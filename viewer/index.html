@@ -277,6 +277,9 @@ input[type=range]:focus-visible { outline: 2px solid var(--ink); outline-offset:
 "use strict";
 // Every value from a log is agent- or model-made text: it only ever reaches the DOM as text nodes.
 const $app = document.getElementById("app");
+// An exported replay (python -m viewer.export) embeds its data here; the live viewer has none.
+const REPLAY = (() => { const el = document.getElementById("hl-replay"); return el ? JSON.parse(el.textContent) : null; })();
+if (REPLAY) { document.querySelector('header.top a.pbtn[href="#/gateway"]')?.remove(); if (!location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id); }
 // Week kinds in the life strip. Lime = income, teal = building, coral = broke; the rest neutral.
 const KIND = { full_time: ["Full-time job", "var(--lime)"], part_time: ["Part-time", "color-mix(in srgb, var(--lime) 55%, var(--strip-bg))"],
                accelerator: ["Accelerator", "var(--teal)"], gig: ["Gig week", "var(--strip-gig)"], school: ["Classes only", "var(--strip-school)"],
@@ -584,6 +587,7 @@ function showGrid() {
   }
   let stop = false;
   async function poll() {
+    if (REPLAY) { data = REPLAY.runs; render(); return; }
     try { data = await (await fetch("/api/runs", { cache: "no-store" })).json(); render(); } catch (e) { count.textContent = "can't reach the viewer server"; }
     if (!stop) timer = setTimeout(poll, 3000);
   }
@@ -603,9 +607,12 @@ function showRun(runId, wantWeek) {
   let sel = wantWeek, follow = wantWeek == null, playing = null, pending = false;
   const view = h("div"); $app.replaceChildren(view);
 
-  const es = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
-  es.addEventListener("ev", m => { ingest(JSON.parse(m.data)); schedule(); });
-  es.addEventListener("end", () => { es.close(); R.ended = true; loadRepos(); schedule(); });
+  const es = REPLAY ? { close() {} } : new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+  if (REPLAY) { (REPLAY.events[runId] || []).forEach(ingest); R.ended = true; R.repos = REPLAY.repos[runId] || []; setTimeout(schedule); }
+  else {
+    es.addEventListener("ev", m => { ingest(JSON.parse(m.data)); schedule(); });
+    es.addEventListener("end", () => { es.close(); R.ended = true; loadRepos(); schedule(); });
+  }
   es.onerror = () => { if (!R.ended) { R.error = "lost the stream; reconnecting…"; schedule(); } };
   let resizeT; const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(schedule, 150); };
   addEventListener("resize", onResize);

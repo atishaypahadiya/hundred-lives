@@ -37,8 +37,10 @@ uv run python -m orchestrator.sandbox check    # isolation probes from a throwaw
 uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 10   # 52 weeks each
 uv run python analysis/summarize.py runs/maya-*.jsonl
 uv run python -m viewer.server                  # http://127.0.0.1:8711, read-only on runs/
+uv run python -m viewer.export <run_id> --deny real-names.txt   # docs/replays/<run_id>/ + scrub-report.json
 ```
 
+- `viewer.export` (Phase 3) writes a self-contained replay: the page with the run's normalized events, summary and repo summaries embedded as JSON (no server, no fetches, no Google Fonts; opens from `file://`). It scrubs what it publishes: home paths → `~`, emails → `[email removed]`, and any secret-looking string, secret-named field, or `--deny` name (a local list of real people, never committed) refuses the export with nothing written. It lists the persona's contacts in `scrub-report.json` for a person to confirm they're fictional.
 - The viewer never writes under `runs/` and renders every logged string as text, never HTML (agent-made content). It reads logs only, so anything it shows must be in the log. `idea` events are derived for now (reflections, files the agent wrote, launch pitches); thinking blocks aren't logged yet. Quiet git (`commit -q`, `push -q`) is read from the command text and labelled as such.
 
 - `--agent-model ollama:<model>` (default `ollama:qwen3:8b`; `--model` is an alias) or `claude-*` / `anthropic:<model>`. `--referee-model` and `--summary-model` default to the agent model. Both are logged in `run_start` and `run_end`, and every `llm_call` logs its model. For showcase runs keep the referee fixed at `claude-haiku-5-5` even when the agent model changes.
