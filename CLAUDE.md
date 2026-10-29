@@ -4,7 +4,7 @@ Run one LLM persona many times through a simulated life and compare the paths. D
 
 ## Status
 
-Phase 1 of "watchable lives": each run gets its own container (OrbStack/Docker) and a user on a local Gitea. Tools: `files`, `shell`, `apply`, `launch`, `gig`, `leave`, `wait`. No browse or message yet. Phase 2 (standard events, `idea`, `viewer/`) and Phase 3 (exported replays) are next.
+Phase 1 of "watchable lives": each run gets its own container (OrbStack/Docker) and a user on a local Gitea. Tools: `files`, `shell`, `apply`, `launch`, `gig`, `leave`, `wait`. No browse or message yet. Phase 2 has started with the read-only `viewer/`; the orchestrator-side events (`idea`, logged thinking) wait until the showcase runs are done. Phase 3 (exported replays) is next.
 
 ## Layout
 
@@ -19,6 +19,9 @@ orchestrator/world.py    loads and validates openings.yaml; per-run shuffle; ren
 orchestrator/memory.py   code-kept week records (condensed per quarter) + the LLM's quarterly reflection
 orchestrator/sandbox.py  per-agent container (AgentBox), in-container workspace (BoxWorkspace), Gitea admin client; `up`/`check`/`down` CLI
 sandbox/                 compose.yaml (Gitea + the internal hl-agents network), agent.Dockerfile, init.py (the container's PID 1)
+viewer/normalize.py      raw log records -> standard viewer events (thought, tool_call, shell_output, git_commit, git_push, idea, referee, life, money, week_end, usage, summary); shared by live, replay and export
+viewer/server.py         Starlette: run grid summaries, SSE tail of a run log (live and finished runs take one path), repo bundles via a bare clone in a temp dir
+viewer/index.html        the page: grid of lives, one life with week scrubber, money, thinking, terminal, tools, idea log, referee, repos
 analysis/summarize.py    per-run paths and metrics; first-applied opening vs position; valid-action rate; calibration
 experiments/             experiment plans (question, conditions, commands, measures, cost), one file each
 runs/                    <run_id>.jsonl, <run_id>/workspace/, <run_id>/repos/*.bundle, <batch>-referee-baseline.jsonl (gitignored)
@@ -33,7 +36,10 @@ uv run python -m orchestrator.sandbox up       # once: Gitea on 127.0.0.1:3000, 
 uv run python -m orchestrator.sandbox check    # isolation probes from a throwaway agent container
 uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 10   # 52 weeks each
 uv run python analysis/summarize.py runs/maya-*.jsonl
+uv run python -m viewer.server                  # http://127.0.0.1:8711, read-only on runs/
 ```
+
+- The viewer never writes under `runs/` and renders every logged string as text, never HTML (agent-made content). It reads logs only, so anything it shows must be in the log. `idea` events are derived for now (reflections, files the agent wrote, launch pitches); thinking blocks aren't logged yet. Quiet git (`commit -q`, `push -q`) is read from the command text and labelled as such.
 
 - `--agent-model ollama:<model>` (default `ollama:qwen3:8b`; `--model` is an alias) or `claude-*` / `anthropic:<model>`. `--referee-model` and `--summary-model` default to the agent model. Both are logged in `run_start` and `run_end`, and every `llm_call` logs its model. For showcase runs keep the referee fixed at `claude-haiku-5-5` even when the agent model changes.
 - `--sandbox docker` (default) needs `orchestrator.sandbox up` and OrbStack running; `--sandbox none` drops `shell`/`launch` and the code host (the v0.2 world).

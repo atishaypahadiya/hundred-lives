@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hundred Lives Viewer</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --raised: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;   /* full-time, part-time, accelerator */
+  --gig: #c3c2b7; --none: #f0efec;
+  --good: #0ca30c; --good-text: #006300; --warning: #fab219; --critical: #d03b3b;
+  --term-bg: #1a1a19; --term-ink: #e6e5df; --term-muted: #a3a29b;
+  --hl: rgba(42,120,214,0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --raised: #222220;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --gig: #5c5b56; --none: #2a2a28;
+    --good-text: #0ca30c; --term-bg: #0d0d0d; --hl: rgba(57,135,229,0.14);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --raised: #222220;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --gig: #5c5b56; --none: #2a2a28;
+  --good-text: #0ca30c; --term-bg: #0d0d0d; --hl: rgba(57,135,229,0.14);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+header.top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+header.top h1 { font-size: 15px; margin: 0; font-weight: 600; }
+header.top .sp { flex: 1; }
+main { max-width: 1400px; margin: 0 auto; padding: 16px; }
+.btn { border: 1px solid var(--border); background: var(--raised); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.btn:hover { background: var(--hl); }
+.btn[aria-pressed="true"] { background: var(--hl); border-color: var(--s1); }
+.muted { color: var(--muted); } .ink2 { color: var(--ink-2); }
+.num { font-variant-numeric: tabular-nums; }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
+.badge.live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: pulse 1.6s infinite; }
+.badge.pilot { border-color: var(--warning); }
+@keyframes pulse { 50% { opacity: .3; } }
+.filters { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.filters input { border: 1px solid var(--border); background: var(--raised); border-radius: 6px; padding: 5px 9px; min-width: 240px; }
+.batch h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 18px 0 8px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-decoration: none; display: block; }
+.card:hover { border-color: var(--s1); }
+.card .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.card .id { font-weight: 600; font-size: 13px; }
+.card .facts { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.panel h3 { font-size: 13px; margin: 0 0 8px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.panel h3 .muted { font-weight: 400; }
+.detail-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 12px; }
+.detail-head h2 { margin: 0; font-size: 18px; }
+.kv { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-2); }
+.kv b { color: var(--ink); font-weight: 600; }
+.scrub { display: flex; gap: 10px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+.scrub input[type=range] { flex: 1; min-width: 180px; accent-color: var(--s1); }
+.scrub .wk { font-weight: 600; min-width: 120px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+.stack { display: grid; gap: 12px; align-content: start; }
+@media (max-width: 900px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 16px; margin-bottom: 10px; }
+.stat .v { font-size: 20px; font-weight: 600; }
+.stat .l { font-size: 12px; color: var(--muted); }
+.chart { position: relative; }
+.chart svg, svg.strip { display: block; width: 100%; height: auto; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12); white-space: nowrap; z-index: 3; display: none; }
+.tip b { font-weight: 600; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.legend i.broke { background: transparent; border: 2px solid var(--critical); }
+.feed { display: grid; gap: 8px; max-height: 520px; overflow: auto; }
+.item { border-left: 2px solid var(--grid); padding: 2px 0 2px 10px; }
+.item.now { border-left-color: var(--s1); background: var(--hl); }
+.item .meta { font-size: 12px; color: var(--muted); }
+.item pre, .pre { white-space: pre-wrap; word-break: break-word; margin: 2px 0 0; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.text { white-space: pre-wrap; word-break: break-word; }
+.term { background: var(--term-bg); color: var(--term-ink); border-radius: 6px; padding: 10px 12px; max-height: 460px; overflow: auto; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.term .cmd { color: #9ec5f4; white-space: pre-wrap; word-break: break-word; }
+.term .out { white-space: pre-wrap; word-break: break-word; color: var(--term-ink); margin: 2px 0 10px; }
+.term .info { color: var(--term-muted); }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+tr.now td { background: var(--hl); }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--hl); }
+.oc { white-space: nowrap; }
+.oc.success { color: var(--good-text); } .oc.failure { color: var(--critical); } .oc.ignored, .oc.quiet { color: var(--muted); }
+.tools { display: grid; gap: 6px; }
+.tool { font-size: 12.5px; }
+.tool .name { font-weight: 600; }
+.tool.err .name { color: var(--critical); }
+details > summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
+.empty { color: var(--muted); font-size: 13px; }
+.notice { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.repo { border-top: 1px solid var(--grid); padding-top: 8px; margin-top: 8px; }
+.repo:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.commit { display: flex; gap: 8px; font-size: 12.5px; align-items: baseline; }
+.commit code { color: var(--muted); }
+.plus { color: var(--good-text); } .minus { color: var(--critical); }
+:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1><a href="#/" style="text-decoration:none">Hundred Lives</a></h1>
+  <span class="muted" id="crumb"></span>
+  <span class="sp"></span>
+  <button class="btn" id="theme" title="Switch light / dark">Theme</button>
+</header>
+<main id="app"></main>
+<script>
+"use strict";
+// Every value from a log is agent- or model-made text: it only ever reaches the DOM as text nodes.
+const $app = document.getElementById("app");
+const KIND = { full_time: ["Full-time job", "var(--s1)"], part_time: ["Part-time", "var(--s2)"],
+               accelerator: ["Accelerator", "var(--s3)"], gig: ["Gig week", "var(--gig)"], none: ["No commitment", "var(--none)"] };
+const OUTCOME = { success: "✓ success", failure: "✕ failure", ignored: "– no reply", traction: "✓ traction", quiet: "– quiet" };
+const money = v => v == null ? "–" : (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const pct = v => v == null ? "–" : (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
+const SVG = "http://www.w3.org/2000/svg";
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return el;
+}
+function s(tag, attrs) { const el = document.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v); return el; }
+
+// ---------- theme ----------
+document.getElementById("theme").onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
+  try { localStorage.setItem("hl-theme", document.documentElement.dataset.theme); } catch {}
+  route();
+};
+try { const t = localStorage.getItem("hl-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+
+// ---------- routing ----------
+let cleanup = () => {};
+function route() {
+  cleanup(); cleanup = () => {};
+  const m = location.hash.match(/^#\/run\/([^?]+)(?:\?w=(\d+))?/);
+  if (m) showRun(decodeURIComponent(m[1]), m[2] ? +m[2] : null); else showGrid();
+}
+addEventListener("hashchange", route);
+
+// ---------- life strip + cash chart (shared by grid cards and the detail view) ----------
+function weekKind(w) { return w.commitment && w.commitment !== "none" ? w.commitment : (w.gig ? "gig" : "none"); }
+
+function lifeStrip(weeks, horizon, opts = {}) {
+  const n = Math.max(horizon || 0, weeks.length, 1), W = opts.width || 300, H = opts.height || 12;
+  const pad = opts.pad || { l: 0, r: 0 }, slot = (W - pad.l - pad.r) / n, gap = Math.min(2, slot / 4), cw = slot - gap;
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H + 4}`, class: "strip", role: "img", "aria-label": `Life strip, ${weeks.length} of ${n} weeks` });
+  for (let i = 0; i < n; i++) {
+    const w = weeks[i], x = pad.l + i * slot + gap / 2;
+    const r = s("rect", { x, y: 2, width: Math.max(cw, 1), height: H, rx: Math.min(2, cw / 2),
+      fill: w ? KIND[weekKind(w)][1] : "transparent", stroke: w ? "none" : "var(--grid)", "stroke-width": w ? 0 : 1 });
+    if (w && w.broke) { r.setAttribute("stroke", "var(--critical)"); r.setAttribute("stroke-width", 2); }
+    if (opts.onpick && w) { r.style.cursor = "pointer"; r.addEventListener("click", () => opts.onpick(w.week)); }
+    if (w) { const t = s("title"); t.textContent = `Week ${w.week}: ${KIND[weekKind(w)][0]}${w.broke ? " · broke" : ""} · cash ${money(w.cash)}`; r.append(t); }
+    svg.append(r);
+    if (opts.sel && w && w.week === opts.sel) svg.append(s("rect", { x: x - 1, y: 0, width: cw + 2, height: H + 4, rx: 3, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }));
+  }
+  return svg;
+}
+
+function legend(extra) {
+  return h("div", { class: "legend" },
+    ["full_time", "part_time", "accelerator", "gig", "none"].map(k => h("span", {}, h("i", { style: `background:${KIND[k][1]}` }), KIND[k][0])),
+    h("span", {}, h("i", { class: "broke" }), "Broke (outline)"), extra || []);
+}
+
+function cashChart(weeks, horizon, opts = {}) {
+  const wrap = h("div", { class: "chart" }), tip = h("div", { class: "tip" });
+  const W = opts.width || 640, H = opts.height || 180, pad = { ...(opts.mini ? CHART_PAD_MINI : CHART_PAD), t: opts.mini ? 4 : 10, b: opts.mini ? 2 : 22 };
+  const n = Math.max(horizon || 0, weeks.length, 1), slot = (W - pad.l - pad.r) / n;
+  const vals = weeks.map(w => w.cash ?? 0), max = Math.max(1, ...vals) * 1.08;
+  const x = wk => pad.l + (wk - 0.5) * slot, y = v => H - pad.b - v / max * (H - pad.t - pad.b);
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `Cash by week: ${weeks.length ? money(vals[0]) + " in week 1, " + money(vals[vals.length - 1]) + " in week " + weeks[weeks.length - 1].week : "no weeks yet"}` });
+  if (!opts.mini) {
+    const step = niceStep(max / 4);
+    for (let v = 0; v <= max; v += step) {
+      svg.append(s("line", { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+      const t = s("text", { x: pad.l - 8, y: y(v) + 4, "text-anchor": "end", "font-size": 11, fill: "var(--muted)", class: "num" }); t.textContent = money(v); svg.append(t);
+    }
+    for (const wk of ticks(n)) { const t = s("text", { x: x(wk), y: H - 6, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }); t.textContent = "w" + wk; svg.append(t); }
+  }
+  if (opts.sel) svg.append(s("line", { x1: x(opts.sel), x2: x(opts.sel), y1: pad.t, y2: H - pad.b, stroke: "var(--axis)", "stroke-width": 1, "stroke-dasharray": "3 3" }));
+  if (weeks.length) {
+    const d = weeks.map((w, i) => (i ? "L" : "M") + x(w.week).toFixed(1) + " " + y(w.cash ?? 0).toFixed(1)).join(" ");
+    svg.append(s("path", { d, fill: "none", stroke: "var(--ink-2)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    const last = weeks[weeks.length - 1];
+    svg.append(s("circle", { cx: x(last.week), cy: y(last.cash ?? 0), r: opts.mini ? 2.5 : 4, fill: "var(--ink-2)", stroke: "var(--surface)", "stroke-width": 2 }));
+    if (opts.sel) { const w = weeks.find(w => w.week === opts.sel); if (w) svg.append(s("circle", { cx: x(w.week), cy: y(w.cash ?? 0), r: 5, fill: "var(--surface)", stroke: "var(--ink)", "stroke-width": 2 })); }
+  }
+  if (!opts.mini) {
+    const hair = s("line", { y1: pad.t, y2: H - pad.b, stroke: "var(--ink-2)", "stroke-width": 1, visibility: "hidden" });
+    const hit = s("rect", { x: pad.l, y: 0, width: W - pad.l - pad.r, height: H, fill: "transparent" });
+    svg.append(hair, hit);
+    const at = ev => { const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W;
+      const wk = Math.floor((px - pad.l) / slot) + 1; return weeks.find(w => w.week === wk) || null; };
+    hit.addEventListener("pointermove", ev => {
+      const w = at(ev); if (!w) { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); return; }
+      hair.setAttribute("x1", x(w.week)); hair.setAttribute("x2", x(w.week)); hair.setAttribute("visibility", "visible");
+      tip.replaceChildren(h("div", {}, h("b", {}, "Week " + w.week)), h("div", {}, h("b", {}, money(w.cash)), " cash"),
+        h("div", {}, h("b", {}, money(w.income)), " income/wk"), w.funding ? h("div", {}, h("b", {}, money(w.funding)), " company funding") : null,
+        h("div", { class: "muted" }, KIND[weekKind(w)][0], w.broke ? " · broke" : ""), opts.onpick ? h("div", { class: "muted" }, "click to go to this week") : null);
+      const r = wrap.getBoundingClientRect(), left = ev.clientX - r.left;
+      tip.style.display = "block"; tip.style.top = "8px";
+      tip.style.left = Math.min(left + 12, r.width - tip.offsetWidth - 4) + "px";
+    });
+    hit.addEventListener("pointerleave", () => { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); });
+    if (opts.onpick) hit.addEventListener("click", ev => { const w = at(ev); if (w) opts.onpick(w.week); });
+  }
+  wrap.append(svg, tip);
+  return wrap;
+}
+const CHART_PAD = { l: 56, r: 8 }, CHART_PAD_MINI = { l: 0, r: 0 };
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); return [1, 2, 2.5, 5, 10].map(m => m * p).find(v => v >= raw) || p * 10; }
+function ticks(n) { const st = n <= 13 ? 1 : n <= 30 ? 5 : n <= 60 ? 10 : 26, out = [1]; for (let i = st; i <= n; i += st) if (i !== 1) out.push(i); return out; }
+
+// ---------- grid of lives ----------
+function showGrid() {
+  document.getElementById("crumb").textContent = "";
+  let filter = sessionStorageGet("hl-filter") || "", data = [];
+  const input = h("input", { type: "search", placeholder: "Filter by run, model, persona…", value: filter, "aria-label": "Filter runs" });
+  const count = h("span", { class: "muted" });
+  const body = h("div");
+  $app.replaceChildren(h("div", { class: "filters" }, input, count, h("span", { class: "muted" }, " · updates every 3 s")), body);
+  input.addEventListener("input", () => { filter = input.value; sessionStorageSet("hl-filter", filter); render(); });
+
+  function render() {
+    const q = filter.trim().toLowerCase();
+    const shown = data.filter(r => !q || JSON.stringify([r.run_id, r.models, r.persona, r.reason, r.status]).toLowerCase().includes(q));
+    count.textContent = `${shown.length} of ${data.length} lives`;
+    const batches = new Map();
+    for (const r of shown) { const b = r.run_id.replace(/-\d{3}$/, ""); if (!batches.has(b)) batches.set(b, []); batches.get(b).push(r); }
+    body.replaceChildren(...[...batches].map(([b, rs]) => h("section", { class: "batch" },
+      h("h2", {}, b, h("span", { class: "muted" }, ` · ${rs.length} run${rs.length > 1 ? "s" : ""} · ${modelLine(rs[0].models)}`)),
+      h("div", { class: "cards" }, rs.sort((a, z) => a.run_id.localeCompare(z.run_id)).map(card)))),
+      data.length ? legend() : h("p", { class: "empty" }, "No run logs in runs/ yet."));
+  }
+  function card(r) {
+    const last = r.last || {}, weeks = r.weeks || [];
+    return h("a", { class: "card", href: "#/run/" + encodeURIComponent(r.run_id) },
+      h("div", { class: "row" }, h("span", { class: "id" }, r.run_id.match(/-(\d{3})$/) ? "run " + r.run_id.slice(-3) : r.run_id),
+        r.status === "live" ? h("span", { class: "badge live" }, "live") : h("span", { class: "badge" }, r.reason || "ended"),
+        r.pilot ? h("span", { class: "badge pilot", title: "uncommitted or unrecorded code" }, "⚠ PILOT") : null,
+        h("span", { class: "muted", style: "margin-left:auto;font-size:12px" }, `week ${weeks.length} / ${r.horizon ?? "?"}`)),
+      h("div", { style: "margin-top:8px" }, cashChart(weeks, r.horizon, { mini: true, width: 300, height: 36 })),
+      lifeStrip(weeks, r.horizon, { width: 300, height: 10 }),
+      h("div", { class: "facts" }, h("b", { class: "num" }, money(last.cash)), " cash",
+        last.labels && last.labels.length ? " · " + last.labels.join(", ") : "",
+        h("br"), `${r.applications} applications · ${r.successes} accepted · ${r.shell} shell · ${r.repos} repo${r.repos === 1 ? "" : "s"} · ${r.launches} launch${r.launches === 1 ? "" : "es"}`,
+        h("br"), h("span", { class: "muted num" }, `${(r.tokens_used || 0).toLocaleString()} tokens · $${(r.cost_usd || 0).toFixed(4)}`)));
+  }
+  let stop = false;
+  async function poll() {
+    try { data = await (await fetch("/api/runs", { cache: "no-store" })).json(); render(); } catch (e) { count.textContent = "can't reach the viewer server"; }
+    if (!stop) timer = setTimeout(poll, 3000);
+  }
+  let timer; poll();
+  cleanup = () => { stop = true; clearTimeout(timer); };
+}
+function modelLine(m) { if (!m) return ""; const a = m.agent, r = m.referee; return a === r ? a : `agent ${a} · referee ${r}`; }
+function sessionStorageGet(k) { try { return sessionStorage.getItem(k); } catch { return null; } }
+function sessionStorageSet(k, v) { try { sessionStorage.setItem(k, v); } catch {} }
+
+// ---------- one life ----------
+function showRun(runId, wantWeek) {
+  document.getElementById("crumb").textContent = "/ " + runId;
+  const R = { meta: null, summary: null, events: [], weeks: [], maxWeek: 0, ended: false, repos: null, error: null };
+  let sel = wantWeek, follow = wantWeek == null, playing = null, pending = false;
+  const view = h("div"); $app.replaceChildren(view);
+
+  const es = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+  es.addEventListener("ev", m => { ingest(JSON.parse(m.data)); schedule(); });
+  es.addEventListener("end", () => { es.close(); R.ended = true; loadRepos(); schedule(); });
+  es.onerror = () => { if (!R.ended) { R.error = "lost the stream; reconnecting…"; schedule(); } };
+  let resizeT; const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(schedule, 150); };
+  addEventListener("resize", onResize);
+  cleanup = () => { es.close(); clearInterval(playing); removeEventListener("resize", onResize); };
+
+  function ingest(ev) {
+    R.error = null; R.events.push(ev);
+    if (ev.kind === "meta" && ev.event === "start") R.meta = ev;
+    if (ev.kind === "summary") R.summary = ev;
+    if (ev.kind === "money" && ev.at === "end") {
+      const wk = R.events.filter(e => e.week === ev.week);
+      R.weeks[ev.week - 1] = { week: ev.week, cash: ev.cash, income: ev.income, expenses: ev.expenses, funding: ev.company_funding,
+        labels: ev.commitments,
+        gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke) };
+    }
+    if (ev.week) R.maxWeek = Math.max(R.maxWeek, ev.week);
+  }
+  async function loadRepos() { try { R.repos = await (await fetch(`/api/runs/${encodeURIComponent(runId)}/repos`)).json(); } catch { R.repos = []; } schedule(); }
+  function schedule() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; render(); }); } }
+  function go(w) { follow = false; sel = Math.max(1, Math.min(w, R.maxWeek || 1)); history.replaceState(null, "", `#/run/${encodeURIComponent(runId)}?w=${sel}`); render(); }
+
+  function render() {
+    const scrollY = window.scrollY, horizon = R.meta?.horizon || R.maxWeek;
+    const chartW = Math.max(280, Math.min(1340, $app.clientWidth - 2 * 16 - 30));  // the panel's inner width, in px
+    const weeks = R.weeks.filter(Boolean).map(w => ({ ...w, commitment: commitmentKind(w) }));
+    const doneWeeks = weeks.length ? weeks[weeks.length - 1].week : 0;
+    if (follow || sel == null) sel = Math.max(R.maxWeek, 1);
+    sel = Math.min(sel, Math.max(R.maxWeek, 1));
+    const upTo = R.events.filter(e => e.week == null || e.week <= sel), thisWeek = R.events.filter(e => e.week === sel);
+    const m = R.meta || {}, sm = R.summary;
+    const state = weeks.find(w => w.week === sel) || [...weeks].reverse().find(w => w.week < sel) || {};
+    const cost = sm?.cost_usd ?? [...R.events].reverse().find(e => e.kind === "usage")?.cost_usd_total;
+    const tokens = sm?.tokens_used ?? [...R.events].reverse().find(e => e.kind === "usage")?.tokens_used;
+
+    const slider = h("input", { type: "range", min: 1, max: Math.max(R.maxWeek, 1), value: sel, "aria-label": "Week" });
+    slider.addEventListener("input", () => go(+slider.value));
+    view.replaceChildren(
+      h("div", { class: "detail-head" },
+        h("h2", {}, m.persona ? `${m.persona} · ` : "", runId),
+        sm ? h("span", { class: "badge" }, `ended: ${sm.reason}`) : h("span", { class: "badge live" }, "live"),
+        m.pilot ? h("span", { class: "badge pilot", title: "uncommitted or unrecorded code" }, "⚠ PILOT") : null,
+        m.illustrative ? h("span", { class: "badge", title: "world numbers are illustrative, not sourced" }, "illustrative world") : null,
+        R.error ? h("span", { class: "badge" }, R.error) : null),
+      h("div", { class: "kv" },
+        h("span", {}, "agent ", h("b", {}, m.models?.agent || "–")), h("span", {}, "referee ", h("b", {}, m.models?.referee || "–")),
+        h("span", {}, "order seed ", h("b", {}, m.order_seed ?? "–")), h("span", {}, "dice seed ", h("b", {}, m.dice_seed ?? "–"), m.dice_scheme === "sequential" ? " (sequential)" : ""),
+        h("span", {}, "code ", h("b", {}, (m.code?.git_sha || "–").slice(0, 7)), m.code?.dirty ? " dirty" : ""),
+        h("span", {}, "sandbox ", h("b", {}, m.sandbox ? "docker" : "none")),
+        h("span", { class: "num" }, "tokens ", h("b", {}, (tokens || 0).toLocaleString()), m.token_budget ? ` / ${m.token_budget.toLocaleString()}` : ""),
+        h("span", { class: "num" }, "cost ", h("b", {}, cost != null ? "$" + cost.toFixed(4) : "–"))),
+      h("div", { class: "scrub" },
+        h("button", { class: "btn", onclick: () => go(sel - 1), "aria-label": "Previous week", disabled: sel <= 1 }, "◀"),
+        slider,
+        h("button", { class: "btn", onclick: () => go(sel + 1), "aria-label": "Next week", disabled: sel >= R.maxWeek }, "▶"),
+        h("span", { class: "wk num" }, `Week ${sel} of ${horizon || "?"}`),
+        h("button", { class: "btn", "aria-pressed": String(!!playing), onclick: togglePlay }, playing ? "Pause" : "Play"),
+        h("button", { class: "btn", "aria-pressed": String(follow), onclick: () => { follow = true; history.replaceState(null, "", `#/run/${encodeURIComponent(runId)}`); render(); } },
+          R.ended ? "Last week" : "Follow live")),
+      h("div", { class: "panel" },
+        h("h3", {}, "Money and commitments", h("span", { class: "muted" }, `end of week ${sel}`)),
+        h("div", { class: "stats" },
+          stat(money(state.cash), "cash"), stat(money(state.income), "income / week"), stat(money(state.expenses), "expenses / week"),
+          stat(money(state.funding), "company funding"), stat((state.labels || []).join(", ") || "none", "commitments", true)),
+        cashChart(weeks, horizon, { sel, onpick: go, width: chartW, height: chartW < 600 ? 170 : 210 }),
+        lifeStrip(weeks, horizon, { width: chartW, height: 14, sel, onpick: go, pad: CHART_PAD }),
+        legend(),
+        h("details", {}, h("summary", {}, "Table view"), weekTable(weeks, sel, go))),
+      h("div", { class: "cols" },
+        h("div", { class: "stack" }, weekPanel(thisWeek, sel, doneWeeks), thinkingPanel(thisWeek), terminalPanel(upTo, sel), toolsPanel(thisWeek)),
+        h("div", { class: "stack" }, ideaPanel(upTo, sel), refereePanel(R.events, sel, go), repoPanel(upTo, sel, R))));
+    window.scrollTo(0, scrollY);
+  }
+  function commitmentKind(w) {
+    const labels = w.labels || [];
+    if (!labels.length) return "none";
+    const starts = R.events.filter(e => e.kind === "life" && e.event === "commitment_started" && e.week <= w.week && labels.includes(e.label));
+    if (starts.some(e => (e.opening_id || "").startsWith("acc-"))) return "accelerator";
+    const txt = labels.join(" ").toLowerCase();
+    return /part[- ]time|20 hours/.test(txt) ? "part_time" : "full_time";
+  }
+  function togglePlay() {
+    if (playing) { clearInterval(playing); playing = null; render(); return; }
+    follow = false; if (sel >= R.maxWeek) sel = 0;
+    playing = setInterval(() => { if (sel >= R.maxWeek) { clearInterval(playing); playing = null; render(); } else go(sel + 1); }, 900);
+    go(sel + 1);
+  }
+}
+
+function stat(v, l, small) { return h("div", { class: "stat" }, h("div", { class: "v num", style: small ? "font-size:14px;font-weight:600" : null }, v), h("div", { class: "l" }, l)); }
+
+function weekTable(weeks, sel, go) {
+  return h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Week"), h("th", { class: "r" }, "Cash"), h("th", { class: "r" }, "Income"), h("th", { class: "r" }, "Funding"), h("th", {}, "Commitment"), h("th", {}, "Gig"), h("th", {}, "Broke"))),
+    h("tbody", {}, weeks.map(w => h("tr", { class: "click" + (w.week === sel ? " now" : ""), onclick: () => go(w.week) },
+      h("td", { class: "num" }, w.week), h("td", { class: "r" }, money(w.cash)), h("td", { class: "r" }, money(w.income)), h("td", { class: "r" }, money(w.funding)),
+      h("td", {}, (w.labels || []).join(", ") || "–"), h("td", {}, w.gig ? "yes" : ""), h("td", {}, w.broke ? "⚠ broke" : "")))));
+}
+
+function weekPanel(evs, sel, doneWeeks) {
+  const ws = evs.find(e => e.kind === "week_start"), we = evs.find(e => e.kind === "week_end");
+  return h("div", { class: "panel" },
+    h("h3", {}, `Week ${sel}`, we ? h("span", { class: "muted" }, `ended: ${we.reason} · ${we.used}/${we.actions} actions · ${we.invalid} invalid`) : h("span", { class: "muted" }, sel > doneWeeks ? "in progress" : "")),
+    ws?.broke ? h("p", { style: "margin:0 0 6px" }, "⚠ Broke this week: cash plus income didn't cover expenses.") : null,
+    ws?.news?.length ? h("div", {}, h("div", { class: "meta muted" }, "News"), h("ul", { style: "margin:2px 0 8px;padding-left:18px" }, ws.news.map(n => h("li", { class: "text" }, n)))) : null,
+    ws?.carried_errors?.length ? h("div", {}, h("div", { class: "meta muted" }, "Problems carried from last week"), h("ul", { style: "margin:2px 0 8px;padding-left:18px" }, ws.carried_errors.map(n => h("li", { class: "text" }, n)))) : null,
+    we ? h("div", { class: "text ink2" }, we.digest) : h("div", { class: "empty" }, "Week not finished yet."),
+    ws && ws.openings_hidden ? h("div", { class: "notice" }, `${ws.openings_hidden} openings hidden from the agent this week (pending, accepted, or before the reapply week).`) : null);
+}
+
+function thinkingPanel(evs) {
+  const th = evs.filter(e => e.kind === "thought");
+  return h("div", { class: "panel" },
+    h("h3", {}, "Thinking", h("span", { class: "muted" }, "the agent's own words this week")),
+    th.length ? h("div", { class: "feed" }, th.map(e => h("div", { class: "item" },
+      h("div", { class: "meta" }, e.source === "note" ? "wait note" : e.nudge ? "nudge" : "text"), h("div", { class: "text" }, e.text)))) : h("div", { class: "empty" }, "Nothing this week."),
+    h("div", { class: "notice" }, "Thinking blocks aren't logged yet; this shows the agent's visible text and the note it leaves when it waits."));
+}
+
+function terminalPanel(upTo, sel) {
+  const sh = upTo.filter(e => e.kind === "shell_output");
+  const term = h("div", { class: "term", tabindex: 0, "aria-label": "Shell history" },
+    sh.length ? sh.map(e => [h("div", { class: "info" }, `── week ${e.week} · exit ${e.exit_code}${e.timed_out ? " · timed out" : ""}${e.stopped ? " · output capped" : ""}`),
+      h("div", { class: "cmd" }, "$ " + e.command), h("div", { class: "out" }, e.output || "")]) : h("div", { class: "info" }, "No shell commands yet."));
+  queueMicrotask(() => { term.scrollTop = term.scrollHeight; });
+  return h("div", { class: "panel" }, h("h3", {}, "Terminal", h("span", { class: "muted" }, `${sh.length} command${sh.length === 1 ? "" : "s"} through week ${sel}`)), term);
+}
+
+function toolsPanel(evs) {
+  const tc = evs.filter(e => e.kind === "tool_call");
+  return h("div", { class: "panel" }, h("h3", {}, "Tool calls", h("span", { class: "muted" }, `${tc.length} this week`)),
+    tc.length ? h("div", { class: "tools" }, tc.map(e => h("details", { class: "tool" + (e.is_error ? " err" : "") },
+      h("summary", {}, h("span", { class: "name" }, e.tool), e.is_error ? " · error" : "", " ", h("span", { class: "muted" }, briefInput(e))),
+      h("div", { class: "pre" }, JSON.stringify(e.input, null, 2)), h("div", { class: "meta muted", style: "margin-top:4px" }, "result"), h("div", { class: "pre" }, e.output)))) : h("div", { class: "empty" }, "None."));
+}
+function briefInput(e) {
+  const a = e.input || {};
+  const v = a.opening_id || a.path || a.command || a.repo || a.note || a.action || "";
+  return (a.action && a.path ? a.action + " " : "") + String(v).replace(/\s+/g, " ").slice(0, 90);
+}
+
+function ideaPanel(upTo, sel) {
+  const ideas = upTo.filter(e => e.kind === "idea").reverse();
+  const label = { reflection: "quarterly reflection", file: "wrote", pitch: "launch pitch" };
+  return h("div", { class: "panel" }, h("h3", {}, "Idea log", h("span", { class: "muted" }, `reflections, plans, pitches through week ${sel}`)),
+    ideas.length ? h("div", { class: "feed" }, ideas.map(e => h("div", { class: "item" + (e.week === sel ? " now" : "") },
+      h("div", { class: "meta" }, `week ${e.week} · ${label[e.source] || e.source}${e.path ? " " + e.path : ""}${e.title ? " · " + e.title : ""}`),
+      h("div", { class: "text" }, e.text)))) : h("div", { class: "empty" }, "No ideas recorded yet."));
+}
+
+function refereePanel(all, sel, go) {
+  const every = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch"));
+  const apps = every.filter(e => e.week <= sel), later = every.length - apps.length;
+  const rows = apps.map(e => {
+    const revealed = e.event === "launch" || (e.reveal_week != null && e.reveal_week <= sel);
+    const oc = h("span", { class: "oc " + e.outcome }, OUTCOME[e.outcome] || e.outcome);
+    return [h("tr", { class: "click" + (e.week === sel ? " now" : ""), onclick: () => go(e.week), title: "Go to week " + e.week },
+      h("td", { class: "num" }, e.week), h("td", {}, e.event === "launch" ? "launch " + (e.repo || "").split("/").pop() : e.opening_id, h("div", { class: "muted", style: "font-size:11px" }, e.event === "launch" ? "forum" : e.opening_type)),
+      h("td", { class: "r" }, pct(e.base_rate)), h("td", { class: "r" }, pct(e.estimated_chance)),
+      h("td", { class: "r" }, e.base_rate ? (e.estimated_chance / e.base_rate).toFixed(2) + "×" : "–"),
+      h("td", { class: "r" }, e.draw != null ? e.draw.toFixed(3) : "–"),
+      h("td", {}, oc, e.event === "launch" ? h("div", { class: "muted", style: "font-size:11px" }, `${e.upvotes ?? 0} upvotes`) :
+        h("div", { class: "muted", style: "font-size:11px" }, revealed ? `heard week ${e.reveal_week}` : `already drawn · agent hears week ${e.reveal_week}`))),
+      h("tr", {}, h("td", { colspan: 7, style: "padding-top:0" }, h("details", {}, h("summary", {}, "submission and rationale"),
+        e.details ? h("div", {}, h("div", { class: "meta muted" }, "submission"), h("div", { class: "text" }, e.details)) : null,
+        e.repo ? h("div", { class: "meta muted" }, "repo: " + e.repo) : null,
+        e.key ? h("div", { class: "meta muted" }, "dice key: " + e.key) : null,
+        h("div", { class: "meta muted" }, "referee rationale"), h("div", { class: "text" }, e.rationale || "–"),
+        e.comments?.length ? h("div", {}, h("div", { class: "meta muted" }, "forum comments"), h("ul", {}, e.comments.map(c => h("li", { class: "text" }, c)))) : null)))];
+  });
+  const done = apps, mean = done.length ? done.reduce((a, e) => a + (e.base_rate ? e.estimated_chance / e.base_rate : 0), 0) / done.length : null;
+  return h("div", { class: "panel" }, h("h3", {}, "Referee", h("span", { class: "muted" }, `${done.length} decisions through week ${sel}${mean ? ` · mean estimate ${mean.toFixed(2)}× base` : ""}`)),
+    apps.length ? h("div", { style: "max-height:520px;overflow:auto" }, h("table", {},
+      h("thead", {}, h("tr", {}, h("th", {}, "Wk"), h("th", {}, "Opening"), h("th", { class: "r" }, "Base"), h("th", { class: "r" }, "Est."), h("th", { class: "r" }, "Est./base"), h("th", { class: "r" }, "Draw u"), h("th", {}, "Outcome"))),
+      h("tbody", {}, rows))) : h("div", { class: "empty" }, "No applications yet."),
+    h("div", { class: "notice" }, `Success if u < estimate. The referee only estimates; the keyed dice pick the outcome.${later ? ` ${later} later decision${later === 1 ? "" : "s"} not shown.` : ""}`));
+}
+
+function repoPanel(upTo, sel, R) {
+  const git = upTo.filter(e => e.kind === "git_commit" || e.kind === "git_push");
+  const launches = upTo.filter(e => e.kind === "referee" && e.event === "launch");
+  const atEnd = R.ended && sel >= R.maxWeek;
+  return h("div", { class: "panel" }, h("h3", {}, "Repos and commits", h("span", { class: "muted" }, `through week ${sel}`)),
+    git.length ? h("div", { class: "tools" }, git.map(e => e.kind === "git_commit"
+      ? h("div", { class: "commit" }, h("span", { class: "muted num" }, "w" + e.week), h("code", { title: e.sha ? null : "git ran with -q; read from the command, not git's output" }, e.sha || "commit -q"), h("span", { class: "text" }, e.message),
+          e.files != null ? h("span", { class: "muted num" }, `${e.files} file${e.files === 1 ? "" : "s"} `, h("span", { class: "plus" }, "+" + e.insertions), " ", h("span", { class: "minus" }, "−" + e.deletions)) : null)
+      : h("div", { class: "commit" }, h("span", { class: "muted num" }, "w" + e.week), h("span", {}, e.first ? "⬆ new repo on the code host: " : "⬆ push "), h("code", {}, e.repo || e.url || ""), e.refs?.length ? h("span", { class: "muted" }, e.refs.join(", ")) : null)))
+      : h("div", { class: "empty" }, "No commits or pushes seen in the shell yet."),
+    launches.map(l => h("div", { class: "repo" }, h("div", {}, h("b", {}, "Launched "), l.title || "", h("span", { class: "muted" }, ` · week ${l.week} · ${l.snapshot?.commits ?? "?"} commits · ${l.snapshot?.file_count ?? "?"} files`)),
+      l.snapshot?.files?.length ? h("div", { class: "pre muted" }, l.snapshot.files.join("  ")) : null,
+      l.snapshot?.readme ? h("details", {}, h("summary", {}, "README as the referee saw it"), h("div", { class: "pre" }, l.snapshot.readme)) : null)),
+    atEnd && R.repos ? h("div", { class: "repo" }, h("div", { class: "meta muted" }, "Exported at run end (runs/<id>/repos/*.bundle)"),
+      R.repos.length ? R.repos.map(b => h("div", { class: "repo" },
+        h("div", {}, h("b", {}, b.repo), h("span", { class: "muted" }, b.error ? " · " + b.error : ` · ${b.commits.length} commit${b.commits.length === 1 ? "" : "s"} · ${b.file_count} files · ${b.bundle_bytes.toLocaleString()} bytes`)),
+        (b.commits || []).map(c => h("div", { class: "commit" }, h("code", {}, c.sha.slice(0, 7)), h("span", { class: "text" }, c.subject),
+          h("span", { class: "muted num" }, `${c.files} file${c.files === 1 ? "" : "s"} `, h("span", { class: "plus" }, "+" + c.insertions), " ", h("span", { class: "minus" }, "−" + c.deletions)))),
+        b.files?.length ? h("div", { class: "pre muted" }, b.files.join("  ")) : null,
+        b.readme ? h("details", {}, h("summary", {}, b.readme_path), h("div", { class: "pre" }, b.readme)) : null)) : h("div", { class: "empty" }, "No repos were exported."))
+      : R.ended ? h("div", { class: "notice" }, "Move to the last week to see the exported repos.") : h("div", { class: "notice" }, "Exported repos appear when the run ends."));
+}
+
+route();
+</script>
+</body>
+</html>
