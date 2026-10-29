@@ -2,7 +2,7 @@
 
 Status: **planned, 2026-10-29.** Part A (base × 5) is approved to run once Track A is published. Part B (sensitivity) is held until the Console spend limit resets on 2026-11-01 (UTC), and it launches only after month-to-date spend has been checked against the $50 limit and the user says go.
 
-Both parts run from one commit (the one that adds this file), on student world v2 (`c6d11d6`: hours-based time, streak holds in zero-action weeks, reflections state the week) with the sensitivity personas and `referee_view` from `09f5ac3`. Every run must record that commit as `run_start.code.git_sha` with `dirty: false`.
+Both parts run from one commit: the last one to change this file. Part A records it, and Part B must record the same one. Branch `viewer-restyle` stays at that commit until Part B ends; new work goes on master. The runs use student world v2 (`c6d11d6`: hours-based time, streak holds in zero-action weeks, reflections state the week) with the sensitivity personas and `referee_view` from `09f5ac3`. Every run must record that commit as `run_start.code.git_sha` with `dirty: false`.
 
 ## Question
 
@@ -88,4 +88,4 @@ Track A cost $1.63 for 104 weeks (1.69M tokens, Sonnet agent). World v2 frees ab
 | A | 5 | $8–12 | $15 |
 | B | 15 | $24–36 | 3 × $12 |
 
-Logged Anthropic spend in October 2026, before part A, across both runs directories: $7.38 (experiment 01 still running). Before part B: check month-to-date spend in the Console against the $50 monthly limit. Launch only if the projected total (B's estimate, plus anything still running) fits in what's left, and the user approves.
+Logged Anthropic spend in October 2026, before part A, across both runs directories: $11.06 (experiment 01 finished, $6.96 of it). Console spend may differ, since cache prices are unreconciled. Before part B: check month-to-date spend in the Console against the $50 monthly limit. Launch only if the projected total (B's estimate, plus anything still running) fits in what's left, and the user approves.
