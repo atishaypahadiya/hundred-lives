@@ -29,7 +29,7 @@ from .memory import Memory, WeekRecord
 from .tools import (ACTION_COST, ACTIONS_PER_WEEK, CODING_TOOLS, MAX_INVALID_PER_WEEK, REAPPLY_AFTER_WEEKS,
                     ToolError, Workspace, tools_for, validate)
 from .world import (COMMITMENT_TYPES, DEFAULT_PATH as DEFAULT_WORLD, INCOME_TYPES, auth_problem, catalog,
-                    check_contacts, enrolled, listed, load_world, semester, shuffled, time_cost)
+                    check_contacts, enrolled, listed, load_world, semester, semester_capped, shuffled, time_cost)
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = ROOT / "runs"
@@ -298,6 +298,29 @@ class Run:
     def committed_time(self) -> int:
         return sum(c["time_cost"] for c in self.commitments)
 
+    def _capped_time(self, week: int) -> int:
+        """Time used by semester-capped work (campus jobs, internships) still running in `week`."""
+        return sum(c["time_cost"] for c in self.commitments
+                   if c.get("opening_id") and semester_capped(self.world, self.openings[c["opening_id"]])
+                   and (c["ends_week"] is None or c["ends_week"] > week))
+
+    def _auth(self, o: dict, week: int) -> str | None:
+        others = self._capped_time(week) if semester_capped(self.world, o) else 0
+        return auth_problem(self.world, o, week, time_cost(o, self.costs), others)
+
+    def _overcommitted(self, week: int, wk) -> list[str]:
+        """Commitments can't use more than the week: the newest non-class ones end until they fit
+        (classes starting can push a week over)."""
+        news = []
+        while self.committed_time > ACTIONS_PER_WEEK:
+            c = max((c for c in self.commitments if c.get("kind") != "academics"), key=lambda c: c["since_week"])
+            self.commitments.remove(c)
+            news.append(f"Your time in [{c['id']}] {c['label']} ended: your commitments needed more than "
+                        f"{ACTIONS_PER_WEEK} actions a week.")
+            wk.note(f"[{c['id']}] {c['label']} ended (no time)", key=True)
+            self.log("commitment_ended", week, commitment=c, reason="overcommitted")
+        return news
+
     @property
     def company_balance(self) -> float:
         return self.company_funding + self.company_revenue - self.company_spent
@@ -385,6 +408,11 @@ class Run:
                 self.upcoming.append({"opening_id": opening_id, "start_week": o["start_week"]})
                 effect = f"It starts in week {o['start_week']}."
                 key = f"{opening_id} accepted, starts week {o['start_week']}"
+            elif o["type"] in COMMITMENT_TYPES and self._auth(o, week):
+                why = self._auth(o, week)
+                self.log("offer_lapsed", week, opening_id=opening_id, reason="work_authorization", why=why)
+                effect = f"You can't take it now: {why}."
+                key = f"{opening_id} accepted, but couldn't start (work authorization)"
             elif o["type"] in COMMITMENT_TYPES:
                 cost = time_cost(o, self.costs)
                 if self.committed_time + cost <= ACTIONS_PER_WEEK:
@@ -428,8 +456,12 @@ class Run:
             wk.note(f"[{c['id']}] {c['label']} ended", key=True)
             self.log("commitment_ended", week, commitment=c, reason="term")
         news += self._school(week, wk)
-        for c in [c for c in self.commitments if c.get("opening_id")]:
-            why = auth_problem(self.world, self.openings[c["opening_id"]], week, c["time_cost"])
+        capped = 0  # oldest first: when the cap is exceeded, the newest work ends
+        for c in sorted((c for c in self.commitments if c.get("opening_id")), key=lambda c: c["since_week"]):
+            o = self.openings[c["opening_id"]]
+            why = auth_problem(self.world, o, week, c["time_cost"], capped if semester_capped(self.world, o) else 0)
+            if not why and semester_capped(self.world, o):
+                capped += c["time_cost"]
             if why:
                 self.commitments.remove(c)
                 news.append(f"Your time in [{c['id']}] {c['label']} ended: {why}.")
@@ -438,7 +470,7 @@ class Run:
         for u in [u for u in self.upcoming if u["start_week"] <= week]:
             self.upcoming.remove(u)
             o = self.openings[u["opening_id"]]
-            why = auth_problem(self.world, o, week, time_cost(o, self.costs))
+            why = self._auth(o, week)
             if why:
                 news.append(f"{o['id']} {o['title']} couldn't start: {why}.")
                 self.log("offer_lapsed", week, opening_id=o["id"], reason="work_authorization", why=why)
@@ -446,7 +478,13 @@ class Run:
                 self.held_offers.append({"opening_id": o["id"], "message": "", "expires_week": week + OFFER_HOLD_WEEKS})
         for h in list(self.held_offers):
             o = self.openings[h["opening_id"]]
-            if self.committed_time + time_cost(o, self.costs) <= ACTIONS_PER_WEEK:
+            if self._auth(o, week):
+                if week > h["expires_week"]:
+                    self.held_offers.remove(h)
+                    news.append(f"The offer from {o['id']} {o['title']} lapsed: {self._auth(o, week)}.")
+                    wk.note(f"offer from {o['id']} lapsed", key=True)
+                    self.log("offer_lapsed", week, opening_id=o["id"], reason="work_authorization", why=self._auth(o, week))
+            elif self.committed_time + time_cost(o, self.costs) <= ACTIONS_PER_WEEK:
                 self.held_offers.remove(h)
                 c = self._start_commitment(week, o)
                 news.append(f"You took the offer from {o['id']} {o['title']}. {self._commitment_text(c, wk)}")
@@ -517,7 +555,7 @@ class Run:
             raise ToolError(f"{oid} takes applications in weeks {lw[0]}-{lw[1]}, not this week")
         if oid in self.accepted:  # hidden from the list too (see _unavailable)
             raise ToolError(f"you were already accepted by {oid}")
-        why = auth_problem(self.world, o, o.get("start_week") or week, time_cost(o, self.costs))
+        why = self._auth(o, o.get("start_week") or week)
         if why:
             raise ToolError(f"you can't take {oid}: {why}")
         if any(p["opening_id"] == oid for p in self.pending):
@@ -925,6 +963,12 @@ class Run:
         upcoming = next((c for c in self.contractors if c["start_week"] > week), None)
         if upcoming:
             time += f" A contractor starts in week {upcoming['start_week']}."
+        if self.academics:
+            nxt = next((x for x in self.academics["semesters"] if 0 < x["start"] - week <= 4), None)
+            if nxt:
+                time += (f" {nxt['name']} starts in week {nxt['start']}: classes will use "
+                         f"{self.academics['class_actions']} actions a week, and campus jobs and internships "
+                         f"together are capped during semesters; work over the cap ends when it starts.")
         ev = next((oid for oid, e in self.events.items() if e["event_week"] == week), None)
         if ev:
             time += (f" {self.openings[ev]['title']} is this week: {self.openings[ev]['build_actions']} extra build "
@@ -951,7 +995,7 @@ class Run:
         shown = [o for o in self.order if o["id"] not in unavailable]
         notes = {}
         for o in shown:
-            why = auth_problem(self.world, o, o.get("start_week") or week, time_cost(o, self.costs))
+            why = self._auth(o, o.get("start_week") or week)
             if why:
                 notes[o["id"]] = f"(Not open to you: {why}.)"
             elif o.get("listed_weeks") and o["listed_weeks"][1] - week <= 3:
@@ -1012,7 +1056,8 @@ What do you do this week? Act through your tools; wait ends the week."""
     def week(self, week: int):
         wk = WeekState(broke=False, actions=0)
         news = self._deliver(week, wk)
-        wk.actions = ACTIONS_PER_WEEK - self.committed_time
+        news += self._overcommitted(week, wk)
+        wk.actions = max(0, ACTIONS_PER_WEEK - self.committed_time)
         k = self._contractor(week)
         wk.coding_actions = k["coding_actions"] if k else 0
         event = next((oid for oid, e in self.events.items() if e["event_week"] == week), None)

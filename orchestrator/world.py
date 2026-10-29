@@ -142,9 +142,17 @@ def enrolled(world: dict, week: int) -> bool:
     return bool(ac) and week <= ac["graduation_week"]
 
 
-def auth_problem(world: dict, o: dict, week: int, cost: int) -> str | None:
+def semester_capped(world: dict, o: dict) -> bool:
+    """Whether this opening's work counts toward the semester cap on work hours."""
+    wa = world.get("work_authorization")
+    kind = o.get("auth", "none")
+    return bool(wa) and kind != "none" and wa["kinds"][kind].get("semester_max_actions") is not None
+
+
+def auth_problem(world: dict, o: dict, week: int, cost: int, others: int = 0) -> str | None:
     """Why this opening's work isn't allowed if it starts in this week, or None. Rules come from
-    the world file's work_authorization; openings without `auth` are always allowed."""
+    the world file's work_authorization; openings without `auth` are always allowed. `others` is
+    the time already used by other semester-capped work: the cap is on the total, not per job."""
     kind = o.get("auth", "none")
     wa = world.get("work_authorization")
     if kind == "none" or not wa:
@@ -156,9 +164,9 @@ def auth_problem(world: dict, o: dict, week: int, cost: int) -> str | None:
         return (f"{kind.replace('_', '-')} work is only allowed after you graduate (from week {grad + 1}); "
                 f"{rule.get('why', '')}".strip().rstrip(";"))
     cap = rule.get("semester_max_actions")
-    if cap is not None and semester(world, week) and cost > cap:
-        return (f"during a semester {kind.replace('_', '-')} work can use at most {cap} actions/week "
-                f"(this uses {cost})")
+    if cap is not None and semester(world, week) and cost + others > cap:
+        return (f"during a semester, campus jobs and internships together can use at most {cap} actions/week "
+                f"(this would make {cost + others})")
     return None
 
 
