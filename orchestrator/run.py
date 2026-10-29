@@ -11,10 +11,10 @@ messages, only as records and the agent's own reflections.
 import argparse
 import hashlib
 import json
-import random
 import signal
 import sys
 import traceback
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -162,7 +162,7 @@ class Run:
         self.seed = seed
         self.order_seed = seed if order_seed is None else order_seed
         self.dice_seed = seed if dice_seed is None else dice_seed
-        self.rng = random.Random(self.dice_seed)  # used only for outcome draws, so they replay exactly
+        self.attempts: Counter = Counter()  # (kind, target) -> attempts so far; part of each dice key
         self.persona = persona
         self.persona_path = persona_path
         self.world_path = world_path
@@ -376,7 +376,9 @@ class Run:
                                                             temperature=referee.TEMPERATURE,
                                                             seed=referee.SEED))
         est, err = referee.parse_estimate(reply.text, o["base_rate"])
-        outcome, draws = referee.draw(self.rng, est["estimated_chance"], o["reply_rate"])
+        self.attempts[("apply", oid)] += 1
+        attempt = self.attempts[("apply", oid)]
+        outcome, draws = referee.draw(self.dice_seed, oid, attempt, est["estimated_chance"], o["reply_rate"])
         message = {"success": est["message_if_success"], "failure": est["message_if_failure"]}.get(outcome, "")
         app_id = self._next_id("a")
         delay = referee.IGNORED_DROP_WEEKS if outcome == "ignored" else est["decision_in_weeks"]
@@ -386,7 +388,7 @@ class Run:
                  position=self.order.index(o) + 1, details=details, attachments=paths,
                  repo=repo and repo["repo"], estimate=est,
                  estimated_chance=est["estimated_chance"], outcome=outcome, seed=self.dice_seed,
-                 dice_seed=self.dice_seed, **draws,
+                 dice_seed=self.dice_seed, attempt=attempt, **draws,
                  reveal_week=week + delay, parse_error=err,
                  referee_input={"system": referee.SYSTEM, "user": user}, raw_output=reply.text,
                  model=f"{self.referee.name}:{self.referee.model}",
@@ -429,7 +431,10 @@ class Run:
                                                             temperature=referee.TEMPERATURE,
                                                             seed=referee.SEED))
         est, err = referee.parse_launch(reply.text, self.forum["traction_base_rate"])
-        outcome, upvotes, u = referee.draw_launch(self.rng, est["estimated_chance"], self.forum)
+        self.attempts[("launch", name)] += 1
+        attempt = self.attempts[("launch", name)]
+        outcome, upvotes, draws = referee.draw_launch(self.dice_seed, name, attempt,
+                                                      est["estimated_chance"], self.forum)
         comments = est["comments_if_traction" if outcome == "traction" else "comments_if_quiet"]
         self.launches.append({"week": week, "repo": name, "outcome": outcome, "upvotes": upvotes})
         self.track_record.append(f"week {week}: posted repo {name} to {self.forum['name']} → "
@@ -437,7 +442,7 @@ class Run:
         self.log("launch", week, repo=snap["repo"], title=a["title"], pitch=a["pitch"],
                  repo_snapshot=snap, estimate=est, estimated_chance=est["estimated_chance"],
                  base_rate=self.forum["traction_base_rate"], outcome=outcome, upvotes=upvotes,
-                 success_draw=u, seed=self.dice_seed, dice_seed=self.dice_seed, parse_error=err,
+                 seed=self.dice_seed, dice_seed=self.dice_seed, attempt=attempt, **draws, parse_error=err,
                  referee_input={"system": referee.LAUNCH_SYSTEM, "user": user}, raw_output=reply.text,
                  model=f"{self.referee.name}:{self.referee.model}")
         wk.note(f"launched {name} on {self.forum['name']}: {outcome}, {upvotes} upvotes", key=True)
@@ -720,7 +725,7 @@ What do you do this week? Act through your tools; wait ends the week."""
     def execute(self) -> dict:
         self.log("run_start", persona_path=str(self.persona_path), persona=self.persona,
                  world_path=str(self.world_path), seed=self.seed, order_seed=self.order_seed,
-                 dice_seed=self.dice_seed, code=code_version(),
+                 dice_seed=self.dice_seed, dice_scheme=referee.DICE_SCHEME, code=code_version(),
                  world_illustrative=self.world_illustrative, sources=self.sources,
                  opening_order=[o["id"] for o in self.order],
                  models={"agent": f"{self.agent.name}:{self.agent.model}",

@@ -19,8 +19,8 @@ application always gets the same odds, and the dice add the variance. Current Cl
 reject sampling parameters, so Anthropic referee estimates are not deterministic.
 """
 
+import hashlib
 import json
-import random
 
 import yaml
 
@@ -177,14 +177,34 @@ def parse_estimate(text: str, base_rate: float) -> tuple[dict, str | None]:
     return out, None
 
 
-def draw(rng: random.Random, chance: float, reply_rate: float) -> tuple[str, dict]:
-    """Sample the outcome. Returns (outcome, the raw draws for the log)."""
-    success_draw = rng.random()
+# --- dice -----------------------------------------------------------------------------------
+#
+# Common random numbers: every draw is a pure function of its key (dice seed, kind, target,
+# attempt), never of what else the run did. Two runs with the same dice seed that both make
+# their 1st application to job-01, in whatever week and after whatever else, get the same u.
+# So holding the dice seed fixed really holds outcomes fixed for the same choices, which a
+# sequential RNG can't do once paths diverge.
+
+DICE_SCHEME = "keyed-sha256-v1"  # logged in run_start; runs without it used one sequential RNG
+
+
+def uniform(dice_seed: int, kind: str, target: str, attempt: int) -> tuple[float, str]:
+    """A uniform draw in [0, 1) for this key, and the key as logged."""
+    key = json.dumps([dice_seed, kind, target, attempt])
+    h = hashlib.sha256(key.encode()).digest()
+    return (int.from_bytes(h[:8], "big") >> 11) / 2**53, key  # 53 bits: exactly representable
+
+
+def draw(dice_seed: int, opening_id: str, attempt: int, chance: float, reply_rate: float) -> tuple[str, dict]:
+    """Sample an application's outcome. The success and reply draws have separate keys, so
+    whether the reply draw is needed never changes the success draw. Returns (outcome, draws)."""
+    success_draw, success_key = uniform(dice_seed, "apply", opening_id, attempt)
+    reply_draw, reply_key = uniform(dice_seed, "reply", opening_id, attempt)
+    draws = {"success_draw": success_draw, "success_key": success_key,
+             "reply_draw": reply_draw, "reply_key": reply_key}
     if success_draw < chance:
-        return "success", {"success_draw": success_draw, "reply_draw": None}
-    reply_draw = rng.random()
-    outcome = "failure" if reply_draw < reply_rate else "ignored"
-    return outcome, {"success_draw": success_draw, "reply_draw": reply_draw}
+        return "success", draws
+    return ("failure" if reply_draw < reply_rate else "ignored"), draws
 
 
 # --- launches -------------------------------------------------------------------------------
@@ -253,9 +273,12 @@ def parse_launch(text: str, base_rate: float) -> tuple[dict, str | None]:
     return out, None
 
 
-def draw_launch(rng: random.Random, chance: float, forum: dict) -> tuple[str, int, float]:
-    """Returns (outcome, upvotes, the success draw)."""
-    u = rng.random()
+def draw_launch(dice_seed: int, repo: str, attempt: int, chance: float, forum: dict) -> tuple[str, int, dict]:
+    """Sample a launch: traction or not, then upvotes in that outcome's range, each from its own
+    key. Returns (outcome, upvotes, draws)."""
+    u, key = uniform(dice_seed, "launch", repo, attempt)
+    v, vkey = uniform(dice_seed, "launch_upvotes", repo, attempt)
     outcome = "traction" if u < chance else "quiet"
     lo, hi = forum["upvotes_traction" if outcome == "traction" else "upvotes_quiet"]
-    return outcome, rng.randint(lo, hi), u
+    upvotes = min(hi, lo + int(v * (hi - lo + 1)))
+    return outcome, upvotes, {"success_draw": u, "success_key": key, "upvotes_draw": v, "upvotes_key": vkey}

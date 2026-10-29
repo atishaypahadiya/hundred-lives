@@ -30,7 +30,7 @@ Horizon and budget: **26 weeks, `--max-tokens 1000000`.** That's the same as the
 | a | vary dice only | fixed | seed + i | `--order-seed 1000` |
 | b | vary order only | seed + i | fixed | `--dice-seed 2000` |
 | c | vary both | seed + i | seed + i | (neither) |
-| d | *recommended:* vary neither | fixed | fixed | `--order-seed 1000 --dice-seed 2000` |
+| d | vary neither | fixed | fixed | `--order-seed 1000 --dice-seed 2000` |
 
 Each condition is one batch of `--runs 10`. With the same `--seed 0`, run i in (a) uses the same dice seed as run i in (c), and run i in (b) uses the same order seed as run i in (c).
 
@@ -48,19 +48,25 @@ Every batch first logs a `referee_baseline`: the average applicant scored agains
 
 ## Why (d)
 
-Without (d), (a) measures dice plus sampling and (b) measures order plus sampling, so the difference between them can't be pinned on either source. (d) gives the floor, the diversity that comes from sampling alone:
+Without (d), (a) measures dice plus sampling and (b) measures order plus sampling, so neither source can be measured on its own. (d) gives the floor, the diversity that comes from sampling alone:
 
 - dice share ≈ diversity(a) − diversity(d);
 - order share ≈ diversity(b) − diversity(d);
 - interaction ≈ diversity(c) − diversity(a) − diversity(b) + diversity(d).
 
-It adds 10 runs (about +33% cost).
+Approved: (d) adds 10 runs, about a third more cost.
 
-## Caveat to decide before running: fixed dice is a fixed stream
+## Dice are common random numbers
 
-`Run.rng` is one sequential stream. Each application or launch takes the next draws, so once two runs differ in what they do, the same draw goes to a different application. "Fixed dice" then only fixes outcomes for as long as the runs behave identically. That weakens (b) and (d).
+Each draw is a pure function of its key (`referee.uniform`):
 
-The fix, which needs a yes before it's built: key each draw by `(dice_seed, opening_id, n-th application to it)` (and by repo for launches). The same application to the same opening then gets the same draw whatever else the run did. Old runs can't be replayed under the keyed scheme, which is acceptable since the world changed anyway.
+- `[dice_seed, "apply", opening_id, n]` for the success draw of the n-th application to an opening;
+- `[dice_seed, "reply", opening_id, n]` for failure vs ignored, a separate key so it never uses up the success draw;
+- `[dice_seed, "launch", repo, n]` and `[dice_seed, "launch_upvotes", repo, n]` for launches.
+
+With a fixed dice seed, the same choice gets the same draw however the paths diverged, so (b) and (d) really do hold outcomes fixed for the same choices. Every draw's key is logged (`referee_decision.success_key` / `reply_key`, `launch.success_key` / `upvotes_key`), and `run_start.dice_scheme = "keyed-sha256-v1"`.
+
+Remaining limit: the Haiku referee isn't deterministic, so the same application can get a slightly different estimate, and the same u can land on either side of it. The per-batch baselines measure how much that estimate moves.
 
 ## Measures (analysis/diversity.py, to be written before running)
 
@@ -76,4 +82,4 @@ Report each measure with a bootstrap 95% CI over runs. Ten runs per condition wi
 
 ## Cost
 
-Estimate = (40 runs if (d) is included, otherwise 30) × the measured cost of a showcase run, plus 4 baselines × 30 referee calls. I'll fill in the number after the showcase runs and the Console reconciliation, and won't launch until it's approved.
+Estimate = 40 runs × the measured cost of a showcase run, plus 4 baselines × 30 referee calls. I'll fill in the number after the showcase runs and the Console reconciliation, and won't launch until it's approved.
