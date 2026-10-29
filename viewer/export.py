@@ -88,15 +88,15 @@ def scrub(obj, report: dict, deny: list[str], home: str, path: str = ""):
 
 
 def export(run_id: str, out: Path, deny: list[str]) -> dict:
-    path = server.runs_dir / f"{run_id}.jsonl"
-    if not path.is_file():
-        raise SystemExit(f"no run log {path}")
+    path = server._log_path(run_id)
+    if path is None:
+        raise SystemExit(f"no run log {run_id}.jsonl in {', '.join(map(str, server.runs_dirs))}")
     records = list(server._records(path))
     if not any(r.get("type") == "run_end" for r in records):
         raise SystemExit(f"{run_id} hasn't ended; export finished runs only")
     events = [ev for seq, rec in enumerate(records, 1) for ev in normalize(rec, seq)]
     summary = server.summarize(path)
-    bundles = sorted(p for p in (server.runs_dir / run_id / "repos").glob("*.bundle") if p.is_file() and not p.is_symlink())
+    bundles = sorted(p for p in (path.parent / run_id / "repos").glob("*.bundle") if p.is_file() and not p.is_symlink())
     repos = [server.read_bundle(b) for b in bundles]
     for r in repos:
         r.pop("bundle_bytes", None)
@@ -136,10 +136,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("run_id")
     ap.add_argument("--out", type=Path)
-    ap.add_argument("--runs-dir", type=Path, default=server.runs_dir)
+    ap.add_argument("--runs-dir", type=Path, action="append", help="repeatable; default runs/")
     ap.add_argument("--deny", type=Path, help="real names that must not appear, one per line (not committed)")
     a = ap.parse_args(argv)
-    server.runs_dir = a.runs_dir.resolve()
+    server.runs_dirs = [d.resolve() for d in a.runs_dir or server.runs_dirs]
     if not server.RUN_ID.match(a.run_id):
         sys.exit(f"bad run id {a.run_id!r}")
     deny = [l.strip() for l in a.deny.read_text().splitlines() if l.strip()] if a.deny else []

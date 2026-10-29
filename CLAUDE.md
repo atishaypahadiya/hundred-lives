@@ -36,7 +36,7 @@ uv run python -m orchestrator.sandbox up       # once: Gitea on 127.0.0.1:3000, 
 uv run python -m orchestrator.sandbox check    # isolation probes from a throwaway agent container
 uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 10   # 52 weeks each
 uv run python analysis/summarize.py runs/maya-*.jsonl
-uv run python -m viewer.server                  # http://127.0.0.1:8711, read-only on runs/
+uv run python -m viewer.server                  # http://127.0.0.1:8711, read-only on runs/ (--runs-dir repeatable)
 uv run python -m viewer.export <run_id> --deny real-names.txt   # docs/replays/<run_id>/ + scrub-report.json
 ```
 

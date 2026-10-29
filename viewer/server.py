@@ -2,6 +2,7 @@
 
     uv run python -m viewer.server              # http://127.0.0.1:8711
     uv run python -m viewer.server --port 9000 --runs-dir runs
+    uv run python -m viewer.server --runs-dir runs --runs-dir ../other/runs   # several dirs, one grid
 
 Endpoints:
     GET /                                 the page (viewer/index.html)
@@ -50,15 +51,18 @@ SUMMARY_TAIL = 256_000  # bytes of the log's end read for a run summary
 GIT_TIMEOUT_S = 10
 MAX_COMMITS, MAX_FILES, MAX_README = 200, 500, 20_000
 
-runs_dir = ROOT / "runs"
+runs_dirs: list[Path] = [ROOT / "runs"]  # searched in order; a run id in two dirs is shown from the first
 _summaries: dict[str, tuple[tuple, dict]] = {}  # run_id -> ((size, mtime), summary)
 
 
 def _log_path(run_id: str) -> Path | None:
     if not RUN_ID.match(run_id) or run_id.endswith("-referee-baseline"):
         return None
-    p = runs_dir / f"{run_id}.jsonl"
-    return p if p.is_file() and p.resolve().parent == runs_dir.resolve() else None
+    for d in runs_dirs:
+        p = d / f"{run_id}.jsonl"
+        if p.is_file() and p.resolve().parent == d.resolve():
+            return p
+    return None
 
 
 def _records(path: Path):
@@ -137,7 +141,8 @@ async def page(request: Request):
 
 
 async def runs(request: Request):
-    paths = sorted((p for p in runs_dir.glob("*.jsonl") if _log_path(p.stem)), key=lambda p: p.stem, reverse=True)
+    stems = {p.stem for d in runs_dirs for p in d.glob("*.jsonl")}
+    paths = sorted(filter(None, map(_log_path, stems)), key=lambda p: p.stem, reverse=True)
     return JSONResponse([summarize(p) for p in paths])
 
 
@@ -230,7 +235,7 @@ async def repos(request: Request):
     path = _log_path(request.path_params["run_id"])
     if not path:
         return Response("no such run", status_code=404)
-    d = runs_dir / path.stem / "repos"
+    d = path.parent / path.stem / "repos"
     bundles = sorted(p for p in d.glob("*.bundle") if p.is_file() and not p.is_symlink()) if d.is_dir() else []
     return JSONResponse(await asyncio.gather(*(asyncio.to_thread(read_bundle, b) for b in bundles)))
 
@@ -303,13 +308,14 @@ app = Starlette(middleware=[Middleware(TrustedHostMiddleware, allowed_hosts=LOOP
 
 
 def main(argv=None):
-    global runs_dir
+    global runs_dirs
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=8711)
-    ap.add_argument("--runs-dir", type=Path, default=runs_dir)
+    ap.add_argument("--runs-dir", type=Path, action="append",
+                    help="a runs directory; repeat to show several in one grid (default: runs/)")
     ap.add_argument("--gateway-dir", type=Path, default=GATEWAY_DIR)
     args = ap.parse_args(argv)
-    runs_dir = args.runs_dir.resolve()
+    runs_dirs = [d.resolve() for d in args.runs_dir or runs_dirs]
     global gateway_dir
     gateway_dir = args.gateway_dir.resolve()
     import uvicorn
