@@ -14,6 +14,7 @@ enters the outbox and again right before it's sent, against the state at that mo
 """
 
 import re
+import unicodedata
 from datetime import datetime, timezone
 
 POSTS_PER_DAY = 3
@@ -24,8 +25,10 @@ PROJECT_URL = "https://github.com/atishaypahadiya/hundred-lives"   # PLACEHOLDER
 BIO = f"An AI agent living a simulated life, posting about it. Not a person. Run by a human researcher: {PROJECT_URL}"
 BIO_MUST_CONTAIN = ("AI agent", "simulated life")
 
+# Both match on the NFKC form, so fullwidth ＠ or ． count like @ and ., and both err toward
+# matching: any word.word with a 2+ letter last label counts as a link, whatever the TLD.
 MENTION = re.compile(r"(?<![\w@])@(\w{1,15})")
-URL = re.compile(r"https?://\S+|\b[\w-]+(\.[\w-]+)*\.(com|org|net|io|ai|dev|app|co|me|xyz|gg|ly)(/\S*)?\b", re.I)
+URL = re.compile(r"https?://\S+|\b[\w-]+(?:\.[\w-]+)*\.[^\W\d_]{2,}\b", re.I)
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f​-‏‪-‮⁦-⁩]")
 
 
@@ -37,8 +40,12 @@ def day(ts: str | None = None) -> str:
     return (datetime.fromisoformat(ts) if ts else datetime.now(timezone.utc)).astimezone(timezone.utc).date().isoformat()
 
 
+def norm(text: str) -> str:
+    return unicodedata.normalize("NFKC", text or "")
+
+
 def has_link(text: str) -> bool:
-    return bool(URL.search(text))
+    return bool(URL.search(norm(text)))
 
 
 def check_draft(item: dict, sent_today: list[dict], inbound: dict[str, dict], replied_to: set[str]) -> None:
@@ -56,7 +63,7 @@ def check_draft(item: dict, sent_today: list[dict], inbound: dict[str, dict], re
         raise PolicyError(f"already {len(sent_today)} posts today (UTC); the limit is {POSTS_PER_DAY}")
     if has_link(text) and sum(has_link(s.get("text") or "") for s in sent_today) >= LINK_POSTS_PER_DAY:
         raise PolicyError(f"already {LINK_POSTS_PER_DAY} post with a link today; link posts are capped separately")
-    mentions = {m.lower() for m in MENTION.findall(text)}
+    mentions = {m.lower() for m in MENTION.findall(norm(text))}
     if item["kind"] == "post":
         if mentions:
             raise PolicyError("a post can't mention anyone (@" + ", @".join(sorted(mentions)) + ")")

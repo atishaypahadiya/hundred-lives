@@ -31,7 +31,12 @@ SECRETS = [
     ("assigned secret", re.compile(rb"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['\"][^'\"\s]{12,}['\"]")),
     ("email address", re.compile(rb"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
 ]
-ALLOWED_EMAILS = re.compile(rb"@(example\.(com|org)|users\.noreply\.github\.com|hl\.local|gitea\.local)\b")
+ALLOWED_EMAILS = re.compile(rb"[^@\s]+@(example\.(com|org)|users\.noreply\.github\.com|hl\.local|gitea\.local)")
+
+
+def allowed_email(e: bytes) -> bool:
+    """The whole address must be on an allowed domain (x@example.com.evil.org isn't)."""
+    return ALLOWED_EMAILS.fullmatch(e) is not None
 
 
 def _git(*args: str, cwd: Path | None = None, env: dict | None = None, input_: bytes | None = None) -> bytes:
@@ -43,25 +48,27 @@ def _git(*args: str, cwd: Path | None = None, env: dict | None = None, input_: b
 
 
 def scan(bare: Path) -> list[dict]:
-    """Every secret-looking string and email in any blob of any commit, plus commit author/committer
-    emails. Returns [{what, object, sample}] with the sample redacted."""
+    """Every secret-looking string and email in every object of every type: blobs (file
+    contents), trees (file names), commits (messages, author and committer names and emails),
+    and tags (messages, tagger). Returns [{what, object, sample}] with the sample redacted."""
     hits = []
     for line in _git("log", "--all", "--format=%H %ae %ce", cwd=bare).decode().splitlines():
         sha, *emails = line.split()
         for e in emails:
-            if not ALLOWED_EMAILS.search(e.encode()):
+            if not allowed_email(e.encode()):
                 hits.append({"what": "commit email", "object": sha[:10], "sample": e[:2] + "…"})
-    objs = _git("cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype) %(objectsize)", cwd=bare)
-    blobs = [l.split()[0] for l in objs.decode().splitlines() if l.split()[1] == "blob" and int(l.split()[2]) <= MAX_BLOB]
-    big = [l.split()[0] for l in objs.decode().splitlines() if l.split()[1] == "blob" and int(l.split()[2]) > MAX_BLOB]
-    hits += [{"what": "blob too large to scan", "object": b[:10], "sample": ""} for b in big]
-    for sha in blobs:
-        data = _git("cat-file", "blob", sha, cwd=bare)
+    objs = [l.split() for l in _git("cat-file", "--batch-all-objects",
+                                    "--batch-check=%(objectname) %(objecttype) %(objectsize)", cwd=bare).decode().splitlines()]
+    hits += [{"what": f"{t} too large to scan", "object": sha[:10], "sample": ""} for sha, t, n in objs if int(n) > MAX_BLOB]
+    for sha, kind, n in objs:
+        if int(n) > MAX_BLOB:
+            continue
+        data = _git("cat-file", kind, sha, cwd=bare)
         for what, rx in SECRETS:
             for m in rx.finditer(data):
-                if what == "email address" and ALLOWED_EMAILS.search(m.group(0)):
+                if what == "email address" and allowed_email(m.group(0)):
                     continue
-                hits.append({"what": what, "object": sha[:10], "sample": m.group(0)[:4].decode(errors="replace") + "…"})
+                hits.append({"what": what, "object": f"{kind} {sha[:10]}", "sample": m.group(0)[:4].decode(errors="replace") + "…"})
     return hits
 
 
