@@ -447,7 +447,9 @@ footer .row a{color:var(--grey-2)}
   "results": "",
   "log": [
     { "date": "2026-10-28", "text": "Wrote down the questions, the sandbox design, and the predictions.", "status": "done" },
-    { "date": "next", "text": "One agent, one persona, local model, logs working end to end.", "status": "now" },
+    { "date": "2026-10-28", "text": "Seeded dice for the referee: it estimates odds and code draws the outcome, so a 6% chance stays 6% across runs.", "status": "done" },
+    { "date": "2026-10-29", "text": "Sandbox for agents with a shell: one container per agent, a separate internal network for each run, CPU, memory, disk and process limits, and a local Gitea with no route to the internet. Red-teamed it: found and fixed egress through Gitea's migrate and mirror, code leaking between runs, two ways to exhaust host memory, and agents reaching each other's containers.", "status": "done" },
+    { "date": "next", "text": "Pilot results (10 × 52 on qwen3:8b), then the first agents with a shell.", "status": "now" },
     { "date": "later", "text": "Three agents in containers with the shared world and proxy.", "status": "" },
     { "date": "later", "text": "100 runs per persona, then change one detail at a time.", "status": "" },
     { "date": "later", "text": "Replace the LLM referee with real base rates.", "status": "" }
