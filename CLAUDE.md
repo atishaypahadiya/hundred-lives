@@ -78,6 +78,18 @@ A second world for the "Self" persona: two years of a CS degree as an internatio
 - `feed` + `post(text, repo?)`: the referee (role `audience`) estimates a breakout chance and writes candidate replies with made-up handles; code draws breakout, Pareto luck, likes, follows, replies, each on its own key (`referee.draw_post`). Logged as `post`; followers in every snapshot. With the file's numbers a new account's post gets 0–2 likes most of the time (p99 ≈ 20).
 - Contacts in `self.yaml` are fictional. `address_note` (persona) and `address_as` (contact) tell the referee and contacts how to address the persona.
 
+## The live gateway (`gateway/`, Track B)
+
+The Self persona in real time on X: `python -m gateway.run turn|dispatch|loop|status|publish|kill|unkill`. Built and tested offline; **nothing has been posted**.
+
+- The agent only drafts (`draft_post`, `draft_reply`, `done`); drafts wait in the outbox until a person approves them on the viewer's `#/gateway` page. There is no code for DMs, follows, likes, reposts, or search.
+- Rules are constants in `gateway/policy.py`, checked at draft time and again just before sending: ≤3 posts a day (UTC) including replies, ≤1 of them with a link, replies only to someone who engaged first and only mentioning them, no other mentions, ≤100 reads a day, and the profile bio must disclose an AI agent running a simulated life with the project link (checked live before any send).
+- Dry run is the default (no request leaves the machine; fake ids). `--live` calls X; `--live-github` pushes approved mirrors. Dry and live state are separate: `gateway/state/{dry,live}/gateway.jsonl` (gitignored) is the only state, an append-only event log; `KILL` in that dir stops every turn and send.
+- Inbound posts reach the agent inside `<untrusted>` blocks with control/bidi characters stripped and the closing tag neutralized.
+- The GitHub publisher mirrors a run's exported bundle (never live Gitea), refuses any repo whose history has a secret-looking string or a real email, and creates the repo private in `GITHUB_ORG`. The token reaches git only as an env-config header.
+- Credentials (`X_USER_ACCESS_TOKEN`, `X_USER_ID`, `GITHUB_TOKEN`, `GITHUB_ORG`, optional `X_COST_PER_*_USD`) live in `.env` only, never in prompts, logs, containers, or commits.
+- The viewer's gateway endpoints are its only writes, and they go to the gateway state dir, never `runs/`; they need the `X-HL-Token` header (token in `gateway/state/approve.token`, 0600) and a loopback Origin.
+
 ## Sandbox
 
 - The agent loop runs on the host. A container only runs `shell` commands and `files` reads/writes; it never sees the model endpoint, API keys, or the host filesystem.

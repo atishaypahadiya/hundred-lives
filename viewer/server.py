@@ -10,8 +10,13 @@ Endpoints:
                                           then new ones as the run writes them; `end` after run_end.
                                           A finished run and a live one take the same path.
     GET /api/runs/{run_id}/repos          exported repo bundles: commits, files, README
+    GET /api/gateway?mode=dry|live        the live gateway's outbox, kill switch, and today's counts
+    GET /api/gateway/token                the approval token (same-origin pages only)
+    POST /api/gateway/{mode}/{item}/approve|reject, /api/gateway/{mode}/kill|unkill
 
-Nothing here writes under runs/. Bundles are read through a bare clone in a temp dir (no
+Nothing here writes under runs/. The gateway endpoints append decisions to the gateway's own
+log (gateway/state/<mode>/gateway.jsonl); they need the X-HL-Token header, which a cross-origin
+page can't send without a CORS preflight this server never answers, and a loopback Origin. Bundles are read through a bare clone in a temp dir (no
 checkout, hooks off), since anything in a repo is agent-controlled. Binds 127.0.0.1 only, and
 rejects any Host header that isn't a loopback name, so a web page can't DNS-rebind its way in.
 """
@@ -31,6 +36,9 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
+
+from gateway import policy as gw_policy
+from gateway.store import DEFAULT_DIR as GATEWAY_DIR, Store, approve_token
 
 from .normalize import normalize
 
@@ -228,12 +236,69 @@ async def repos(request: Request):
 
 
 LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "[::1]"]  # TrustedHostMiddleware ignores the port
+gateway_dir = GATEWAY_DIR
+GATEWAY_MODES = ("dry", "live")
+LOOPBACK_ORIGIN = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$")
+
+
+def _gateway_store(mode: str) -> Store | None:
+    return Store(gateway_dir / mode) if mode in GATEWAY_MODES else None
+
+
+async def gateway(request: Request):
+    store = _gateway_store(request.query_params.get("mode", "dry"))
+    if store is None:
+        return JSONResponse({"error": "mode is dry or live"}, status_code=400)
+    items = sorted(store.outbox().values(), key=lambda i: i["created"], reverse=True)
+    inbound = store.inbound()
+    for i in items:  # the post a reply answers, for the reviewer
+        if i.get("in_reply_to") in inbound:
+            src = inbound[i["in_reply_to"]]
+            i["replying_to"] = {"author": src.get("author_username"), "text": src.get("text", "")[:1000]}
+    return JSONResponse({"killed": store.killed(), "items": items[:200], "sent_today": len(store.sent_today()),
+                         "reads_today": store.reads_today(), "limits": {"posts": gw_policy.POSTS_PER_DAY,
+                         "links": gw_policy.LINK_POSTS_PER_DAY, "reads": gw_policy.READS_PER_DAY}})
+
+
+async def gateway_token(request: Request):
+    return JSONResponse({"token": approve_token(gateway_dir)}, headers={"Cache-Control": "no-store"})
+
+
+async def gateway_act(request: Request):
+    origin = request.headers.get("origin")
+    if origin and not LOOPBACK_ORIGIN.match(origin):
+        return JSONResponse({"error": "cross-origin request"}, status_code=403)
+    if request.headers.get("x-hl-token") != approve_token(gateway_dir):
+        return JSONResponse({"error": "missing or wrong X-HL-Token"}, status_code=403)
+    store = _gateway_store(request.path_params["mode"])
+    if store is None:
+        return JSONResponse({"error": "mode is dry or live"}, status_code=400)
+    action, item_id = request.path_params["action"], request.path_params.get("item")
+    if action not in (("approve", "reject") if item_id else ("kill", "unkill")):
+        return JSONResponse({"error": f"unknown action {action!r}"}, status_code=404)
+    if action == "kill":
+        store.kill("from the viewer")
+    elif action == "unkill":
+        store.unkill()
+    else:
+        item = store.outbox().get(item_id or "")
+        if item is None:
+            return JSONResponse({"error": f"no item {item_id!r}"}, status_code=404)
+        allowed = {"approve": ("pending",), "reject": ("pending", "approved")}[action]
+        if item["status"] not in allowed:
+            return JSONResponse({"error": f"{item_id} is {item['status']}; can't {action}"}, status_code=409)
+        store.log("approved" if action == "approve" else "rejected", item_id=item_id, by="viewer")
+    return JSONResponse({"ok": True})
 
 app = Starlette(middleware=[Middleware(TrustedHostMiddleware, allowed_hosts=LOOPBACK_HOSTS)], routes=[
     Route("/", page),
     Route("/api/runs", runs),
     Route("/api/runs/{run_id}/events", events),
     Route("/api/runs/{run_id}/repos", repos),
+    Route("/api/gateway", gateway),
+    Route("/api/gateway/token", gateway_token),
+    Route("/api/gateway/{mode}/{action:str}", gateway_act, methods=["POST"]),
+    Route("/api/gateway/{mode}/{item}/{action:str}", gateway_act, methods=["POST"]),
 ])
 
 
@@ -242,8 +307,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=8711)
     ap.add_argument("--runs-dir", type=Path, default=runs_dir)
+    ap.add_argument("--gateway-dir", type=Path, default=GATEWAY_DIR)
     args = ap.parse_args(argv)
     runs_dir = args.runs_dir.resolve()
+    global gateway_dir
+    gateway_dir = args.gateway_dir.resolve()
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
 

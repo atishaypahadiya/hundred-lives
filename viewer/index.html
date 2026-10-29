@@ -269,6 +269,7 @@ input[type=range]:focus-visible { outline: 2px solid var(--ink); outline-offset:
   <h1><a href="#/">Hundred Lives</a></h1>
   <span class="crumb" id="crumb"></span>
   <span class="sp"></span>
+  <a class="pbtn" href="#/gateway">Gateway</a>
   <span id="themeSlot"></span>
 </header>
 <main id="app"></main>
@@ -399,8 +400,8 @@ themeButton();
 let cleanup = () => {};
 function route() {
   cleanup(); cleanup = () => {};
-  const m = location.hash.match(/^#\/run\/([^?]+)(?:\?w=(\d+))?/);
-  if (m) showRun(decodeURIComponent(m[1]), m[2] ? +m[2] : null); else showGrid();
+  const m = location.hash.match(/^#\/run\/([^?]+)(?:\?w=(\d+))?/), g = location.hash.match(/^#\/gateway(?:\?mode=(dry|live))?/);
+  if (m) showRun(decodeURIComponent(m[1]), m[2] ? +m[2] : null); else if (g) showGateway(g[1] || "dry"); else showGrid();
 }
 addEventListener("hashchange", route);
 
@@ -489,6 +490,54 @@ function cashChart(weeks, horizon, opts = {}) {
 const CHART_PAD = { l: 64, r: 8 };
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); return [1, 2, 2.5, 5, 10].map(m => m * p).find(v => v >= raw) || p * 10; }
 function ticks(n) { const st = n <= 13 ? 1 : n <= 30 ? 5 : n <= 60 ? 10 : 26, out = [1]; for (let i = st; i <= n; i += st) if (i !== 1) out.push(i); return out; }
+
+// ---------- the live gateway's outbox (Track B) ----------
+// Drafts wait here for a person. Approve and Reject append a decision to the gateway's own log;
+// the gateway checks its rules again before sending. Nothing on this page posts anything.
+function showGateway(mode) {
+  document.getElementById("crumb").textContent = "gateway · " + mode;
+  document.getElementById("back").replaceChildren(IconButton({ icon: "back", label: "Back to all lives", href: "#/" }));
+  $app.classList.remove("has-scrubber");
+  let token = null, timer = null, msg = "";
+  const STATUS = { pending: "amber", approved: "teal", sent: "lime", rejected: null, blocked: "coral", failed: "coral" };
+  async function act(path) {
+    try {
+      token = token || (await (await fetch("/api/gateway/token")).json()).token;
+      const r = await fetch(`/api/gateway/${mode}/${path}`, { method: "POST", headers: { "X-HL-Token": token } });
+      msg = r.ok ? "" : (await r.json()).error || `error ${r.status}`;
+    } catch (e) { msg = String(e); }
+    load();
+  }
+  async function load() {
+    let d;
+    try { d = await (await fetch(`/api/gateway?mode=${mode}`)).json(); } catch (e) { msg = String(e); return; }
+    const pending = d.items.filter(i => i.status === "pending");
+    $app.replaceChildren(h("div", {},
+      h("div", { class: "bento" },
+        StatTile({ label: "Kill switch", value: d.killed ? "On" : "Off", tone: d.killed ? "broke" : "glass", sub: d.killed ? "no turns, no sends" : "turns and sends allowed" },
+          h("div", { style: "margin-top:12px" }, h("button", { class: "pbtn", type: "button", onclick: () => act(d.killed ? "unkill" : "kill") }, d.killed ? "Turn off" : "Stop everything"))),
+        StatTile({ label: "Posted today (UTC)", value: `${d.sent_today} / ${d.limits.posts}`, sub: `link posts ≤ ${d.limits.links} a day` }),
+        StatTile({ label: "Reads today", value: `${d.reads_today} / ${d.limits.reads}`, sub: "mentions and replies read" }),
+        StatTile({ label: "Waiting for you", value: pending.length, sub: mode === "dry" ? "dry run: nothing reaches X" : "live: approved items are sent" })),
+      h("div", { class: "tile-head", style: "margin:16px 0" },
+        h("a", { class: "pbtn", href: "#/gateway?mode=dry", "aria-pressed": String(mode === "dry") }, "Dry run"),
+        h("a", { class: "pbtn", href: "#/gateway?mode=live", "aria-pressed": String(mode === "live") }, "Live"),
+        msg ? h("span", { class: "lab", role: "alert" }, msg) : null),
+      GlassCard({ title: "Outbox", sub: `${d.items.length} item${d.items.length === 1 ? "" : "s"}`, cls: "wide" },
+        d.items.length ? h("div", { class: "feed", style: "max-height:none" }, d.items.map(i => h("div", { class: "item" },
+          h("div", { class: "tile-head" }, Pill(i.status, { tone: STATUS[i.status] }), Pill(i.kind), h("span", { class: "meta" }, `${i.id} · ${i.created}`)),
+          i.replying_to ? h("div", { class: "inner", style: "margin-top:8px" }, h("div", { class: "meta" }, `replying to @${i.replying_to.author} (untrusted)`), h("div", { class: "text" }, i.replying_to.text)) : null,
+          h("div", { class: "text", style: "margin-top:8px" }, i.kind === "publish_repo" ? `Mirror ${i.run_id}/${i.repo} to GitHub as ${i.publish_as} (private)` : i.text),
+          i.kind !== "publish_repo" ? h("div", { class: "meta" }, `${[...(i.text || "")].length} characters`) : null,
+          (i.history || []).filter(x => x.reason).map(x => h("div", { class: "meta" }, `${x.status}: ${x.reason}`)),
+          i.status === "pending" || i.status === "approved" ? h("div", { class: "tile-head", style: "margin-top:8px" },
+            i.status === "pending" ? h("button", { class: "pbtn", type: "button", onclick: () => act(`${i.id}/approve`) }, "Approve") : null,
+            h("button", { class: "pbtn", type: "button", onclick: () => act(`${i.id}/reject`) }, "Reject")) : null)))
+          : h("div", { class: "empty" }, "Nothing in the outbox."))));
+  }
+  load(); timer = setInterval(load, 5000);
+  cleanup = () => clearInterval(timer);
+}
 
 // ---------- grid of lives ----------
 function showGrid() {
