@@ -10,6 +10,7 @@ and converted for the OpenAI-compatible side.
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 
@@ -48,6 +49,28 @@ class Usage:
     def as_dict(self) -> dict:
         return {"input": self.input, "output": self.output, "cache_read": self.cache_read,
                 "cache_write": self.cache_write, "total": self.total}
+
+
+MAX_RETRIES = 4  # Anthropic SDK: retries connection errors, 408, 409, 429, 5xx with backoff
+
+
+class APIError(Exception):
+    """A model call that failed for good, after retries: spend limit, auth, any 4xx/5xx, or the
+    network. It's never a world event: the run stops with run_end.reason = "api_error", and
+    neither the agent nor the referee ever sees it."""
+
+    SPEND = re.compile(r"credit balance|billing|spend limit|spending limit|usage limit|quota", re.I)
+
+    def __init__(self, backend: str, model: str, status: int | None, kind: str, message: str,
+                 request_id: str | None = None):
+        self.backend, self.model, self.status, self.message = backend, model, status, message
+        self.kind = "spend_limit" if self.SPEND.search(message or "") else kind
+        self.request_id = request_id
+        super().__init__(f"{backend}:{model} {status or ''} {self.kind}: {message}".replace("  ", " "))
+
+    def as_dict(self) -> dict:
+        return {"backend": self.backend, "model": self.model, "status": self.status, "kind": self.kind,
+                "message": self.message[:2000], "request_id": self.request_id}
 
 
 @dataclass
@@ -90,7 +113,7 @@ class AnthropicBackend:
         if model not in PRICES:
             raise ValueError(f"no price for {model!r}; add it to backends.PRICES so runs can report cost")
         self.model = model
-        self.client = anthropic.Anthropic()
+        self.client = anthropic.Anthropic(max_retries=MAX_RETRIES)
 
     def cost(self, reply: Reply) -> float:
         """From the API's usage fields: input_tokens excludes cached tokens, which are
@@ -102,10 +125,18 @@ class AnthropicBackend:
 
     def _create(self, **kw):
         kw.setdefault("output_config", {})["effort"] = EFFORT
-        if self.model in FALLBACK_MODELS:
-            return self.client.beta.messages.create(
-                model=self.model, betas=[FALLBACK_BETA], fallbacks="default", **kw)
-        return self.client.messages.create(model=self.model, **kw)
+        try:
+            if self.model in FALLBACK_MODELS:
+                return self.client.beta.messages.create(
+                    model=self.model, betas=[FALLBACK_BETA], fallbacks="default", **kw)
+            return self.client.messages.create(model=self.model, **kw)
+        except anthropic.APIStatusError as e:  # after the SDK's retries
+            body = e.body if isinstance(e.body, dict) else {}
+            err = body.get("error") if isinstance(body.get("error"), dict) else {}
+            raise APIError(self.name, self.model, e.status_code, err.get("type") or f"http_{e.status_code}",
+                           err.get("message") or str(e), e.response.headers.get("request-id")) from e
+        except anthropic.APIConnectionError as e:  # includes timeouts
+            raise APIError(self.name, self.model, None, "connection", str(e)) from e
 
     @staticmethod
     def _reply(resp, t0: float) -> Reply:
@@ -180,10 +211,14 @@ class OllamaBackend:
                 r = self.http.post(self.url, json=body)
                 r.raise_for_status()
                 return r.json()
-            except (httpx.TransportError, httpx.HTTPStatusError):
+            except httpx.HTTPStatusError as e:
                 if attempt == 2:
-                    raise
-                time.sleep(2 ** attempt)
+                    raise APIError(self.name, self.model, e.response.status_code,
+                                   f"http_{e.response.status_code}", e.response.text[:2000]) from e
+            except httpx.TransportError as e:
+                if attempt == 2:
+                    raise APIError(self.name, self.model, None, "connection", str(e)) from e
+            time.sleep(2 ** attempt)
 
     @staticmethod
     def _reply(data: dict, t0: float) -> Reply:

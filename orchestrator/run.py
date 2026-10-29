@@ -23,7 +23,7 @@ import yaml
 from dotenv import load_dotenv
 
 from . import referee
-from .backends import make_backend
+from .backends import APIError, make_backend
 from .memory import Memory, WeekRecord
 from .tools import (ACTION_COST, ACTIONS_PER_WEEK, MAX_INVALID_PER_WEEK, REAPPLY_AFTER_WEEKS, ToolError,
                     Workspace, tools_for, validate)
@@ -241,7 +241,11 @@ class Run:
         if self.tokens_used + estimate > self.budget:
             raise BudgetExceeded(f"next {role} call could use ~{estimate} tokens; "
                                  f"{self.budget - self.tokens_used} of {self.budget} left")
-        reply = fn(max_tokens)
+        try:
+            reply = fn(max_tokens)
+        except APIError as e:  # not a world event: logged here, ends the run in execute()
+            self.log("api_error", week, role=role, **e.as_dict())
+            raise
         self.tokens_used += reply.usage.total
         cost = backend.cost(reply)
         self.cost_usd += cost
@@ -742,6 +746,10 @@ What do you do this week? Act through your tools; wait ends the week."""
                 self.week(week)
         except BudgetExceeded as e:
             reason, detail = "token_budget", str(e)
+        except APIError as e:
+            # The interrupted week never reaches week_end, so its actions aren't counted, and
+            # nothing about the failure is shown to the agent or the referee.
+            reason, detail = "api_error", str(e)
         except KeyboardInterrupt:
             reason = "interrupted"
             raise
@@ -765,7 +773,7 @@ What do you do this week? Act through your tools; wait ends the week."""
         if detail:
             print(f"[{self.run_id}] stopped: {reason}: {detail.strip().splitlines()[-1]}",
                   file=sys.stderr)
-        return {"run_id": self.run_id, "reason": reason, "weeks": self.weeks_completed,
+        return {"run_id": self.run_id, "reason": reason, "detail": detail, "weeks": self.weeks_completed,
                 "tokens": self.tokens_used, "cost_usd": self.cost_usd,
                 "valid_action_rate": self.valid_action_rate}
 
@@ -780,8 +788,13 @@ def referee_baseline(log_id: str, world: dict, backend, sources: dict, code: dic
     ratios, cost = [], 0.0
     for o in world["openings"]:
         user = referee.build_baseline_prompt(o)
-        reply = backend.complete(referee.SYSTEM, user, backend.default_max_tokens, referee.SCHEMA,
-                                 temperature=referee.TEMPERATURE, seed=referee.SEED)
+        try:
+            reply = backend.complete(referee.SYSTEM, user, backend.default_max_tokens, referee.SCHEMA,
+                                     temperature=referee.TEMPERATURE, seed=referee.SEED)
+        except APIError as e:
+            log("api_error", role="referee_baseline", opening_id=o["id"], **e.as_dict())
+            log.close()
+            raise
         est, err = referee.parse_estimate(reply.text, o["base_rate"])
         ratio = est["estimated_chance"] / o["base_rate"]
         ratios.append((o["type"], ratio))
@@ -851,8 +864,11 @@ def main(argv=None):
     RUNS_DIR.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if not args.skip_referee_baseline:
-        referee_baseline(f"{args.persona.stem}-{stamp}-referee-baseline", world, referee_backend,
-                         sources, code)
+        try:
+            referee_baseline(f"{args.persona.stem}-{stamp}-referee-baseline", world, referee_backend,
+                             sources, code)
+        except APIError as e:
+            sys.exit(f"API error during the referee baseline; no runs started: {e}")
     results = []
     for i in range(1, args.runs + 1):
         run_id = f"{args.persona.stem}-{stamp}-{i:03d}"
@@ -860,6 +876,9 @@ def main(argv=None):
                            referee_backend, summarizer, args.max_tokens, horizon,
                            seed=args.seed + i, order_seed=args.order_seed, dice_seed=args.dice_seed,
                            sources=sources, sandbox=args.sandbox == "docker").execute())
+        if results[-1]["reason"] == "api_error":  # e.g. the spend limit: later runs would fail too
+            print(f"stopping the batch after run {i} of {args.runs}: {results[-1]['detail']}", file=sys.stderr)
+            break
     for r in results:
         print(f"{r['run_id']}  {r['reason']:<12} {r['weeks']} weeks  {r['tokens']:,} tokens  "
               f"${r['cost_usd']:.4f}  valid-action rate {r['valid_action_rate']}  runs/{r['run_id']}.jsonl")
