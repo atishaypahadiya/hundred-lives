@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+runs/*
+!runs/.gitkeep
+.DS_Store
+*.ipynb_checkpoints

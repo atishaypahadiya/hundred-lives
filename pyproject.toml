@@ -1,0 +1,20 @@
+[project]
+name = "hundred-lives"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Atishay Pahadiya", email = "atishaypahadiya3@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=2.3.0",
+    "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+hundred-lives = "hundred_lives:main"
+
+[build-system]
+requires = ["uv_build>=0.13.4,<0.14.0"]
+build-backend = "uv_build"
