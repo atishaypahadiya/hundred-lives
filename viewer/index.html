@@ -118,6 +118,11 @@ header.top { position: sticky; top: 12px; z-index: 10; margin: 12px 16px 0; padd
   display: flex; align-items: center; gap: 12px; }
 header.top h1 { font-size: 16px; margin: 0; white-space: nowrap; }
 @media (max-width: 480px) { body.replay header.top h1 { display: none; } }  /* the back link names the project */
+.replay-banner { max-width: 1440px; margin: 12px auto 0; padding: 10px 16px; border-radius: var(--r-pill); background: var(--fill);
+  color: var(--ink); font-size: 13px; line-height: 1.4; text-align: center; margin-inline: 16px; }
+@media (min-width: 900px) { .replay-banner { margin-inline: 24px; } }
+@media (min-width: 1488px) { .replay-banner { margin-inline: auto; } }
+@media (max-width: 640px) { .replay-banner { border-radius: var(--r-panel); } }
 @media (max-width: 640px) { header.top .crumb { display: none; } }
 header.top h1 a { text-decoration: none; }
 header.top .crumb { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -284,6 +289,8 @@ const $app = document.getElementById("app");
 const REPLAY = (() => { const el = document.getElementById("hl-replay"); return el ? JSON.parse(el.textContent) : null; })();
 if (REPLAY) {
   document.body.classList.add("replay");
+  document.body.prepend(h("div", { class: "replay-banner", role: "note" },
+    "Simulated life. Fictional world, organizations and odds; contacts are invented. Not a record of real events, people, or companies."));
   // A published replay links back to the project page (docs/index.html, two levels up) instead of the gateway.
   document.querySelector('header.top a.pbtn[href="#/gateway"]')?.replaceWith(h("a", { class: "pbtn", href: "../../" }, "← hundred-lives"));
   if (!location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id);
