@@ -1,12 +1,24 @@
-"""The world's static content: openings, time costs, and the gig, from world/openings.yaml."""
+"""The world's static content: openings, time costs, and the gig, from world/openings.yaml.
+
+A world file can also have a calendar, academics (classes as a commitment during semesters,
+graduation at a fixed week), work_authorization (which kinds of work are allowed when), and a
+feed (the `post` tool). Each is optional; a world without them (openings.yaml) works as before.
+"""
 
 import random
 from pathlib import Path
 
 import yaml
 
-TYPES = ("job", "accelerator", "grant", "angel_intro")
-COMMITMENT_TYPES = ("job", "accelerator")  # a success becomes a commitment with a schedule
+TYPES = ("job", "accelerator", "grant", "angel_intro",
+         "on_campus", "internship", "freelance", "student_program", "hackathon")
+COMMITMENT_TYPES = ("job", "accelerator", "on_campus", "internship", "freelance", "student_program")
+INCOME_TYPES = ("job", "on_campus", "internship", "freelance")  # applying counts as acting on a broke week
+AUTH_KINDS = ("none", "on_campus", "internship", "off_campus", "freelance")
+AUTH_WHILE = ("always", "enrolled", "graduated")
+FEED_KEYS = ("name", "description", "base_reach", "reach_per_follower", "like_rate", "follow_rate",
+             "reply_rate", "breakout_base_rate", "breakout_multiplier", "tail_alpha", "luck_cap",
+             "max_posts_per_week")
 SCHEDULES = ("full_time", "part_time")
 DEFAULT_PATH = Path(__file__).resolve().parent.parent / "world" / "openings.yaml"
 SPEND_KEYS = {"contractor": ("description", "price_weekly", "coding_actions", "max_weeks"),
@@ -59,6 +71,7 @@ def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
     costs = world.get("time_costs") or {}
     if set(costs) != set(SCHEDULES):
         raise ValueError(f"{path}: time_costs must define exactly {SCHEDULES}")
+    _check_calendar(world, path)
     seen = set()
     for o in world.get("openings") or []:
         missing = [k for k in ("id", "type", "title", "org", "requirements", "base_rate") if k not in o]
@@ -74,10 +87,84 @@ def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
         if (o["type"] in COMMITMENT_TYPES) != (o.get("schedule") in SCHEDULES):
             raise ValueError(f"{path}: opening {o['id']}: jobs and accelerators need a schedule "
                              f"in {SCHEDULES}; other types must not have one")
+        if o.get("auth", "none") not in AUTH_KINDS:
+            raise ValueError(f"{path}: opening {o['id']} auth must be one of {AUTH_KINDS}")
+        if o.get("auth", "none") != "none" and o["auth"] not in (world.get("work_authorization") or {}).get("kinds", {}):
+            raise ValueError(f"{path}: opening {o['id']} auth {o['auth']!r} has no rule in work_authorization.kinds")
+        lw = o.get("listed_weeks")
+        if lw is not None and not (isinstance(lw, list) and len(lw) == 2 and lw[0] <= lw[1]):
+            raise ValueError(f"{path}: opening {o['id']} listed_weeks must be [first, last]")
+        if o["type"] == "hackathon":
+            for k in ("event_week", "attend_actions", "build_actions", "prize", "prize_base_rate"):
+                if k not in o:
+                    raise ValueError(f"{path}: hackathon {o['id']} is missing {k}")
+            if lw and lw[1] >= o["event_week"]:
+                raise ValueError(f"{path}: hackathon {o['id']} must stop being listed before its event_week")
         seen.add(o["id"])
     if not seen:
         raise ValueError(f"{path}: no openings")
     return world
+
+
+def _check_calendar(world: dict, path: Path):
+    ac = world.get("academics")
+    if ac:
+        for k in ("label", "semesters", "class_actions", "graduation_week", "leave_refusal"):
+            if k not in ac:
+                raise ValueError(f"{path}: academics.{k} is required")
+        for sem in ac["semesters"]:
+            if not sem["start"] <= sem["end"] <= ac["graduation_week"]:
+                raise ValueError(f"{path}: semester {sem.get('name')} must lie within weeks 1..graduation_week")
+    wa = world.get("work_authorization")
+    if wa:
+        if "summary" not in wa:
+            raise ValueError(f"{path}: work_authorization.summary is required (the agent reads it)")
+        for kind, rule in (wa.get("kinds") or {}).items():
+            if kind not in AUTH_KINDS or rule.get("while") not in AUTH_WHILE:
+                raise ValueError(f"{path}: work_authorization.kinds.{kind} needs while in {AUTH_WHILE}")
+            if rule["while"] != "always" and not ac:
+                raise ValueError(f"{path}: work_authorization.kinds.{kind} depends on enrollment; add academics")
+    feed = world.get("feed")
+    if feed:
+        missing = [k for k in FEED_KEYS if k not in feed]
+        if missing:
+            raise ValueError(f"{path}: feed is missing {missing}")
+
+
+def semester(world: dict, week: int) -> dict | None:
+    """The semester running in this week, if any."""
+    ac = world.get("academics")
+    return next((s for s in ac["semesters"] if s["start"] <= week <= s["end"]), None) if ac else None
+
+
+def enrolled(world: dict, week: int) -> bool:
+    ac = world.get("academics")
+    return bool(ac) and week <= ac["graduation_week"]
+
+
+def auth_problem(world: dict, o: dict, week: int, cost: int) -> str | None:
+    """Why this opening's work isn't allowed if it starts in this week, or None. Rules come from
+    the world file's work_authorization; openings without `auth` are always allowed."""
+    kind = o.get("auth", "none")
+    wa = world.get("work_authorization")
+    if kind == "none" or not wa:
+        return None
+    rule, grad = wa["kinds"][kind], (world.get("academics") or {}).get("graduation_week")
+    if rule["while"] == "enrolled" and not enrolled(world, week):
+        return f"{kind.replace('_', '-')} work is only allowed while you're enrolled (until week {grad})"
+    if rule["while"] == "graduated" and enrolled(world, week):
+        return (f"{kind.replace('_', '-')} work is only allowed after you graduate (from week {grad + 1}); "
+                f"{rule.get('why', '')}".strip().rstrip(";"))
+    cap = rule.get("semester_max_actions")
+    if cap is not None and semester(world, week) and cost > cap:
+        return (f"during a semester {kind.replace('_', '-')} work can use at most {cap} actions/week "
+                f"(this uses {cost})")
+    return None
+
+
+def listed(o: dict, week: int) -> bool:
+    lw = o.get("listed_weeks")
+    return lw is None or lw[0] <= week <= lw[1]
 
 
 def shuffled(openings: list[dict], seed: int) -> list[dict]:
@@ -102,6 +189,12 @@ def terms(o: dict) -> str:
         parts.append(f"${o['amount']:,} to you")
     if o.get("investment"):
         parts.append(f"${o['investment']:,} invested in your company")
+    if o.get("company_amount"):
+        parts.append(f"${o['company_amount']:,} to your company (no equity)")
+    if o.get("start_week"):
+        parts.append(f"starts week {o['start_week']}")
+    if o.get("event_week"):
+        parts.append(f"event in week {o['event_week']}, prizes ${o['prize']:,} for a top placing")
     if o.get("stipend_weekly"):
         parts.append(f"${o['stipend_weekly']:,}/week stipend")
     if o.get("duration_weeks"):
@@ -109,12 +202,16 @@ def terms(o: dict) -> str:
     return ", ".join(parts)
 
 
-def catalog(openings: list[dict], costs: dict) -> str:
-    """Agent-facing list of openings, in the given order. Base and reply rates are left out."""
+def catalog(openings: list[dict], costs: dict, notes: dict | None = None) -> str:
+    """Agent-facing list of openings, in the given order. Base and reply rates are left out.
+    notes: opening id -> a short line (e.g. a work-authorization limit, or the last week to apply)."""
     lines = []
     for o in openings:
         cost = time_cost(o, costs)
         uses = f" Uses {cost} of your 8 weekly actions." if cost else ""
+        if o["type"] == "hackathon":
+            uses = f" Uses {o['attend_actions']} actions in the event week, and gives {o['build_actions']} extra build actions."
+        note = f" {notes[o['id']]}" if notes and o["id"] in notes else ""
         lines.append(f"- {o['id']} [{o['type']}] {o['title']}, {o['org']}. {terms(o)}.{uses} "
-                     f"Needs: {o['requirements']}.")
+                     f"Needs: {o['requirements']}.{note}")
     return "\n".join(lines)

@@ -84,6 +84,8 @@ def summarize(path: Path) -> dict:
             state = r.get("state") or {}
             s["weeks"].append({"week": r.get("week"), "cash": state.get("cash"), "income": state.get("weekly_income"),
                                "funding": state.get("company_funding"), "commitment": kind(state.get("commitments")),
+                               "followers": state.get("followers"),
+                               "school": any(c.get("kind") == "academics" for c in state.get("commitments") or []),
                                "labels": [c.get("label") for c in state.get("commitments") or []],
                                "gig": "took a gig" in (r.get("digest") or ""), "broke": False})
         elif t == "week_start" and r.get("broke"):
@@ -112,8 +114,9 @@ def summarize(path: Path) -> dict:
 
 
 def kind(commitments: list | None) -> str:
-    """The week's main commitment: accelerator, full-time job (5 actions), part-time, or none."""
-    cs = commitments or []
+    """The week's main commitment: accelerator, full-time job (5 actions), part-time, or none.
+    Classes (kind "academics") aren't a job; a week with only classes is "none" plus school."""
+    cs = [c for c in commitments or [] if c.get("kind") != "academics"]
     if any((c.get("opening_id") or "").startswith("acc-") for c in cs):
         return "accelerator"
     if not cs:

@@ -21,7 +21,7 @@ orchestrator/sandbox.py  per-agent container (AgentBox), in-container workspace 
 sandbox/                 compose.yaml (Gitea + the internal hl-agents network), agent.Dockerfile, init.py (the container's PID 1)
 viewer/normalize.py      raw log records -> standard viewer events (thought, tool_call, shell_output, git_commit, git_push, idea, referee, life, money, week_end, usage, summary); shared by live, replay and export
 viewer/server.py         Starlette: run grid summaries, SSE tail of a run log (live and finished runs take one path), repo bundles via a bare clone in a temp dir
-viewer/index.html        the page: grid of lives, one life with week scrubber, money, thinking, terminal, tools, idea log, referee, repos
+viewer/index.html        the page: grid of lives, one life with week scrubber, money, thinking, terminal, tools, idea log, referee, feed, repos
 analysis/summarize.py    per-run paths and metrics; first-applied opening vs position; valid-action rate; calibration
 experiments/             experiment plans (question, conditions, commands, measures, cost), one file each
 runs/                    <run_id>.jsonl, <run_id>/workspace/, <run_id>/repos/*.bundle, <batch>-referee-baseline.jsonl (gitignored)
@@ -65,6 +65,18 @@ uv run python -m viewer.server                  # http://127.0.0.1:8711, read-on
 7. `spend(item)` uses company funds only (`company_funding` raised + `company_revenue` from pilots − `company_spent`; never personal cash, which can't be spent at all). Prices are in `world/openings.yaml` `spend`: `contractor` (per week, paid up front, starts next week, one at a time, adds `coding_actions`), `launch_ads` (the next launch of that repo within `valid_weeks` uses the ads' `traction_base_rate`, and the launch referee is told it was promoted). The referee's "money raised" is still `company_funding` only.
 8. With a sandbox, new Gitea repos are logged (`repo_created`) and the workspace is copied to `runs/<id>/workspace/` within the sync caps.
 9. Cash += income − expenses. **Memory facts are kept by code**: each week adds a `WeekRecord` (full digest plus key events: applications, replies, commitments starting or ending, offers). The agent sees the current quarter in full and older quarters condensed to key events plus gig and broke counts; cash, commitments, and open applications come from state. The LLM writes only a short "reflections and plans" note (≤120 words) every 13 weeks (`memory_reflection`). No LLM-written facts, so there's nothing to cite-check.
+
+## The student world (`world/student.yaml`, persona `self.yaml`)
+
+A second world for the "Self" persona: two years of a CS degree as an international student, then the months after. Every new mechanic switches on only when its key is in the world file, so Maya's prompts are byte-identical to before (checked by rendering every prompt on both commits).
+
+- `calendar`: the referee's and contacts' "week 1 is …" text and the opening kinds named in the referee's system prompt.
+- `academics`: semesters; classes are a commitment (`kind: "academics"`) of `class_actions` each semester week that `leave` refuses; `graduated` event at `graduation_week + 1`. The referee's person block gets a student-status line and follower count (`Run._status`), new worlds only.
+- `work_authorization`: each opening's `auth` kind is allowed `always`, while `enrolled`, or once `graduated`, with an optional semester cap on actions (`world.auth_problem`). Applying to something not allowed is a tool error; the catalog marks it; a commitment that loses authorization ends (`commitment_ended.reason = "work_authorization"`). Illustrative F-1 rules, not legal advice.
+- Openings may have `listed_weeks` (hidden outside, not counted as hidden), `start_week` (accepted → "coming up", becomes a held offer that week), `company_amount` (non-dilutive, to company funds).
+- Hackathons (`type: hackathon`): decision before `event_week`; that week uses `attend_actions` and adds `build_actions` to the coding pool; `submit(opening_id, repo, pitch)` (free) is judged with `prize_base_rate` (`referee.JUDGE_SYSTEM`), dice `[dice_seed, "hackathon", id, 1]`; logs `hackathon_week`, `hackathon_result` (placed / not_placed / no_submission).
+- `feed` + `post(text, repo?)`: the referee (role `audience`) estimates a breakout chance and writes candidate replies with made-up handles; code draws breakout, Pareto luck, likes, follows, replies, each on its own key (`referee.draw_post`). Logged as `post`; followers in every snapshot. With the file's numbers a new account's post gets 0–2 likes most of the time (p99 ≈ 20).
+- Contacts in `self.yaml` are fictional. `address_note` (persona) and `address_as` (contact) tell the referee and contacts how to address the persona.
 
 ## Sandbox
 

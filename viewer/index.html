@@ -26,7 +26,7 @@
   --g-building: linear-gradient(145deg, #6fd3c4, #d4f5e6);
   --g-idle: linear-gradient(145deg, #f7f6f3, #e2e0db);
   --idle-a: #d6d4cf; --idle-b: #f4f3f0; --idle-ink: #141414; --idle-muted: #6b6964;
-  --strip-bg: #1b1b1b; --strip-none: rgba(255,255,255,.12); --strip-gig: rgba(255,255,255,.42); --strip-future: rgba(255,255,255,.05);
+  --strip-bg: #1b1b1b; --strip-none: rgba(255,255,255,.12); --strip-gig: rgba(255,255,255,.42); --strip-school: rgba(255,255,255,.26); --strip-future: rgba(255,255,255,.05);
   --term-bg: #161616; --term-ink: #e6e5df; --term-muted: #9a9890;
   --blob-a: #ffffff; --blob-b: #d9d7d1; --blob-c: #f5f4f1;
   --r-card: 28px; --r-panel: 20px; --r-tile: 22px; --r-pill: 999px;
@@ -278,8 +278,10 @@ input[type=range]:focus-visible { outline: 2px solid var(--ink); outline-offset:
 const $app = document.getElementById("app");
 // Week kinds in the life strip. Lime = income, teal = building, coral = broke; the rest neutral.
 const KIND = { full_time: ["Full-time job", "var(--lime)"], part_time: ["Part-time", "color-mix(in srgb, var(--lime) 55%, var(--strip-bg))"],
-               accelerator: ["Accelerator", "var(--teal)"], gig: ["Gig week", "var(--strip-gig)"], none: ["No commitment", "var(--strip-none)"] };
-const OUTCOME = { success: ["success", "lime"], failure: ["rejected", "coral"], ignored: ["no reply", ""], traction: ["traction", "lime"], quiet: ["quiet", ""] };
+               accelerator: ["Accelerator", "var(--teal)"], gig: ["Gig week", "var(--strip-gig)"], school: ["Classes only", "var(--strip-school)"],
+               none: ["No commitment", "var(--strip-none)"] };
+const OUTCOME = { success: ["success", "lime"], failure: ["rejected", "coral"], ignored: ["no reply", ""], traction: ["traction", "lime"], quiet: ["quiet", ""],
+                  placed: ["placed", "lime"], not_placed: ["didn't place", "coral"], no_submission: ["no submission", ""] };
 const TONE = { success: "In a job", broke: "Broke", building: "Building", idle: "Idle" };
 const money = v => v == null ? "–" : (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
 const pct = v => v == null ? "–" : (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
@@ -403,7 +405,7 @@ function route() {
 addEventListener("hashchange", route);
 
 // ---------- life strip + cash chart (shared by grid tiles and the detail view) ----------
-function weekKind(w) { return w.commitment && w.commitment !== "none" ? w.commitment : (w.gig ? "gig" : "none"); }
+function weekKind(w) { return w.commitment && w.commitment !== "none" ? w.commitment : w.gig ? "gig" : w.school ? "school" : "none"; }
 // A tile's tone from one week's state: broke, in a job, building (accelerator, or no job but a funded company or repos), idle.
 function lifeTone(w, building) {
   if (!w) return "idle";
@@ -433,9 +435,9 @@ function lifeStrip(weeks, horizon, opts = {}) {
   return svg;
 }
 
-function legend(extra) {
+function legend(extra, school) {
   return h("div", { class: "legend" },
-    ["full_time", "part_time", "accelerator", "gig", "none"].map(k => h("span", {}, h("i", { class: "sw", style: `--c:${KIND[k][1]}` }), KIND[k][0])),
+    ["full_time", "part_time", "accelerator", "gig", ...(school ? ["school"] : []), "none"].map(k => h("span", {}, h("i", { class: "sw", style: `--c:${KIND[k][1]}` }), KIND[k][0])),
     h("span", {}, h("i", { class: "sw broke" }), "Broke (coral, white dot)"), extra || []);
 }
 
@@ -513,7 +515,7 @@ function showGrid() {
         h("div", { class: "legend", style: "margin-bottom:12px" }, ["success", "broke", "building", "idle"].map(t => h("span", {}, h("i", { class: "swt t-" + t }),
           { success: "In a job", broke: "Broke this week", building: "Building: accelerator, or no job and a funded company or repos", idle: "Idle" }[t])),
           h("span", {}, "· colour is the latest week's state")),
-        legend()) : h("p", { class: "empty" }, "No run logs in runs/ yet."));
+        legend(null, data.some(r => (r.weeks || []).some(w => w.school)))) : h("p", { class: "empty" }, "No run logs in runs/ yet."));
   }
   function card(r) {
     const last = r.last || {}, weeks = (r.weeks || []).map(w => ({ ...w, commitment: { full_time: "full_time", part_time: "part_time", accelerator: "accelerator" }[w.commitment] || "none" }));
@@ -568,7 +570,8 @@ function showRun(runId, wantWeek) {
       const wk = R.events.filter(e => e.week === ev.week);
       R.weeks[ev.week - 1] = { week: ev.week, cash: ev.cash, income: ev.income, expenses: ev.expenses,
         funding: ev.company_balance ?? ev.company_funding, raised: ev.company_funding, revenue: ev.company_revenue, spent: ev.company_spent,
-        labels: ev.commitments,
+        labels: ev.commitments, detail: ev.commitment_detail, followers: ev.followers,
+        school: (ev.commitment_detail || []).some(c => c.kind === "academics"),
         gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke) };
     }
     if (ev.week) R.maxWeek = Math.max(R.maxWeek, ev.week);
@@ -623,6 +626,7 @@ function showRun(runId, wantWeek) {
           h("div", { class: "panels" },
             weekPanel(thisWeek, sel, doneWeeks),
             messagePanel(upTo, sel),
+            weeks.some(w => w.followers != null) || upTo.some(e => e.kind === "post") ? feedPanel(upTo, weeks, sel, horizon) : null,
             terminalPanel(upTo, sel),
             toolsPanel(thisWeek),
             refereePanel(R.events, sel, go),
@@ -632,6 +636,12 @@ function showRun(runId, wantWeek) {
     window.scrollTo(0, scrollY);
   }
   function commitmentKind(w) {
+    if (w.detail) {  // newer logs: classes aren't a job; part-time by the actions it uses
+      const cs = w.detail.filter(c => c.kind !== "academics");
+      if (!cs.length) return "none";
+      if (cs.some(c => (c.opening_id || "").startsWith("acc-"))) return "accelerator";
+      return Math.max(...cs.map(c => c.time_cost || 0)) >= 5 ? "full_time" : "part_time";
+    }
     const labels = w.labels || [];
     if (!labels.length) return "none";
     const starts = R.events.filter(e => e.kind === "life" && e.event === "commitment_started" && e.week <= w.week && labels.includes(e.label));
@@ -707,7 +717,7 @@ function cashTile(weeks, state, sel, horizon, chartW, go) {
       h("div", { class: "sm", style: "min-width:0" }, h("div", { style: "font-size:14px" }, (state.labels || []).join(", ") || "none"), h("div", { class: "lab" }, "commitments"))),
     cashChart(weeks, horizon, { sel, onpick: go, width: chartW, height: chartW < 600 ? 160 : 200 }),
     lifeStrip(weeks, horizon, { width: chartW, height: 12, sel, onpick: go, pad: CHART_PAD }),
-    legend(),
+    legend(null, weeks.some(w => w.school)),
     h("details", {}, h("summary", {}, "Table view"), h("div", { class: "tbl" }, weekTable(weeks, sel, go))));
 }
 
@@ -809,19 +819,49 @@ function messagePanel(upTo, sel) {
         m.offer_problem ? h("div", { style: "margin-top:8px" }, Pill(m.offer_problem, { tone: "amber" })) : null)))))));
 }
 
+// The feed: follower curve, likes per week, and every post with the replies the author saw.
+function feedPanel(upTo, weeks, sel, horizon) {
+  const posts = upTo.filter(e => e.kind === "post"), n = Math.max(horizon || 0, sel, 1);
+  const followers = weeks.filter(w => w.week <= sel).map(w => w.followers || 0), now = followers[followers.length - 1] || 0;
+  const likes = Array.from({ length: n }, (_, i) => posts.filter(p => p.week === i + 1).reduce((a, p) => a + (p.likes || 0), 0));
+  const W = 640, H = 48, max = Math.max(1, ...likes), slot = W / n;
+  const bars = s("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", style: "width:100%;height:48px;display:block", role: "img",
+    "aria-label": `Likes per week through week ${sel}; most in one week ${max}` });
+  likes.forEach((v, i) => { if (!v) return; const bh = Math.max(2, v / max * (H - 2)), r = s("rect", { x: i * slot + slot * 0.15, y: H - bh, width: slot * 0.7, height: bh, rx: Math.min(2, slot * 0.35), fill: "var(--ink-2)" });
+    const t = s("title"); t.textContent = `Week ${i + 1}: ${v} likes`; r.append(t); bars.append(r); });
+  return GlassCard({ title: "Feed", sub: `${posts.length} post${posts.length === 1 ? "" : "s"} through week ${sel}`, cls: "wide" },
+    h("div", { class: "money", style: "margin-bottom:16px" },
+      h("div", {}, h("div", { class: "big" }, now.toLocaleString()), h("div", { class: "lab" }, "followers")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, posts.reduce((a, p) => a + (p.likes || 0), 0).toLocaleString()), h("div", { class: "lab" }, "likes, all posts")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, posts.filter(p => p.breakout).length), h("div", { class: "lab" }, "broke out"))),
+    h("div", { class: "lab" }, "Followers by week"), Spark(followers.length ? followers : [0]),
+    h("div", { class: "lab", style: "margin-top:12px" }, `Likes per week (tallest: ${max})`), bars,
+    posts.length ? h("div", { class: "feed", style: "margin-top:16px" }, [...posts].reverse().map(p => h("div", { class: "item" + (p.week === sel ? " now" : "") },
+      h("div", { class: "meta" }, `week ${p.week} · post ${p.n} · about ${(p.reach || 0).toLocaleString()} people saw it`),
+      h("div", { class: "text", style: "margin-top:4px" }, p.text),
+      h("div", { class: "tile-head", style: "margin-top:8px" }, Pill(`${p.likes} likes`, { tone: p.breakout ? "lime" : null }), Pill(`${p.replies} replies`),
+        Pill(`+${p.new_followers} followers`), p.breakout ? Pill("broke out", { tone: "lime" }) : null, p.repo ? Pill(p.repo.split("/").pop(), { k: "repo" }) : null),
+      p.shown?.length ? h("div", { class: "tools", style: "margin-top:8px" }, p.shown.map(r => h("div", { class: "inner" }, h("div", { class: "meta" }, "@" + r.handle), h("div", { class: "text" }, r.text)))) : null,
+      h("details", { style: "margin-top:8px" }, h("summary", {}, "referee"), h("div", { class: "inner", style: "margin-top:8px" },
+        h("div", { class: "meta" }, `breakout chance ${pct(p.estimated_chance)} (base ${pct(p.base_rate)}) · draw ${p.draw?.toFixed(3)} · luck ${p.luck}×`),
+        h("div", { class: "text" }, p.rationale || "–")))))) : h("div", { class: "empty", style: "margin-top:12px" }, "No posts yet."));
+}
+
 function refereePanel(all, sel, go) {
-  const every = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch"));
+  const every = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch" || e.event === "hackathon"));
   const apps = every.filter(e => e.week <= sel), later = every.length - apps.length;
   const rows = apps.map(e => {
-    const revealed = e.event === "launch" || (e.reveal_week != null && e.reveal_week <= sel);
+    const revealed = e.event !== "apply" || (e.reveal_week != null && e.reveal_week <= sel);
     const [ocText, ocTone] = OUTCOME[e.outcome] || [e.outcome, ""];
     const oc = h("span", { class: "oc" }, h("i", { class: "dot " + ocTone }), ocText);
     return [h("tr", { class: "click" + (e.week === sel ? " now" : ""), onclick: () => go(e.week), title: "Go to week " + e.week },
-      h("td", { class: "num" }, e.week), h("td", {}, e.event === "launch" ? "launch " + (e.repo || "").split("/").pop() : e.opening_id, h("div", { class: "lab" }, e.event === "launch" ? "forum" : e.opening_type)),
+      h("td", { class: "num" }, e.week), h("td", {}, e.event === "launch" ? "launch " + (e.repo || "").split("/").pop() : e.opening_id,
+        h("div", { class: "lab" }, e.event === "launch" ? "forum" : e.event === "hackathon" ? "hackathon judging" : e.opening_type)),
       h("td", { class: "r" }, pct(e.base_rate)), h("td", { class: "r" }, pct(e.estimated_chance)),
       h("td", { class: "r" }, e.base_rate ? (e.estimated_chance / e.base_rate).toFixed(2) + "×" : "–"),
       h("td", { class: "r" }, e.draw != null ? e.draw.toFixed(3) : "–"),
       h("td", {}, oc, e.event === "launch" ? h("div", { class: "lab" }, `${e.upvotes ?? 0} upvotes`) :
+        e.event === "hackathon" ? h("div", { class: "lab" }, e.prize ? `prize ${money(e.prize)}` : "") :
         h("div", { class: "lab oc" }, revealed ? `heard week ${e.reveal_week}` : [h("i", { class: "dot amber" }), `already drawn · agent hears week ${e.reveal_week}`]))),
       h("tr", {}, h("td", { colspan: 7, style: "padding-top:0" }, h("details", {}, h("summary", {}, "submission and rationale"),
         h("div", { class: "inner", style: "margin-top:8px" },
