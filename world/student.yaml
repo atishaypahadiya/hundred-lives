@@ -15,7 +15,7 @@ calendar:
   opening_kinds: a job, internship, campus role, student program, hackathon, accelerator, grant, or investor introduction
 
 academics:
-  label: B.S. Computer Science, San José State University
+  label: B.S. Data Science, San José State University
   class_actions: 3               # of the 8 weekly actions, every week of a semester
   semesters:
     - {name: Fall semester (year 1), start: 1, end: 16}

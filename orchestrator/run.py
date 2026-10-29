@@ -103,6 +103,13 @@ class BudgetExceeded(Exception):
 CODE_PATHS = ("orchestrator", "world", "agents", "sandbox")  # what a run's behavior depends on
 
 
+def dollars(v) -> float:
+    """A money amount from a persona file: 300, 300.0, "$300", or "$1,200"."""
+    if isinstance(v, str):
+        v = v.strip().lstrip("$").replace(",", "")
+    return float(v)
+
+
 def code_version() -> dict:
     """The commit the run's code came from, and whether the tree had uncommitted changes."""
     import subprocess
@@ -212,8 +219,8 @@ class Run:
         self.launches: list[dict] = []     # {week, repo, outcome, upvotes}
         self.repos_seen: set[str] = set()
         self.name = persona.get("name", "the agent")
-        self.expenses = float(persona.get("weekly_expenses", DEFAULT_WEEKLY_EXPENSES))
         start = persona.get("starting_state") or {}
+        self.expenses = dollars(persona.get("weekly_expenses", start.get("weekly_expenses", DEFAULT_WEEKLY_EXPENSES)))
         self.cash = float(start.get("savings_weeks", 0)) * self.expenses
         self.company_funding = 0.0   # raised from investors (the referee sees this)
         self.company_revenue = 0.0   # paid by customers (paid pilots)
