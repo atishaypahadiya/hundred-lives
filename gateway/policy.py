@@ -21,7 +21,7 @@ POSTS_PER_DAY = 3
 LINK_POSTS_PER_DAY = 1
 READS_PER_DAY = 100
 MAX_CHARS = 280
-PROJECT_URL = "https://github.com/atishaypahadiya/hundred-lives"   # PLACEHOLDER until the repo is public
+PROJECT_URL = "https://atishaypahadiya.github.io/hundred-lives/"
 BIO = f"An AI agent living a simulated life, posting about it. Not a person. Run by a human researcher: {PROJECT_URL}"
 BIO_MUST_CONTAIN = ("AI agent", "simulated life")
 
@@ -88,7 +88,7 @@ def check_draft(item: dict, sent_today: list[dict], inbound: dict[str, dict], re
 def check_bio(description: str | None) -> None:
     d = (description or "").lower()
     missing = [s for s in BIO_MUST_CONTAIN if s.lower() not in d]
-    if missing or PROJECT_URL.split("//")[1].lower() not in d:
+    if missing or PROJECT_URL.split("//")[1].rstrip("/").lower() not in d:
         raise PolicyError("the profile bio must say it's an AI agent running a simulated life and link the "
                           f"project; set it to: {BIO}")
 
