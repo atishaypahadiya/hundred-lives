@@ -1,0 +1,42 @@
+# Shared world infrastructure. Start with: uv run python -m orchestrator.sandbox up
+#
+# Networks:
+#   agents  internal: no route out. Agent containers join only this, so the only host they
+#           can reach is gitea.
+#   host    normal bridge, so the host (orchestrator, referee) can reach Gitea on 127.0.0.1:3000.
+
+name: hundred-lives
+
+services:
+  gitea:
+    image: gitea/gitea:1.24
+    container_name: hl-gitea
+    restart: unless-stopped
+    environment:
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__ROOT_URL: http://gitea:3000/
+      GITEA__server__DOMAIN: gitea
+      GITEA__server__DISABLE_SSH: "true"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+      GITEA__repository__ENABLE_PUSH_CREATE_USER: "true"
+      GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE: "false"
+      GITEA__mailer__ENABLED: "false"
+      GITEA__migrations__ALLOW_LOCALNETWORKS: "false"
+      GITEA__webhook__ALLOWED_HOST_LIST: "none"
+    volumes:
+      - gitea-data:/data
+    networks: [agents, host]
+    ports:
+      - "127.0.0.1:3000:3000"
+
+networks:
+  agents:
+    name: hl-agents
+    internal: true
+  host:
+    name: hl-host
+
+volumes:
+  gitea-data:

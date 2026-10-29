@@ -22,6 +22,17 @@ EFFORT = "medium"
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
+# Dollars per million tokens: (input, output, cache read, 5-minute cache write). Input/output
+# and the Opus/Sonnet cache-read prices are the published API rates; the rest assume the usual
+# 0.1x input for cache reads and 1.25x input for 5-minute cache writes (all our cache_control
+# is the default 5-minute TTL). Unverified for Haiku 5.5: reconcile a run's logged cost_usd
+# against the Console usage page before trusting it.
+PRICES = {
+    "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
+    "claude-sonnet-5-5": (2.00, 10.00, 0.20, 2.50),
+    "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
+}
+
 
 @dataclass
 class Usage:
@@ -54,6 +65,8 @@ class Reply:
     usage: Usage
     stop_reason: str
     latency_s: float
+    raw_usage: dict | None = None    # the API's usage object, verbatim, for reconciling costs
+    served_model: str | None = None  # can differ from the requested model when a fallback served it
 
 
 def make_backend(spec: str):
@@ -74,8 +87,18 @@ class AnthropicBackend:
     default_max_tokens = 16000  # thinking is always on for current models and counts as output
 
     def __init__(self, model: str):
+        if model not in PRICES:
+            raise ValueError(f"no price for {model!r}; add it to backends.PRICES so runs can report cost")
         self.model = model
         self.client = anthropic.Anthropic()
+
+    def cost(self, reply: Reply) -> float:
+        """From the API's usage fields: input_tokens excludes cached tokens, which are
+        reported separately as cache_read_input_tokens and cache_creation_input_tokens."""
+        model = reply.served_model if reply.served_model in PRICES else self.model
+        i, o, cr, cw = PRICES[model]
+        u = reply.usage
+        return (u.input * i + u.output * o + u.cache_read * cr + u.cache_write * cw) / 1e6
 
     def _create(self, **kw):
         kw.setdefault("output_config", {})["effort"] = EFFORT
@@ -91,7 +114,8 @@ class AnthropicBackend:
                       u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0)
         text = "".join(b.text for b in resp.content if b.type == "text")
         calls = [ToolCall(b.id, b.name, b.input) for b in resp.content if b.type == "tool_use"]
-        return Reply(text, calls, usage, resp.stop_reason, time.monotonic() - t0)
+        return Reply(text, calls, usage, resp.stop_reason, time.monotonic() - t0,
+                     raw_usage=u.model_dump(mode="json", exclude_none=True), served_model=resp.model)
 
     def conversation(self, system: str, tools: list[dict]):
         return AnthropicConversation(self, system, tools)
@@ -178,6 +202,9 @@ class OllamaBackend:
         usage = Usage(u.get("prompt_tokens", 0) - cached, u.get("completion_tokens", 0), cached, 0)
         return Reply(msg.get("content") or "", calls, usage, choice.get("finish_reason") or "",
                      time.monotonic() - t0)
+
+    def cost(self, reply: Reply) -> float:
+        return 0.0  # local
 
     def conversation(self, system: str, tools: list[dict]):
         return OllamaConversation(self, system, tools)

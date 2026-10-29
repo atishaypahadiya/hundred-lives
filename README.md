@@ -56,7 +56,7 @@ cd hundred-lives
 cp .env.example .env     # add ANTHROPIC_API_KEY (only needed for Claude runs)
 uv sync
 OLLAMA_CONTEXT_LENGTH=16384 ollama serve &
-uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 3 --turns 20
+uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 10                 # 52 weeks each; --horizon 260 for five years
 uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 3 --model claude-opus-5-5
 uv run python analysis/summarize.py runs/*.jsonl
 ```

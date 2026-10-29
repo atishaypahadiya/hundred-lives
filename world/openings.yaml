@@ -8,18 +8,35 @@
 # Effects of a success are fixed by the opening, not invented by the referee:
 #   job          pay_weekly (dollars/week) as a commitment, for duration_weeks if set
 #   accelerator  investment into the company; stipend_weekly for duration_weeks
+# Jobs and accelerators are commitments with a schedule (full_time or part_time).
 #   grant        amount to personal cash
 #   angel_intro  investment into the company
 
+# Each week has 8 actions. A commitment uses some of them every week it lasts; a gig uses
+# them once. Commitments can't add up to more than 8.
+time_costs:
+  full_time: 5
+  part_time: 3
+
+# The builders' forum, where `launch` posts a repo. traction_base_rate is the share of all
+# launches that get real attention (front page, ~100+ upvotes). Also a guess, not data.
+forum:
+  name: Builders Forum
+  traction_base_rate: 0.05
+  upvotes_traction: [60, 600]   # drawn uniformly when a launch gets traction
+  upvotes_quiet: [0, 8]         # otherwise
+  relaunch_after_weeks: 13      # the same repo can be posted again after this long
+
 gig:
   pay: 1000          # dollars, paid the same week
-  time_cost: 6       # actions it uses out of the week's 8
+  time_cost: 6       # actions it uses that week
   description: gig work (delivery driving, tutoring, freelance odd jobs)
 
 openings:
   # --- jobs ---
   - id: job-01
     type: job
+    schedule: full_time
     title: Junior Software Engineer
     org: Brightline Logistics (freight software, San Jose, 300 people)
     requirements: B.S. in CS or equivalent; Python or JavaScript; passes a coding interview
@@ -28,6 +45,7 @@ openings:
     reply_rate: 0.5
   - id: job-02
     type: job
+    schedule: full_time
     title: New Grad Software Engineer
     org: Meridian Cloud (large public tech company, Sunnyvale)
     requirements: CS degree; strong algorithms; internship experience preferred; four interview rounds
@@ -36,6 +54,7 @@ openings:
     reply_rate: 0.4
   - id: job-03
     type: job
+    schedule: full_time
     title: Full-Stack Developer
     org: Patchwork Health (Series A startup, San Francisco, 25 people)
     requirements: has shipped a web app; React and Python; portfolio or code samples
@@ -44,6 +63,7 @@ openings:
     reply_rate: 0.5
   - id: job-04
     type: job
+    schedule: full_time
     title: Data Analyst
     org: Valley County Transit (public agency, San Jose)
     requirements: bachelor's degree; SQL and Python; basic statistics
@@ -52,6 +72,7 @@ openings:
     reply_rate: 0.7
   - id: job-05
     type: job
+    schedule: full_time
     title: Web Developer (6-month contract)
     org: Hollis & Pike (marketing agency, 40 people)
     requirements: portfolio of websites; HTML, CSS, JavaScript
@@ -61,6 +82,7 @@ openings:
     reply_rate: 0.5
   - id: job-06
     type: job
+    schedule: full_time
     title: Machine Learning Engineer I
     org: Quanta Retail (mid-size e-commerce company)
     requirements: MS preferred or strong ML projects; PyTorch; has deployed a model
@@ -69,6 +91,7 @@ openings:
     reply_rate: 0.4
   - id: job-07
     type: job
+    schedule: full_time
     title: IT Support Specialist
     org: Del Mar Community College
     requirements: troubleshooting; customer service; degree a plus
@@ -77,6 +100,7 @@ openings:
     reply_rate: 0.7
   - id: job-08
     type: job
+    schedule: full_time
     title: Founding Engineer
     org: Lumenstack (pre-seed startup, 3 people)
     requirements: builds end to end quickly; comfortable with ambiguity; salary is low, equity is high
@@ -85,6 +109,7 @@ openings:
     reply_rate: 0.6
   - id: job-09
     type: job
+    schedule: full_time
     title: QA Automation Engineer
     org: Corvid Systems (enterprise software, 1,200 people)
     requirements: Python; test automation; detail-oriented
@@ -93,6 +118,7 @@ openings:
     reply_rate: 0.4
   - id: job-10
     type: job
+    schedule: full_time
     title: Software Engineer, Restaurant Platform
     org: TableTurn (Series B point-of-sale startup for restaurants)
     requirements: CS degree; Python or Go; understands how small restaurants operate
@@ -101,6 +127,7 @@ openings:
     reply_rate: 0.5
   - id: job-11
     type: job
+    schedule: full_time
     title: Solutions Engineer
     org: Fernway Payments (fintech, 500 people)
     requirements: technical background; strong communication; runs demos for customers
@@ -109,6 +136,7 @@ openings:
     reply_rate: 0.4
   - id: job-12
     type: job
+    schedule: full_time
     title: Coding Bootcamp Instructor
     org: Forge Academy (coding school, San Jose)
     requirements: strong fundamentals; teaching or tutoring experience
@@ -117,6 +145,7 @@ openings:
     reply_rate: 0.6
   - id: job-13
     type: job
+    schedule: part_time
     title: Research Assistant, ML Lab (part-time, 20 hours/week)
     org: Bayview State University
     requirements: CS degree from Bayview State or similar; ML coursework
@@ -125,6 +154,7 @@ openings:
     reply_rate: 0.6
   - id: job-14
     type: job
+    schedule: full_time
     title: Backend Engineer (remote)
     org: Northstar Labs (remote-first SaaS company)
     requirements: 1+ years of professional experience preferred; Python; distributed systems
@@ -135,6 +165,7 @@ openings:
   # --- accelerators ---
   - id: acc-01
     type: accelerator
+    schedule: full_time
     title: Ignite Batch
     org: Ignite (top national accelerator, 3 months)
     requirements: product with early traction; fast growth; strong founders
@@ -144,6 +175,7 @@ openings:
     reply_rate: 0.9
   - id: acc-02
     type: accelerator
+    schedule: full_time
     title: South Bay Founders Lab
     org: South Bay Founders Lab (regional accelerator, 10 weeks)
     requirements: working prototype; founder works on it full time
@@ -153,6 +185,7 @@ openings:
     reply_rate: 0.9
   - id: acc-03
     type: accelerator
+    schedule: part_time
     title: LaunchPad for Recent Graduates
     org: Bayview State University (12 weeks)
     requirements: graduated within the last 2 years; an idea and a prototype
@@ -163,6 +196,7 @@ openings:
     reply_rate: 0.95
   - id: acc-04
     type: accelerator
+    schedule: part_time
     title: Main Street Tech Incubator
     org: Main Street Tech (incubator for small-business software, 6 months)
     requirements: product for local small businesses; at least one pilot customer
@@ -172,6 +206,7 @@ openings:
     reply_rate: 0.9
   - id: acc-05
     type: accelerator
+    schedule: full_time
     title: Open Builders Residency
     org: Open Builders (non-profit, 8 weeks)
     requirements: open-source project with real users
