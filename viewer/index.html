@@ -117,6 +117,7 @@ h1, h2, h3, .t { font-weight: 500; }
 header.top { position: sticky; top: 12px; z-index: 10; margin: 12px 16px 0; padding: 8px 8px 8px 24px; border-radius: var(--r-card);
   display: flex; align-items: center; gap: 12px; }
 header.top h1 { font-size: 16px; margin: 0; white-space: nowrap; }
+@media (max-width: 480px) { body.replay header.top h1 { display: none; } }  /* the back link names the project */
 @media (max-width: 640px) { header.top .crumb { display: none; } }
 header.top h1 a { text-decoration: none; }
 header.top .crumb { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -259,6 +260,8 @@ input[type=range]:focus-visible { outline: 2px solid var(--ink); outline-offset:
   .scrubber .track { grid-column: 1 / -1; grid-row: 1; margin: 0 8px; }
   .scrubber .wk { padding: 0 4px; text-align: center; }
 }
+@media (max-width: 420px) { .scrubber .wk { font-size: 12px; padding: 0 2px; } .scrubber .pbtn { padding: 0 12px; } }
+@media (max-width: 380px) { .scrubber .wkw { display: none; } }
 .has-scrubber { padding-bottom: 136px; }
 @media (max-width: 640px) { .has-scrubber { padding-bottom: 160px; } }
 </style>
@@ -280,6 +283,7 @@ const $app = document.getElementById("app");
 // An exported replay (python -m viewer.export) embeds its data here; the live viewer has none.
 const REPLAY = (() => { const el = document.getElementById("hl-replay"); return el ? JSON.parse(el.textContent) : null; })();
 if (REPLAY) {
+  document.body.classList.add("replay");
   // A published replay links back to the project page (docs/index.html, two levels up) instead of the gateway.
   document.querySelector('header.top a.pbtn[href="#/gateway"]')?.replaceWith(h("a", { class: "pbtn", href: "../../" }, "← hundred-lives"));
   if (!location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id);
@@ -386,7 +390,7 @@ function Scrubber({ sel, max, horizon, onpick, playing, onplay, follow, onfollow
     IconButton({ icon: playing ? "pause" : "play", label: playing ? "Pause" : "Play", onclick: onplay, pressed: !!playing }),
     h("div", { class: "track" }, ticks, range),
     IconButton({ icon: "next", label: "Next week", onclick: () => onpick(sel + 1), disabled: sel >= max }),
-    h("span", { class: "wk" }, `Week ${sel} of ${horizon || "?"}`),
+    h("span", { class: "wk", "aria-label": `Week ${sel} of ${horizon || "?"}` }, h("span", { class: "wkw" }, "Week "), `${sel} of ${horizon || "?"}`),
     h("button", { class: "pbtn", type: "button", "aria-pressed": String(follow), onclick: onfollow }, ended ? "Last week" : "Follow live"));
 }
 
@@ -964,7 +968,7 @@ function repoPanel(upTo, sel, R) {
       l.snapshot?.readme ? h("details", {}, h("summary", {}, "README as the referee saw it"), h("div", { class: "pre" }, l.snapshot.readme)) : null)),
     atEnd && R.repos ? h("div", { class: "repo" }, h("div", { class: "meta" }, "Exported at run end (runs/<id>/repos/*.bundle)"),
       R.repos.length ? R.repos.map(b => h("div", { class: "repo inner" },
-        h("div", {}, h("span", { class: "t" }, b.repo), h("span", { class: "muted" }, b.error ? " · " + b.error : ` · ${b.commits.length} commit${b.commits.length === 1 ? "" : "s"} · ${b.file_count} files · ${b.bundle_bytes.toLocaleString()} bytes`)),
+        h("div", {}, h("span", { class: "t" }, b.repo), h("span", { class: "muted" }, b.error ? " · " + b.error : ` · ${b.commits.length} commit${b.commits.length === 1 ? "" : "s"} · ${b.file_count} files${b.bundle_bytes != null ? ` · ${b.bundle_bytes.toLocaleString()} bytes` : ""}`)),
         (b.commits || []).map(c => h("div", { class: "commit" }, h("code", {}, c.sha.slice(0, 7)), h("span", { class: "text" }, c.subject),
           h("span", { class: "muted num" }, `${c.files} file${c.files === 1 ? "" : "s"} +${c.insertions} −${c.deletions}`))),
         b.files?.length ? h("div", { class: "pre muted" }, b.files.join("  ")) : null,
