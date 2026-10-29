@@ -103,9 +103,10 @@ wheels = [
 [[package]]
 name = "hundred-lives"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
+    { name = "httpx2" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
 ]
@@ -113,6 +114,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=2.3.0" },
+    { name = "httpx2", specifier = ">=2.16.0" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]

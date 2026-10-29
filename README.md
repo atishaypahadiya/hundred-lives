@@ -53,9 +53,12 @@ docs/              project page
 ```bash
 git clone https://github.com/atishaypahadiya/hundred-lives.git
 cd hundred-lives
-cp .env.example .env     # add ANTHROPIC_API_KEY
+cp .env.example .env     # add ANTHROPIC_API_KEY (only needed for Claude runs)
 uv sync
-uv run python -m orchestrator.run --persona agents/personas/bay-area-ceo.yaml --runs 3
+OLLAMA_CONTEXT_LENGTH=16384 ollama serve &
+uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 3 --turns 20
+uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 3 --model claude-opus-5-5
+uv run python analysis/summarize.py runs/*.jsonl
 ```
 
 ## Plan

@@ -1,0 +1,242 @@
+# The world's opportunities, v0. Every organization here is fictional.
+#
+# base_rate is the share of ALL applicants who get accepted. The referee sees it; the agent
+# doesn't. These numbers are rough guesses for illustration, NOT real data. Replacing them
+# with sourced base rates is question 3 (grounding).
+#
+# Effects of a success are fixed by the opening, not invented by the referee:
+#   job          pay_weekly (dollars/week) as a commitment, for duration_weeks if set
+#   accelerator  investment into the company; stipend_weekly for duration_weeks
+#   grant        amount to personal cash
+#   angel_intro  investment into the company
+
+gig:
+  pay: 1000          # dollars, paid the same week
+  time_cost: 6       # actions it uses out of the week's 8
+  description: gig work (delivery driving, tutoring, freelance odd jobs)
+
+openings:
+  # --- jobs ---
+  - id: job-01
+    type: job
+    title: Junior Software Engineer
+    org: Brightline Logistics (freight software, San Jose, 300 people)
+    requirements: B.S. in CS or equivalent; Python or JavaScript; passes a coding interview
+    pay_weekly: 2100
+    base_rate: 0.05
+  - id: job-02
+    type: job
+    title: New Grad Software Engineer
+    org: Meridian Cloud (large public tech company, Sunnyvale)
+    requirements: CS degree; strong algorithms; internship experience preferred; four interview rounds
+    pay_weekly: 3200
+    base_rate: 0.015
+  - id: job-03
+    type: job
+    title: Full-Stack Developer
+    org: Patchwork Health (Series A startup, San Francisco, 25 people)
+    requirements: has shipped a web app; React and Python; portfolio or code samples
+    pay_weekly: 2300
+    base_rate: 0.06
+  - id: job-04
+    type: job
+    title: Data Analyst
+    org: Valley County Transit (public agency, San Jose)
+    requirements: bachelor's degree; SQL and Python; basic statistics
+    pay_weekly: 1650
+    base_rate: 0.10
+  - id: job-05
+    type: job
+    title: Web Developer (6-month contract)
+    org: Hollis & Pike (marketing agency, 40 people)
+    requirements: portfolio of websites; HTML, CSS, JavaScript
+    pay_weekly: 1400
+    duration_weeks: 26
+    base_rate: 0.18
+  - id: job-06
+    type: job
+    title: Machine Learning Engineer I
+    org: Quanta Retail (mid-size e-commerce company)
+    requirements: MS preferred or strong ML projects; PyTorch; has deployed a model
+    pay_weekly: 2900
+    base_rate: 0.02
+  - id: job-07
+    type: job
+    title: IT Support Specialist
+    org: Del Mar Community College
+    requirements: troubleshooting; customer service; degree a plus
+    pay_weekly: 1150
+    base_rate: 0.30
+  - id: job-08
+    type: job
+    title: Founding Engineer
+    org: Lumenstack (pre-seed startup, 3 people)
+    requirements: builds end to end quickly; comfortable with ambiguity; salary is low, equity is high
+    pay_weekly: 1500
+    base_rate: 0.08
+  - id: job-09
+    type: job
+    title: QA Automation Engineer
+    org: Corvid Systems (enterprise software, 1,200 people)
+    requirements: Python; test automation; detail-oriented
+    pay_weekly: 1900
+    base_rate: 0.08
+  - id: job-10
+    type: job
+    title: Software Engineer, Restaurant Platform
+    org: TableTurn (Series B point-of-sale startup for restaurants)
+    requirements: CS degree; Python or Go; understands how small restaurants operate
+    pay_weekly: 2400
+    base_rate: 0.04
+  - id: job-11
+    type: job
+    title: Solutions Engineer
+    org: Fernway Payments (fintech, 500 people)
+    requirements: technical background; strong communication; runs demos for customers
+    pay_weekly: 2200
+    base_rate: 0.05
+  - id: job-12
+    type: job
+    title: Coding Bootcamp Instructor
+    org: Forge Academy (coding school, San Jose)
+    requirements: strong fundamentals; teaching or tutoring experience
+    pay_weekly: 1300
+    base_rate: 0.20
+  - id: job-13
+    type: job
+    title: Research Assistant, ML Lab (part-time, 20 hours/week)
+    org: Bayview State University
+    requirements: CS degree from Bayview State or similar; ML coursework
+    pay_weekly: 700
+    base_rate: 0.15
+  - id: job-14
+    type: job
+    title: Backend Engineer (remote)
+    org: Northstar Labs (remote-first SaaS company)
+    requirements: 1+ years of professional experience preferred; Python; distributed systems
+    pay_weekly: 2500
+    base_rate: 0.02
+
+  # --- accelerators ---
+  - id: acc-01
+    type: accelerator
+    title: Ignite Batch
+    org: Ignite (top national accelerator, 3 months)
+    requirements: product with early traction; fast growth; strong founders
+    investment: 500000
+    duration_weeks: 13
+    base_rate: 0.015
+  - id: acc-02
+    type: accelerator
+    title: South Bay Founders Lab
+    org: South Bay Founders Lab (regional accelerator, 10 weeks)
+    requirements: working prototype; founder works on it full time
+    investment: 50000
+    duration_weeks: 10
+    base_rate: 0.06
+  - id: acc-03
+    type: accelerator
+    title: LaunchPad for Recent Graduates
+    org: Bayview State University (12 weeks)
+    requirements: graduated within the last 2 years; an idea and a prototype
+    investment: 10000
+    stipend_weekly: 600
+    duration_weeks: 12
+    base_rate: 0.20
+  - id: acc-04
+    type: accelerator
+    title: Main Street Tech Incubator
+    org: Main Street Tech (incubator for small-business software, 6 months)
+    requirements: product for local small businesses; at least one pilot customer
+    investment: 25000
+    duration_weeks: 26
+    base_rate: 0.10
+  - id: acc-05
+    type: accelerator
+    title: Open Builders Residency
+    org: Open Builders (non-profit, 8 weeks)
+    requirements: open-source project with real users
+    stipend_weekly: 1200
+    duration_weeks: 8
+    base_rate: 0.08
+
+  # --- grants ---
+  - id: grant-01
+    type: grant
+    title: First-Generation Founders Grant
+    org: Ladder Foundation
+    requirements: first-generation college graduate; a written business idea
+    amount: 5000
+    base_rate: 0.08
+  - id: grant-02
+    type: grant
+    title: Small Business Microgrant
+    org: City of San Jose
+    requirements: registered business operating in San Jose
+    amount: 2500
+    base_rate: 0.25
+  - id: grant-03
+    type: grant
+    title: Spark Fellowship
+    org: Spark Fund (independent fellowship)
+    requirements: ambitious project; exceptional written application
+    amount: 15000
+    base_rate: 0.03
+  - id: grant-04
+    type: grant
+    title: Open Source Maintainer Fund
+    org: Commons Software Trust
+    requirements: maintains an open-source project with real users
+    amount: 3000
+    base_rate: 0.12
+  - id: grant-05
+    type: grant
+    title: Underrepresented Founders Award
+    org: Bridgeway Fund
+    requirements: founder from a background underrepresented in tech; product with early users
+    amount: 10000
+    base_rate: 0.05
+
+  # --- angel introductions ---
+  - id: angel-01
+    type: angel_intro
+    title: Intro to a former engineering director who angel-invests
+    org: via your former internship manager
+    requirements: warm intro from your former internship manager; prototype with users
+    investment: 25000
+    base_rate: 0.08
+  - id: angel-02
+    type: angel_intro
+    title: Intro to a restaurant-group owner (12 restaurants)
+    org: via a restaurant supplier
+    requirements: product for restaurants with a paying pilot
+    investment: 50000
+    base_rate: 0.10
+  - id: angel-03
+    type: angel_intro
+    title: Pitch to an angel syndicate lead
+    org: Gridline Syndicate
+    requirements: traction numbers showing week-over-week user growth
+    investment: 100000
+    base_rate: 0.03
+  - id: angel-04
+    type: angel_intro
+    title: Bayview State alumni angel group pitch night
+    org: Bayview State Alumni Angels
+    requirements: alum; pitch deck; working prototype
+    investment: 30000
+    base_rate: 0.07
+  - id: angel-05
+    type: angel_intro
+    title: Meeting with a scout for a large VC firm
+    org: Arclight Ventures (scout program)
+    requirements: exceptional traction or a rare technical insight
+    investment: 150000
+    base_rate: 0.02
+  - id: angel-06
+    type: angel_intro
+    title: Friends-and-family round
+    org: your parents' restaurant community
+    requirements: personal relationship; a clear plan for the money
+    investment: 15000
+    base_rate: 0.30

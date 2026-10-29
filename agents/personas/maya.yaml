@@ -1,0 +1,13 @@
+name: Maya
+born: 2004, San Jose, CA
+family: parents run a small restaurant; first in family at a 4-year college
+education: B.S. computer science, state school, graduating this spring
+skills: [python, web dev, basic ML]
+traits:
+  risk_tolerance: medium      # the line changed in sensitivity runs
+  patience: low
+goal: become CEO of a company worth over $1B
+starting_state:
+  savings_weeks: 12          # how long she can go without income
+  network: 3 classmates, 1 former internship manager
+horizon: 260                 # turns; 1 turn = 1 simulated week
