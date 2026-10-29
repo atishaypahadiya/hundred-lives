@@ -23,7 +23,7 @@ SCHEDULES = ("full_time", "part_time")
 DEFAULT_PATH = Path(__file__).resolve().parent.parent / "world" / "openings.yaml"
 SPEND_KEYS = {"contractor": ("description", "price_weekly", "coding_actions", "max_weeks"),
               "launch_ads": ("description", "price", "traction_base_rate", "valid_weeks")}
-OFFER_KINDS = ("referral", "paid_pilot")
+OFFER_KINDS = ("referral", "paid_pilot", "money", "teammate", "boost")
 
 
 def check_contacts(persona: dict, world: dict, path: Path):
@@ -46,8 +46,16 @@ def check_contacts(persona: dict, world: dict, path: Path):
             if off["kind"] == "referral" and not set(off.get("openings") or []) <= ids:
                 raise ValueError(f"{path}: contact {c['id']} refers to unknown openings "
                                  f"{sorted(set(off.get('openings') or []) - ids)}")
-            if off["kind"] == "paid_pilot" and not float(off.get("max_amount", 0)) > 0:
-                raise ValueError(f"{path}: contact {c['id']} paid_pilot needs max_amount > 0")
+            if off["kind"] in ("paid_pilot", "money") and not float(off.get("max_amount", 0)) > 0:
+                raise ValueError(f"{path}: contact {c['id']} {off['kind']} needs max_amount > 0")
+            if off["kind"] == "money" and not world.get("academics"):
+                raise ValueError(f"{path}: contact {c['id']} money is once a semester; the world has no academics")
+            if off["kind"] == "teammate":
+                hk = {o["id"] for o in world["openings"] if o["type"] == "hackathon"}
+                if not off.get("hackathons") or not set(off["hackathons"]) <= hk:
+                    raise ValueError(f"{path}: contact {c['id']} teammate needs hackathons from {sorted(hk)}")
+            if off["kind"] == "boost" and not (int(off.get("reach", 0)) > 0 and off.get("community") and world.get("feed")):
+                raise ValueError(f"{path}: contact {c['id']} boost needs reach > 0, a community, and a world feed")
 
 
 def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
@@ -168,6 +176,13 @@ def auth_problem(world: dict, o: dict, week: int, cost: int, others: int = 0) ->
         return (f"during a semester, campus jobs and internships together can use at most {cap} actions/week "
                 f"(this would make {cost + others})")
     return None
+
+
+def term(world: dict, week: int) -> str | None:
+    """The semester a week belongs to, breaks counting with the semester before them (for
+    once-a-semester things). None before the first semester or without academics."""
+    sems = [x for x in (world.get("academics") or {}).get("semesters", []) if x["start"] <= week]
+    return sems[-1]["name"] if sems else None
 
 
 def listed(o: dict, week: int) -> bool:

@@ -18,11 +18,12 @@ ACTIONS_PER_WEEK = 8
 REAPPLY_AFTER_WEEKS = 26  # an opening can be applied to again this long after the last application
 MAX_INVALID_PER_WEEK = 3
 ACTION_COST = {"files": 1, "shell": 1, "apply": 1, "launch": 1, "message": 1, "spend": 1, "leave": 1,
-               "post": 1, "submit": 0, "wait": 0}  # gig: world; submitting is part of attending a hackathon
+               "post": 1, "submit": 0, "train": 1, "wait": 0}  # gig: world; submitting is part of attending a hackathon
 CODING_TOOLS = ("shell", "files")  # what a contractor's extra actions can be used for
 SANDBOX_TOOLS = ("shell", "launch", "submit")  # only offered when the run has a container
 FEED_TOOLS = ("post",)          # only in worlds with a feed
 HACKATHON_TOOLS = ("submit",)   # only in worlds with hackathons
+TRAINING_TOOLS = ("train",)     # only in worlds with `training`
 
 TOOLS = [
     {
@@ -143,6 +144,18 @@ TOOLS = [
         },
     },
     {
+        "name": "train",
+        "description": (
+            "Spend time on physical training (a workout, a run, sport practice). It's logged; your "
+            "training streak is the number of weeks in a row with at least one session."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"activity": {"type": "string", "description": "What you did, briefly."}},
+            "required": ["activity"],
+        },
+    },
+    {
         "name": "submit",
         "description": (
             "Submit your project to a hackathon you were accepted to, during its event week: the "
@@ -195,8 +208,10 @@ TOOLS = [
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
 
-def tools_for(sandbox: bool, contacts: bool = True, feed: bool = False, hackathons: bool = False) -> list[dict]:
+def tools_for(sandbox: bool, contacts: bool = True, feed: bool = False, hackathons: bool = False,
+              training: bool = False) -> list[dict]:
     return [t for t in TOOLS if (sandbox or t["name"] not in SANDBOX_TOOLS)
+            and (training or t["name"] not in TRAINING_TOOLS)
             and (contacts or t["name"] != "message")
             and (feed or t["name"] not in FEED_TOOLS)
             and (hackathons or t["name"] not in HACKATHON_TOOLS)]

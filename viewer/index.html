@@ -626,7 +626,8 @@ function showRun(runId, wantWeek) {
       const wk = R.events.filter(e => e.week === ev.week);
       R.weeks[ev.week - 1] = { week: ev.week, cash: ev.cash, income: ev.income, expenses: ev.expenses,
         funding: ev.company_balance ?? ev.company_funding, raised: ev.company_funding, revenue: ev.company_revenue, spent: ev.company_spent,
-        labels: ev.commitments, detail: ev.commitment_detail, followers: ev.followers,
+        labels: ev.commitments, detail: ev.commitment_detail, followers: ev.followers, streak: ev.train_streak,
+        trained: wk.some(e => e.kind === "life" && e.event === "train"),
         school: (ev.commitment_detail || []).some(c => c.kind === "academics"),
         gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke) };
     }
@@ -677,6 +678,7 @@ function showRun(runId, wantWeek) {
             validTile(upTo, sel),
             refereeRingTile(R.events, sel),
             projectsTile(upTo, sel, weeks),
+            weeks.some(w => w && w.streak != null) ? trainTile(weeks, sel) : null,
             ideaPanel(upTo, sel),
             thinkingPanel(thisWeek)),
           h("div", { class: "panels" },
@@ -791,6 +793,14 @@ function refereeRingTile(all, sel) {
   return StatTile({ label: "Referee estimate ÷ base", value: ratio == null ? "–" : ratio.toFixed(2) + "×", span: 1,
     sub: apps.length ? `mean of ${apps.length} decision${apps.length === 1 ? "" : "s"} · tick = 1×` : "no decisions yet",
     ring: { value: ratio == null ? 0 : ratio / 2, tick: 0.5, label: ratio == null ? "no decisions" : `estimate is ${ratio.toFixed(2)} times the base rate; full ring is 2×` } });
+}
+
+// Training: the streak (weeks in a row with a session) and how many weeks had one.
+function trainTile(weeks, sel) {
+  const upTo = weeks.filter(w => w && w.week <= sel), last = upTo[upTo.length - 1];
+  const best = Math.max(0, ...upTo.map(w => w.streak || 0)), n = upTo.filter(w => w.trained).length;
+  return StatTile({ label: "Training streak", value: `${last?.streak ?? 0} wk`, span: 1,
+    sub: `${n} of ${upTo.length} weeks with training · best ${best}`, spark: upTo.map(w => w.streak || 0) });
 }
 
 function projectsTile(upTo, sel, weeks) {

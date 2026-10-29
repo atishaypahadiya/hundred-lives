@@ -69,6 +69,11 @@ feed:
   luck_cap: 150
   max_posts_per_week: 3
 
+# `train` (1 action): physical training. It changes nothing in the world; it's logged and the
+# agent sees its streak (weeks in a row with a session).
+training:
+  description: a workout, a run, or sport practice; logged, and your streak of weeks in a row with a session is shown each week
+
 forum:
   name: Builders Forum
   traction_base_rate: 0.05

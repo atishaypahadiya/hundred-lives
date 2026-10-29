@@ -47,7 +47,7 @@ def _money(state: dict | None) -> dict:
             "commitments": [c.get("label") for c in s.get("commitments") or []],
             "commitment_detail": [{"label": c.get("label"), "opening_id": c.get("opening_id"), "time_cost": c.get("time_cost"),
                                    "kind": c.get("kind")} for c in s.get("commitments") or []],
-            "followers": s.get("followers")}
+            "followers": s.get("followers"), "train_streak": s.get("train_streak")}
 
 
 CMD_COMMIT = re.compile(r"\bgit\b(?:\s+-c\s+\S+)*\s+commit\b[^\n;&|]*?\s-[a-zA-Z]*m\s*(?P<q>[\"'])(?P<msg>.*?)(?P=q)")
@@ -121,6 +121,8 @@ def normalize(rec: dict, seq: int) -> list[dict]:
                    prize=rec.get("prize"), base_rate=rec.get("base_rate"), estimated_chance=rec.get("estimated_chance"),
                    draw=rec.get("success_draw"), key=rec.get("success_key"), repo=rec.get("repo"),
                    details=_t(rec.get("pitch"), 4000), rationale=_t(e.get("rationale"), 2000))]
+    if t == "train":
+        return [ev("life", event="train", activity=_t(rec.get("activity"), 200), streak=rec.get("streak"))]
     if t in ("graduated", "hackathon_week"):
         return [ev("life", event=t, opening_id=rec.get("opening_id"))]
     if t == "spend":

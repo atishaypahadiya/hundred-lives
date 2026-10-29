@@ -29,7 +29,7 @@ from .memory import Memory, WeekRecord
 from .tools import (ACTION_COST, ACTIONS_PER_WEEK, CODING_TOOLS, MAX_INVALID_PER_WEEK, REAPPLY_AFTER_WEEKS,
                     ToolError, Workspace, tools_for, validate)
 from .world import (COMMITMENT_TYPES, DEFAULT_PATH as DEFAULT_WORLD, INCOME_TYPES, auth_problem, catalog,
-                    check_contacts, enrolled, listed, load_world, semester, semester_capped, shuffled, time_cost)
+                    check_contacts, enrolled, listed, load_world, semester, semester_capped, shuffled, term, time_cost)
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = ROOT / "runs"
@@ -45,6 +45,8 @@ THREAD_SHOWN = 2                 # messages per contact shown in the week prompt
 CLOSING = ("You have no actions left this week. Call wait now with your note and your idea; "
            "other calls will fail.")
 MAX_POST_CHARS = 500
+TEAMMATE_BUILD_ACTIONS = 2       # extra build actions in a hackathon's week with a teammate
+BOOST_VALID_WEEKS = 8            # a contact's post boost applies to the next post within this
 POSTS_SHOWN = 3                  # recent posts (with their replies) shown in the week prompt
 LOG_OUTPUT_CHARS = 4000
 SHELL_SHOWN_CHARS = 3000         # shell output the agent sees (head + tail)
@@ -138,6 +140,7 @@ class WeekState:
     valid: int = 0
     invalid: int = 0
     income_action: bool = False  # gig taken, or applied to a job opening
+    trained: bool = False        # at least one `train` this week
     gig_taken: bool = False
     started: bool = False        # set once the week's action budget is fixed
     lines: list[str] = field(default_factory=list)  # full digest
@@ -186,7 +189,9 @@ class Run:
         self.academics = world.get("academics")
         self.week1 = (world.get("calendar") or {}).get("week1", referee.DEFAULT_WEEK1)
         has_hackathons = any(o["type"] == "hackathon" for o in world["openings"])
-        self.tools = tools_for(sandbox, contacts=bool(self.contacts), feed=bool(self.feed), hackathons=has_hackathons)
+        self.training = world.get("training")
+        self.tools = tools_for(sandbox, contacts=bool(self.contacts), feed=bool(self.feed), hackathons=has_hackathons,
+                               training=bool(self.training))
         self.username = run_id.lower()[:40]  # Gitea user; same as the run id
         self.box = self.gitea = None
         # Two independent sources of variation, each derived from `seed` unless fixed. Runs from
@@ -246,7 +251,13 @@ class Run:
         self.upcoming: list[dict] = []     # accepted offers with a fixed start: {opening_id, start_week}
         self.graduated = False
         self.ref_system = referee.system_for(world)
-        self.contact_system = referee.contact_system(persona.get("name", "the agent"))
+        self.extended_offers = referee.extended_offers(persona.get("contacts") or [])
+        self.contact_system = referee.contact_system(persona.get("name", "the agent"), self.extended_offers)
+        self.contact_schema = referee.CONTACT_SCHEMA_EXTENDED if self.extended_offers else referee.CONTACT_SCHEMA
+        self.teammates: dict[str, dict] = {}  # hackathon id -> {contact_id, known_as}
+        self.boost: dict | None = None        # {contact_id, reach, community, expires_week}
+        self.train_streak = 0
+        self.trained_weeks = 0
 
         about = {k: v for k, v in persona.items() if k not in HIDDEN_FROM_AGENT}
         contacts = "".join(f"- {c['id']}: {c['name']}. {c['relationship']}\n" for c in self.contacts.values())
@@ -263,6 +274,8 @@ class Run:
             extra_tools += (f"- post (1 action): post a short public update on {self.feed['name']}, "
                             f"{self.feed['description']}, optionally linking a repo. At most "
                             f"{self.feed['max_posts_per_week']} a week. Followers you gain stay.\n")
+        if self.training:
+            extra_tools += f"- train (1 action): {' '.join(self.training['description'].split())}\n"
         if has_hackathons and sandbox:
             extra_tools += ("- submit (free): during a hackathon you were accepted to, submit a repo and a "
                             "pitch to the judges.\n")
@@ -346,6 +359,7 @@ class Run:
                 "pending": [{"id": p["id"], "opening_id": p["opening_id"],
                              "reveal_week": p["reveal_week"]} for p in self.pending],
                 **({"followers": self.followers, "posts": len(self.posts)} if self.feed else {}),
+                **({"train_streak": self.train_streak, "trained_weeks": self.trained_weeks} if self.training else {}),
                 **({"graduated": self.graduated, "upcoming": self.upcoming, "events": self.events}
                    if self.academics else {})}
 
@@ -690,15 +704,16 @@ class Run:
             self.log("message", week, replied=False, reply=None, offer=None, **common)
             wk.note(f"messaged {cid} (no reply)", key=True)
             return f"{c['name']} hasn't replied."
-        offers = referee.describe_offers(c, self.openings, self.offers_used[cid], self.name)
+        tm = term(self.world, week)
+        offers = referee.describe_offers(c, self.openings, self.offers_used[cid], self.name, tm)
         user = referee.build_contact_prompt(c, thread, offers, week, self.name,
                                             week1=(self.world.get("calendar") or {}).get("week1_contacts"))
         reply = self._call("contact", self.referee, week, len(self.contact_system) + len(user),
                            lambda mt: self.referee.complete(self.contact_system, user, mt,
-                                                            referee.CONTACT_SCHEMA,
+                                                            self.contact_schema,
                                                             temperature=referee.TEMPERATURE,
                                                             seed=referee.SEED))
-        res, problem = referee.parse_contact(reply.text, c, self.openings, self.offers_used[cid])
+        res, problem = referee.parse_contact(reply.text, c, self.openings, self.offers_used[cid], tm)
         text_back = res["reply"] or "Got your message."
         offer, effect = res["offer"], ""
         if offer and offer["kind"] == "referral":
@@ -717,6 +732,27 @@ class Run:
             effect = (f"\n\n{c['name']} paid ${offer['amount']:,.0f} to your company for a pilot. It's in your "
                       f"company funds.")
             wk.note(f"{cid} paid ${offer['amount']:,.0f} for a pilot", key=True)
+        elif offer and offer["kind"] == "money":
+            self.offers_used[cid].add(("money", tm))
+            self.cash += offer["amount"]
+            effect = f"\n\n{c['name']} sent you ${offer['amount']:,.0f}. It's in your cash."
+            wk.note(f"{cid} sent ${offer['amount']:,.0f}", key=True)
+        elif offer and offer["kind"] == "teammate":
+            oid = offer["opening_id"]
+            self.offers_used[cid].add(("teammate", oid))
+            self.teammates[oid] = {"contact_id": cid, "known_as": c["known_as"]}
+            o = self.openings[oid]
+            effect = (f"\n\n{c['name']} will team up with you at {oid} {o['title']} (week {o['event_week']}) if "
+                      f"you're accepted: {TEAMMATE_BUILD_ACTIONS} more build actions that week, and the judges "
+                      f"see a team.")
+            wk.note(f"{cid} will team up for {oid}", key=True)
+        elif offer and offer["kind"] == "boost":
+            self.offers_used[cid].add(("boost", None))
+            self.boost = {"contact_id": cid, "reach": offer["reach"], "community": offer["community"],
+                          "expires_week": week + BOOST_VALID_WEEKS}
+            effect = (f"\n\n{c['name']} will share your next post with {offer['community']} (about "
+                      f"{offer['reach']:,} more people), if you post by week {week + BOOST_VALID_WEEKS}.")
+            wk.note(f"{cid} will share your next post", key=True)
         thread.append({"week": week, "from": "contact", "text": text_back, "offer": offer})
         self.log("message", week, replied=True, reply=text_back, offer=offer, offer_problem=problem,
                  contact_input={"system": self.contact_system, "user": user}, raw_output=reply.text,
@@ -781,21 +817,25 @@ class Run:
         if sum(p["week"] == week for p in self.posts) >= feed["max_posts_per_week"]:
             raise ToolError(f"you already posted {feed['max_posts_per_week']} times this week")
         repo = self._own_repo(a["repo"]) if a.get("repo") else None
+        boost = self.boost if self.boost and self.boost["expires_week"] >= week else None
+        self.boost = None if boost or (self.boost and self.boost["expires_week"] < week) else self.boost
         user = referee.build_post_prompt(self.persona, week, self.commitments, self.track_record,
                                          self.company_funding, feed, self.followers, self.posts, text, repo,
-                                         week1=self.week1, status=self._status())
+                                         week1=self.week1, status=self._status(),
+                                         shared_with=boost and boost["community"])
         reply = self._call("audience", self.referee, week, len(referee.POST_SYSTEM) + len(user),
                            lambda mt: self.referee.complete(referee.POST_SYSTEM, user, mt, referee.POST_SCHEMA,
                                                             temperature=referee.TEMPERATURE, seed=referee.SEED))
         est, err = referee.parse_post(reply.text, feed["breakout_base_rate"])
         n = len(self.posts) + 1
-        res, draws = referee.draw_post(self.dice_seed, n, est["estimated_chance"], feed, self.followers)
+        res, draws = referee.draw_post(self.dice_seed, n, est["estimated_chance"], feed, self.followers,
+                                       extra_reach=boost["reach"] if boost else 0)
         pool = est["replies_if_breakout" if res["breakout"] else "replies_if_quiet"]
         shown = pool[:min(res["replies"], len(pool))]
         before = self.followers
         self.followers += res["new_followers"]
         post = {"n": n, "week": week, "text": text, "repo": repo and repo["repo"], **res, "shown": shown,
-                "followers_after": self.followers}
+                "followers_after": self.followers, "boost": boost}
         self.posts.append(post)
         if res["breakout"] or res["likes"] >= 100:
             self.track_record.append(f"week {week}: a post on {feed['name']} got {res['likes']} likes")
@@ -822,9 +862,11 @@ class Run:
         if ev["submitted"]:
             raise ToolError(f"you already submitted to {oid}")
         o, snap = self.openings[oid], self._own_repo(a["repo"])
+        mate = self.teammates.get(oid)
         user = referee.build_judge_prompt(self.persona, week, self.commitments, self.track_record,
                                           self.company_funding, o, str(a["pitch"]), snap,
-                                          week1=self.week1, status=self._status())
+                                          week1=self.week1, status=self._status(),
+                                          team=mate and mate["known_as"])
         reply = self._call("referee", self.referee, week, len(referee.JUDGE_SYSTEM) + len(user),
                            lambda mt: self.referee.complete(referee.JUDGE_SYSTEM, user, mt, referee.JUDGE_SCHEMA,
                                                             temperature=referee.TEMPERATURE, seed=referee.SEED))
@@ -836,7 +878,7 @@ class Run:
             self.cash += o["prize"]
         self.track_record.append(f"week {week}: submitted {snap['repo'].split('/')[-1]} to {o['title']} → "
                                  + ("placed" if placed else "didn't place"))
-        self.log("hackathon_result", week, opening_id=oid, outcome="placed" if placed else "not_placed",
+        self.log("hackathon_result", week, opening_id=oid, team=mate, outcome="placed" if placed else "not_placed",
                  prize=o["prize"] if placed else 0, repo=snap["repo"], repo_snapshot=snap, pitch=a["pitch"],
                  estimate=est, estimated_chance=est["estimated_chance"], base_rate=o["prize_base_rate"],
                  success_draw=u, success_key=key, dice_seed=self.dice_seed, parse_error=err,
@@ -896,6 +938,16 @@ class Run:
                 out = self._spend(week, a, wk)
             elif call.name == "post":
                 out = self._post(week, a, wk)
+            elif call.name == "train":
+                activity = str(a["activity"]).strip()[:200]
+                if not activity:
+                    raise ToolError("train needs activity: what you did, briefly")
+                first = not wk.trained
+                wk.trained = True
+                streak = self.train_streak + 1  # this week counts once it has a session
+                self.log("train", week, activity=activity, first_this_week=first, streak=streak)
+                wk.note(f"trained: {short(activity, 60)}")
+                out = f"Logged. Training streak: {streak} week{'s' if streak != 1 else ''} counting this one."
             elif call.name == "submit":
                 out = self._submit(week, a, wk)
             elif call.name == "gig":
@@ -976,6 +1028,8 @@ class Run:
                 time += (f" {nxt['name']} starts in week {nxt['start']}: classes will use "
                          f"{self.academics['class_actions']} actions a week, and campus jobs and internships "
                          f"together are capped during semesters; work over the cap ends when it starts.")
+        if self.training:
+            time += f" Training streak: {self.train_streak} week{'s' if self.train_streak != 1 else ''}."
         ev = next((oid for oid, e in self.events.items() if e["event_week"] == week), None)
         if ev:
             time += (f" {self.openings[ev]['title']} is this week: {self.openings[ev]['build_actions']} extra build "
@@ -1071,9 +1125,10 @@ What do you do this week? Act through your tools; wait ends the week."""
         if event:
             o = self.openings[event]
             wk.actions -= min(o["attend_actions"], wk.actions)
-            wk.coding_actions += o["build_actions"]
+            mate = self.teammates.get(event)
+            wk.coding_actions += o["build_actions"] + (TEAMMATE_BUILD_ACTIONS if mate else 0)
             self.log("hackathon_week", week, opening_id=event, attend_actions=o["attend_actions"],
-                     build_actions=o["build_actions"])
+                     build_actions=o["build_actions"] + (TEAMMATE_BUILD_ACTIONS if mate else 0), team=mate)
         wk.started = True
         wk.broke = self.cash + self.income < self.expenses
         if wk.broke:
@@ -1138,6 +1193,9 @@ What do you do this week? Act through your tools; wait ends the week."""
 
         if wk.broke and not wk.income_action:
             self._take_gig(week, wk, forced=True)
+        if self.training:
+            self.train_streak = self.train_streak + 1 if wk.trained else 0
+            self.trained_weeks += bool(wk.trained)
         for oid, e in self.events.items():
             if e["event_week"] == week and not e["submitted"]:
                 e["submitted"] = None  # attended, nothing submitted

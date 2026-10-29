@@ -26,7 +26,7 @@ import yaml
 
 from .world import terms
 
-PUBLIC_FIELDS = ("name", "born", "home", "family", "education", "status", "skills")
+PUBLIC_FIELDS = ("name", "born", "home", "family", "education", "status", "skills", "experience")
 TEMPERATURE = 0
 SEED = 0
 IGNORED_DROP_WEEKS = 6  # an ignored application leaves the agent's pending list after this long
@@ -333,14 +333,44 @@ CONTACT_SCHEMA = {
 MAX_THREAD = 20  # messages of the thread the contact's voice sees
 
 
-def contact_system(name: str) -> str:
-    return CONTACT_SYSTEM.format(name=name)
+# Contacts with more kinds of offer (money, hackathon team-ups, post boosts) get this wording
+# and schema; personas with only referrals and paid pilots (Maya) keep the originals exactly.
+CONTACT_SYSTEM_EXTENDED = CONTACT_SYSTEM.replace(
+    "offer_opening_id for a referral and offer_amount (dollars) for a paid pilot,",
+    "offer_opening_id for a referral or a hackathon team-up, and offer_amount (dollars) for a paid "
+    "pilot or money,")
+assert CONTACT_SYSTEM_EXTENDED != CONTACT_SYSTEM
+BASIC_OFFER_KINDS = {"referral", "paid_pilot"}
+CONTACT_SCHEMA_EXTENDED = {**CONTACT_SCHEMA, "properties": {
+    **CONTACT_SCHEMA["properties"],
+    "offer_kind": {"type": "string", "enum": ["none", "referral", "paid_pilot", "money", "teammate", "boost"]}}}
 
 
-def describe_offers(contact: dict, openings: dict, used: set, name: str = "Maya") -> str:
-    """The offers this contact can still make, in words, for the voice prompt."""
+def extended_offers(contacts: list[dict]) -> bool:
+    return any(o["kind"] not in BASIC_OFFER_KINDS for c in contacts for o in c.get("offers") or [])
+
+
+def contact_system(name: str, extended: bool = False) -> str:
+    return (CONTACT_SYSTEM_EXTENDED if extended else CONTACT_SYSTEM).format(name=name)
+
+
+def describe_offers(contact: dict, openings: dict, used: set, name: str = "Maya", term: str | None = None) -> str:
+    """The offers this contact can still make, in words, for the voice prompt. `term` keys
+    once-a-semester money."""
     lines = []
     for off in contact.get("offers") or []:
+        if off["kind"] == "money" and ("money", term) not in used:
+            lines.append(f"- money: send {name} up to ${off['max_amount']:,.0f} for living costs (offer_amount); "
+                         f"at most once a semester")
+        if off["kind"] == "teammate":
+            for oid in off["hackathons"]:
+                if ("teammate", oid) not in used:
+                    o = openings[oid]
+                    lines.append(f"- teammate for {oid}: team up with {name} at {o['title']}, event week "
+                                 f"{o['event_week']} (offer_opening_id {oid!r})")
+        if off["kind"] == "boost" and ("boost", None) not in used:
+            lines.append(f"- boost: share {name}'s next post with {off['community']} (about {off['reach']:,} more "
+                         f"people see it), once")
         if off["kind"] == "paid_pilot" and ("paid_pilot", None) not in used:
             lines.append(f"- paid_pilot: pay {name}'s company for a pilot of something {'she' if name == 'Maya' else 'they'} built, up to "
                          f"${off['max_amount']:,.0f} (offer_amount), once")
@@ -373,7 +403,7 @@ Message thread (oldest first{', earlier messages left out' if len(thread) > len(
 Write your reply to {name}'s last message."""
 
 
-def parse_contact(text: str, contact: dict, openings: dict, used: set) -> tuple[dict, str | None]:
+def parse_contact(text: str, contact: dict, openings: dict, used: set, term: str | None = None) -> tuple[dict, str | None]:
     """The reply, plus an offer only if it's on the contact's list and not used up. Returns
     (result, problem-or-None); a dropped offer is logged, and the reply still goes through."""
     try:
@@ -394,10 +424,30 @@ def parse_contact(text: str, contact: dict, openings: dict, used: set) -> tuple[
         if ("referral", oid) in used:
             return {"reply": reply, "offer": None}, f"referral to {oid} was already given; dropped"
         return {"reply": reply, "offer": {"kind": "referral", "opening_id": oid}}, None
+    if kind == "teammate":
+        oid = str(d.get("offer_opening_id") or "").strip()
+        if oid not in allowed["teammate"]["hackathons"] or oid not in openings:
+            return {"reply": reply, "offer": None}, f"team-up for {oid!r} isn't on {contact['id']}'s list; dropped"
+        if ("teammate", oid) in used:
+            return {"reply": reply, "offer": None}, f"team-up for {oid} was already given; dropped"
+        return {"reply": reply, "offer": {"kind": "teammate", "opening_id": oid}}, None
+    if kind == "boost":
+        if ("boost", None) in used:
+            return {"reply": reply, "offer": None}, "boost was already given; dropped"
+        b = allowed["boost"]
+        return {"reply": reply, "offer": {"kind": "boost", "reach": int(b["reach"]), "community": b["community"]}}, None
     try:
         amount = float(d.get("offer_amount") or 0)
     except (TypeError, ValueError):
         amount = 0.0
+    if kind == "money":
+        if ("money", term) in used:
+            return {"reply": reply, "offer": None}, "money was already given this semester; dropped"
+        if amount <= 0:
+            return {"reply": reply, "offer": None}, "money with no amount; dropped"
+        cap = float(allowed["money"]["max_amount"])
+        problem = f"money ${amount:,.0f} capped at ${cap:,.0f}" if amount > cap else None
+        return {"reply": reply, "offer": {"kind": "money", "amount": round(min(amount, cap), 2)}}, problem
     if ("paid_pilot", None) in used:
         return {"reply": reply, "offer": None}, "paid pilot was already given; dropped"
     if amount <= 0:
@@ -457,13 +507,15 @@ POST_SCHEMA = {
 
 def build_post_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                       company_funding: float, feed: dict, followers: int, recent: list[dict], text: str,
-                      repo: dict | None, week1: str = DEFAULT_WEEK1, status: str | None = None) -> str:
+                      repo: dict | None, week1: str = DEFAULT_WEEK1, status: str | None = None,
+                      shared_with: str | None = None) -> str:
     shown = "\n".join(f"- week {p['week']}: \"{p['text'][:200]}\" ({p['likes']} likes)" for p in recent[-5:]) or "none"
     return f"""\
 {_person(persona, week, commitments, track_record, company_funding, week1, status)}
 
 Feed: {feed['name']} ({feed['description']})
-Followers: {followers}
+Followers: {followers}{f"""
+Shared by a friend with {shared_with}, so more people than usual see it.""" if shared_with else ""}
 breakout_base_rate: {feed['breakout_base_rate']}
 
 Their recent posts:
@@ -500,7 +552,8 @@ def parse_post(text: str, base_rate: float) -> tuple[dict, str | None]:
     return out, None
 
 
-def draw_post(dice_seed: int, n: int, chance: float, feed: dict, followers: int) -> tuple[dict, dict]:
+def draw_post(dice_seed: int, n: int, chance: float, feed: dict, followers: int,
+              extra_reach: int = 0) -> tuple[dict, dict]:
     """The n-th post's engagement. Each quantity has its own key, so one never shifts another.
     luck = (1 - u)^(-1/alpha), capped: a Pareto tail with minimum 1. Counts use stochastic
     rounding (floor(x + u)), so an expected 0.4 likes is 0 most of the time and 1 sometimes."""
@@ -510,7 +563,7 @@ def draw_post(dice_seed: int, n: int, chance: float, feed: dict, followers: int)
     luck = min(float(feed["luck_cap"]), (1 - d["post_luck"][0]) ** (-1 / float(feed["tail_alpha"])))
     if breakout:
         luck *= float(feed["breakout_multiplier"])
-    reach = float(feed["base_reach"]) + float(feed["reach_per_follower"]) * followers
+    reach = float(feed["base_reach"]) + float(feed["reach_per_follower"]) * followers + extra_reach
     likes = int(reach * float(feed["like_rate"]) * luck + d["post_likes"][0])
     follows = int(likes * float(feed["follow_rate"]) + d["post_follows"][0])
     replies = int(likes * float(feed["reply_rate"]) + d["post_replies"][0])
@@ -553,7 +606,7 @@ JUDGE_SCHEMA = {
 
 def build_judge_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                        company_funding: float, hackathon: dict, pitch: str, repo: dict,
-                       week1: str = DEFAULT_WEEK1, status: str | None = None) -> str:
+                       week1: str = DEFAULT_WEEK1, status: str | None = None, team: str | None = None) -> str:
     view = {k: hackathon[k] for k in ("id", "title", "org", "requirements", "theme") if k in hackathon}
     return f"""\
 {_person(persona, week, commitments, track_record, company_funding, week1, status)}
@@ -561,6 +614,7 @@ def build_judge_prompt(persona: dict, week: int, commitments: list[dict], track_
 Hackathon:
 {yaml.safe_dump(view, sort_keys=False).strip()}
 prize_base_rate: {hackathon['prize_base_rate']}
+Team: {f"{persona['name']} and {team}" if team else f"{persona['name']}, solo"}
 
 Pitch:
 {pitch}
