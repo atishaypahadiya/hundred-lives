@@ -81,10 +81,12 @@ class Memory:
             lines.append(f"Weeks {first}–{last}: " + ("; ".join(events + counts) or "nothing of note"))
         return "\n".join(lines) or "(this is your first week)"
 
-    def reflection_prompt(self, name: str, week: int) -> tuple[str, str]:
+    def reflection_prompt(self, name: str, week: int, state_week: bool = False) -> tuple[str, str]:
         system = REFLECTION_SYSTEM.format(name=name)
         user = REFLECTION_USER.format(reflection=self.reflection or "(none yet)",
                                       records=self.records(week), words=REFLECTION_WORDS)
+        if state_week:
+            user = (f"It is the end of week {week}. If you mention the week, it's week {week}.\n\n" + user)
         return system, user
 
     def set_reflection(self, text: str, week: int):

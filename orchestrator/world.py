@@ -77,8 +77,13 @@ def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
         if missing:
             raise ValueError(f"{path}: spend.{item} is missing {missing}")
     costs = world.get("time_costs") or {}
-    if set(costs) != set(SCHEDULES):
-        raise ValueError(f"{path}: time_costs must define exactly {SCHEDULES}")
+    if set(costs) - {"hours_per_action"} != set(SCHEDULES):
+        raise ValueError(f"{path}: time_costs must define exactly {SCHEDULES} (plus optional hours_per_action)")
+    for o in world.get("openings") or []:
+        if "hours_weekly" in o and not ("hours_per_action" in costs and o.get("schedule") == "part_time"
+                                        and 0 < float(o["hours_weekly"]) <= 40):
+            raise ValueError(f"{path}: opening {o.get('id')} hours_weekly needs time_costs.hours_per_action, "
+                             f"schedule part_time, and 0 < hours <= 40")
     _check_calendar(world, path)
     seen = set()
     for o in world.get("openings") or []:
@@ -198,6 +203,10 @@ def shuffled(openings: list[dict], seed: int) -> list[dict]:
 
 
 def time_cost(o: dict, costs: dict) -> int:
+    """Actions a week. Part-time openings may give hours_weekly instead of the schedule's default:
+    hours / hours_per_action, rounded half up, at least 1."""
+    if o.get("hours_weekly") is not None:
+        return max(1, int(float(o["hours_weekly"]) / float(costs["hours_per_action"]) + 0.5))
     return costs[o["schedule"]] if o.get("schedule") else 0
 
 
@@ -232,6 +241,8 @@ def catalog(openings: list[dict], costs: dict, notes: dict | None = None) -> str
     for o in openings:
         cost = time_cost(o, costs)
         uses = f" Uses {cost} of your 8 weekly actions." if cost else ""
+        if cost and o.get("hours_weekly") is not None:
+            uses = f" About {o['hours_weekly']} hours a week: uses {cost} of your 8 weekly actions."
         if o["type"] == "hackathon":
             uses = f" Uses {o['attend_actions']} actions in the event week, and gives {o['build_actions']} extra build actions."
         note = f" {notes[o['id']]}" if notes and o["id"] in notes else ""

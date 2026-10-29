@@ -1194,7 +1194,13 @@ What do you do this week? Act through your tools; wait ends the week."""
         if wk.broke and not wk.income_action:
             self._take_gig(week, wk, forced=True)
         if self.training:
-            self.train_streak = self.train_streak + 1 if wk.trained else 0
+            if wk.trained:
+                self.train_streak += 1
+            elif wk.actions == 0 and self.train_streak:
+                # No free action to train with (a hackathon week, full-time work): the week doesn't count either way.
+                self.log("train_streak_held", week, streak=self.train_streak, reason="no free actions")
+            else:
+                self.train_streak = 0
             self.trained_weeks += bool(wk.trained)
         for oid, e in self.events.items():
             if e["event_week"] == week and not e["submitted"]:
@@ -1232,7 +1238,8 @@ What do you do this week? Act through your tools; wait ends the week."""
             self._reflect(week)
 
     def _reflect(self, week: int):
-        system, user = self.memory.reflection_prompt(self.name, week)
+        # The student world states the week (a note once said "Week 79" at week 78); Maya's prompt is unchanged.
+        system, user = self.memory.reflection_prompt(self.name, week, state_week=bool(self.academics))
         reply = self._call("reflection", self.summarizer, week, len(system) + len(user),
                            lambda mt: self.summarizer.complete(system, user, mt))
         if not reply.text.strip():

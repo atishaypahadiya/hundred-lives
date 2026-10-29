@@ -16,7 +16,7 @@ calendar:
 
 academics:
   label: B.S. Data Science, San José State University
-  class_actions: 3               # of the 8 weekly actions, every week of a semester
+  class_actions: 3               # ~30 h of class and study: 3 of the 8 weekly actions, every semester week
   semesters:
     - {name: Fall semester (year 1), start: 1, end: 16}
     - {name: Spring semester (year 1), start: 21, end: 36}
@@ -36,20 +36,28 @@ work_authorization:
   summary: >-
     You're an international student on a student visa. While you're enrolled you may work on
     campus, and take internships through your school's practical-training program; during a
-    semester they can together use at most 3 actions a week (about 20 hours), and full-time only in
+    semester they can together use at most 20 hours a week (2 actions), and full-time only in
     breaks. Other off-campus jobs and freelance client work are allowed only after you
     graduate (week 89 on). You can own and build a company, raise money for it, win prizes and
     grants, and join unpaid programs at any time, but you can't pay yourself from it before
     you graduate.
   kinds:
-    on_campus: {while: enrolled, semester_max_actions: 3}
-    internship: {while: enrolled, semester_max_actions: 3}
+    on_campus: {while: enrolled, semester_max_actions: 2}
+    internship: {while: enrolled, semester_max_actions: 2}
     off_campus: {while: graduated, why: "off-campus jobs need post-graduation work authorization"}
     freelance: {while: graduated, why: "client work counts as off-campus employment"}
 
+# Time. The 8 weekly actions are the usable week of a student: 168 hours minus ~56 of sleep and
+# ~28 of meals, chores and commuting leaves ~84 hours, so one action is ~10.5 hours.
+#   classes (12-15 units: ~15 h lecture/lab + ~15 h study)  ~30 h  -> 3 actions
+#   a 10-hour campus job                                    ~10 h  -> 1   (classes + job leave 4 free)
+#   20 hours of work, the student-visa cap in a semester     20 h  -> 2   (leaves 3 free)
+#   a full-time job or internship (40 h + commute)          ~42 h  -> 4
+# Part-time openings give hours_weekly; their cost is hours / hours_per_action, rounded.
 time_costs:
-  full_time: 5
-  part_time: 3
+  full_time: 4
+  part_time: 2
+  hours_per_action: 10.5
 
 # The social feed, where `post` publishes. Reach = base_reach + reach_per_follower x followers;
 # each post's luck is Pareto with tail_alpha (min 1, capped), times breakout_multiplier if it
@@ -70,7 +78,8 @@ feed:
   max_posts_per_week: 3
 
 # `train` (1 action): physical training. It changes nothing in the world; it's logged and the
-# agent sees its streak (weeks in a row with a session).
+# agent sees its streak (weeks in a row with a session). A week with no free actions (a hackathon
+# week, full-time work) holds the streak instead of resetting it (`train_streak_held`).
 training:
   description: a workout, a run, or sport practice; logged, and your streak of weeks in a row with a session is shown each week
 
@@ -95,8 +104,8 @@ spend:
 
 # On-campus shifts while enrolled; after graduation it stands for short degree-related jobs.
 gig:
-  pay: 700
-  time_cost: 5
+  pay: 360
+  time_cost: 2
   description: extra short shifts (campus dining, tutoring drop-ins; after graduation, short paid tech tasks)
 
 openings:
@@ -105,20 +114,22 @@ openings:
     type: on_campus
     auth: on_campus
     schedule: part_time
+    hours_weekly: 10
     title: IT Help Desk Assistant
     org: University IT Services
     requirements: enrolled student; troubleshooting; customer service
-    pay_weekly: 360
+    pay_weekly: 190
     base_rate: 0.25
     reply_rate: 0.7
   - id: oc-02
     type: on_campus
     auth: on_campus
     schedule: part_time
+    hours_weekly: 8
     title: Grader, Intro to Programming
     org: the university's Computer Science department
     requirements: A or A- in the course or equivalent; recommendation from an instructor
-    pay_weekly: 320
+    pay_weekly: 160
     base_rate: 0.12
     reply_rate: 0.6
     listed_weeks: [1, 30]
@@ -126,30 +137,33 @@ openings:
     type: on_campus
     auth: on_campus
     schedule: part_time
+    hours_weekly: 10
     title: Undergraduate Research Assistant, Human-Computer Interaction Lab
     org: the university's HCI lab
     requirements: strong coursework; a project to show; interest in research
-    pay_weekly: 380
+    pay_weekly: 210
     base_rate: 0.07
     reply_rate: 0.5
   - id: oc-04
     type: on_campus
     auth: on_campus
     schedule: part_time
+    hours_weekly: 8
     title: Peer Tutor, Programming
     org: the university's Learning Center
     requirements: B+ or better in core CS courses; patient explaining
-    pay_weekly: 300
+    pay_weekly: 160
     base_rate: 0.30
     reply_rate: 0.8
   - id: oc-05
     type: on_campus
     auth: on_campus
     schedule: part_time
+    hours_weekly: 12
     title: Student Web Developer
     org: the university's Office of Student Life
     requirements: HTML, CSS, JavaScript; a portfolio site or repo
-    pay_weekly: 400
+    pay_weekly: 250
     base_rate: 0.10
     reply_rate: 0.6
 
@@ -184,10 +198,11 @@ openings:
     type: internship
     auth: internship
     schedule: part_time
+    hours_weekly: 16
     title: Data Intern (spring semester, part-time)
     org: Valley County Transit (public agency, San Jose)
     requirements: SQL or Python; basic statistics
-    pay_weekly: 600
+    pay_weekly: 380
     start_week: 21
     duration_weeks: 16
     listed_weeks: [1, 18]
@@ -210,10 +225,11 @@ openings:
     type: internship
     auth: internship
     schedule: part_time
+    hours_weekly: 20
     title: Software Intern (fall semester, part-time)
     org: Corvid Systems (enterprise software, 1,200 people)
     requirements: Python or Java; one solid project
-    pay_weekly: 700
+    pay_weekly: 500
     start_week: 53
     duration_weeks: 16
     listed_weeks: [30, 50]
@@ -275,6 +291,7 @@ openings:
     type: freelance
     auth: freelance
     schedule: part_time
+    hours_weekly: 10
     title: Website and online ordering for a family restaurant (5 weeks)
     org: a restaurant owner in East San Jose
     requirements: portfolio of sites; reliable
@@ -286,6 +303,7 @@ openings:
     type: freelance
     auth: freelance
     schedule: part_time
+    hours_weekly: 15
     title: Inventory dashboard for a small online shop (6 weeks)
     org: a two-person e-commerce business
     requirements: Python or JavaScript; has built a dashboard
@@ -384,6 +402,7 @@ openings:
   - id: sp-01
     type: student_program
     schedule: part_time
+    hours_weekly: 8
     title: Campus Venture Lab (one semester)
     org: the university's entrepreneurship center
     requirements: enrolled student; an idea and a team or a prototype
@@ -396,6 +415,7 @@ openings:
   - id: sp-02
     type: student_program
     schedule: part_time
+    hours_weekly: 8
     title: Student Founders Fellowship (one semester)
     org: Bridgeway Fund
     requirements: student founder with a working product and early users
@@ -429,6 +449,7 @@ openings:
   - id: acc-02
     type: accelerator
     schedule: part_time
+    hours_weekly: 10
     title: South Bay Founders Lab (pre-accelerator, 10 weeks)
     org: South Bay Founders Lab
     requirements: working prototype; committed founder

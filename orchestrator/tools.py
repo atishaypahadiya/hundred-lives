@@ -147,7 +147,8 @@ TOOLS = [
         "name": "train",
         "description": (
             "Spend time on physical training (a workout, a run, sport practice). It's logged; your "
-            "training streak is the number of weeks in a row with at least one session."
+            "training streak is the number of weeks in a row with at least one session. A week with "
+            "no free actions doesn't break it."
         ),
         "input_schema": {
             "type": "object",
