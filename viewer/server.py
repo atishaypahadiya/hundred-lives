@@ -12,7 +12,8 @@ Endpoints:
     GET /api/runs/{run_id}/repos          exported repo bundles: commits, files, README
 
 Nothing here writes under runs/. Bundles are read through a bare clone in a temp dir (no
-checkout, hooks off), since anything in a repo is agent-controlled. Binds 127.0.0.1 only.
+checkout, hooks off), since anything in a repo is agent-controlled. Binds 127.0.0.1 only, and
+rejects any Host header that isn't a loopback name, so a web page can't DNS-rebind its way in.
 """
 
 import argparse
@@ -25,6 +26,8 @@ import tempfile
 from pathlib import Path
 
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
@@ -221,7 +224,9 @@ async def repos(request: Request):
     return JSONResponse(await asyncio.gather(*(asyncio.to_thread(read_bundle, b) for b in bundles)))
 
 
-app = Starlette(routes=[
+LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "[::1]"]  # TrustedHostMiddleware ignores the port
+
+app = Starlette(middleware=[Middleware(TrustedHostMiddleware, allowed_hosts=LOOPBACK_HOSTS)], routes=[
     Route("/", page),
     Route("/api/runs", runs),
     Route("/api/runs/{run_id}/events", events),
