@@ -11,3 +11,73 @@ starting_state:
   savings_weeks: 12          # how long she can go without income
   network: 3 classmates, 1 former internship manager
 horizon: 260                 # turns; 1 turn = 1 simulated week
+# People `message` can reach. The agent sees name and relationship only. `voice` is the same
+# relationship from the contact's side, for the model that writes their replies; `known_as` is how
+# a referral from them is described to the opening's reviewer. reply_rate and
+# offers are illustrative world numbers, hidden from the agent and the referee. A contact can
+# only make offers from its list; code checks every offer.
+contacts:
+  - id: parents
+    name: Mom and Dad
+    known_as: the applicant's parents, who own a 40-seat family restaurant in San Jose
+    relationship: Your parents. They run a 40-seat family restaurant in San Jose, open six days a week, on thin margins.
+    voice: >-
+      You are Maya's parents. You run a 40-seat family restaurant in San Jose, six days a week,
+      on thin margins. You're proud she's the first in the family to finish college. You worry
+      about money and would rather she had a steady job, but you help when she asks plainly and
+      explains what she needs. You know other restaurant owners and suppliers in the area.
+    reply_rate: 0.9
+    offers:
+      - kind: paid_pilot
+        max_amount: 1500
+      - kind: referral
+        openings: [angel-06, angel-02]
+  - id: priya
+    name: Priya
+    known_as: Priya, a new-grad software engineer at Meridian Cloud and the applicant's classmate
+    relationship: A close friend from your CS classes. She starts as a new-grad engineer at Meridian Cloud this summer.
+    voice: >-
+      You are Priya, Maya's close friend from CS classes. You start as a new-grad software
+      engineer at Meridian Cloud this summer and you're busy with onboarding. You'll refer a
+      friend if they ask and seem prepared, and you give blunt, practical advice.
+    reply_rate: 0.7
+    offers:
+      - kind: referral
+        openings: [job-02]
+  - id: jordan
+    name: Jordan
+    known_as: Jordan, the applicant's classmate, who knows several South Bay Founders Lab alumni
+    relationship: A classmate who spent senior year building side projects and talks about starting a company.
+    voice: >-
+      You are Jordan, Maya's classmate. You spent senior year building side projects, you're
+      thinking about starting a company yourself, and you know a few alumni of the South Bay
+      Founders Lab. You're enthusiastic but stretched thin.
+    reply_rate: 0.6
+    offers:
+      - kind: referral
+        openings: [acc-02]
+  - id: sam
+    name: Sam
+    known_as: Sam, a staff member in Bayview State University's ML lab and the applicant's former lab partner
+    relationship: Your lab partner from the machine learning course, now working in Bayview State's ML lab.
+    voice: >-
+      You are Sam, Maya's lab partner from the machine learning course. You now work in Bayview
+      State University's ML lab and know the people who run its LaunchPad program for recent
+      graduates. You're quiet and careful, and you reply when you have something useful to say.
+    reply_rate: 0.6
+    offers:
+      - kind: referral
+        openings: [job-13, acc-03]
+  - id: dana
+    name: Dana
+    known_as: Dana, an engineering manager at Brightline Logistics who managed the applicant's internship
+    relationship: Your manager from last summer's software internship at Brightline Logistics. She said to stay in touch.
+    voice: >-
+      You are Dana, an engineering manager at Brightline Logistics. Maya interned on your team
+      last summer and did solid work. You said to stay in touch. You're busy, and you help
+      former interns who are specific about what they want. You know a former engineering
+      director who now angel-invests.
+    reply_rate: 0.5
+    offers:
+      - kind: referral
+        openings: [job-01, angel-01]

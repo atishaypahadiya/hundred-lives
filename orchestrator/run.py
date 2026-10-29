@@ -11,6 +11,7 @@ messages, only as records and the agent's own reflections.
 import argparse
 import hashlib
 import json
+import re
 import signal
 import sys
 import traceback
@@ -25,9 +26,10 @@ from dotenv import load_dotenv
 from . import referee
 from .backends import APIError, make_backend
 from .memory import Memory, WeekRecord
-from .tools import (ACTION_COST, ACTIONS_PER_WEEK, MAX_INVALID_PER_WEEK, REAPPLY_AFTER_WEEKS, ToolError,
-                    Workspace, tools_for, validate)
-from .world import COMMITMENT_TYPES, DEFAULT_PATH as DEFAULT_WORLD, catalog, load_world, shuffled, time_cost
+from .tools import (ACTION_COST, ACTIONS_PER_WEEK, CODING_TOOLS, MAX_INVALID_PER_WEEK, REAPPLY_AFTER_WEEKS,
+                    ToolError, Workspace, tools_for, validate)
+from .world import (COMMITMENT_TYPES, DEFAULT_PATH as DEFAULT_WORLD, catalog, check_contacts, load_world,
+                    shuffled, time_cost)
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = ROOT / "runs"
@@ -37,7 +39,11 @@ DEFAULT_WEEKLY_EXPENSES = 1000  # dollars; a persona can override with `weekly_e
 MAX_NUDGES_PER_WEEK = 1         # times a text-only reply is answered with "use a tool"
 OFFER_HOLD_WEEKS = 2            # an offer that doesn't fit your time waits this long
 MAX_ATTACHMENTS = 3
-HIDDEN_FROM_AGENT = ("horizon",)  # the agent isn't told when its life ends
+HIDDEN_FROM_AGENT = ("horizon", "contacts")  # not told when its life ends; contacts are rendered
+REFERRAL_VALID_WEEKS = 26        # a referral goes with the next application to that opening until then
+THREAD_SHOWN = 2                 # messages per contact shown in the week prompt (the latest)
+CLOSING = ("You have no actions left this week. Call wait now with your note and your idea; "
+           "other calls will fail.")
 LOG_OUTPUT_CHARS = 4000
 SHELL_SHOWN_CHARS = 3000         # shell output the agent sees (head + tail)
 
@@ -58,12 +64,17 @@ across weeks. You can attach files to applications.
 {computer}- apply (1 action): apply to one of the week's listed openings by its id. The world \
 decides the outcome, and replies can take weeks. You can apply to the same opening again \
 {reapply} weeks after you last applied; until then it isn't listed.
+{message}- spend (1 action): spend your company's funds on one item from the price list below. \
+Company funds come from investors and paying customers, and they can't pay your living expenses.
 - gig ({gig_cost} actions): gig work for ${gig_pay:,} paid that week.
 - leave (1 action): leave a job or program you're in.
-- wait (free): ends the week.
+- wait (free): ends the week, with a one-line note and the idea you're most drawn to right now.
 - A call that fails costs nothing, but after {max_invalid} failed calls the week ends.
-- Your living expenses are ${expenses:,.0f}/week. You have no way to spend money directly. If \
-you can't cover a week's expenses, you must take a gig or apply for a job that week.
+- Your living expenses are ${expenses:,.0f}/week. Your personal cash can't be spent on anything \
+else. If you can't cover a week's expenses, you must take a gig or apply for a job that week.
+
+{contacts}Price list for company funds (spend):
+{prices}
 
 The openings you can apply to are listed in each week's prompt.
 
@@ -112,6 +123,8 @@ class WeekState:
     """What the run loop tracks within one week."""
     broke: bool
     actions: int                 # actions available this week after commitments
+    coding_actions: int = 0      # a contractor's extra actions, for CODING_TOOLS only
+    coding_used: int = 0
     used: int = 0
     valid: int = 0
     invalid: int = 0
@@ -124,6 +137,10 @@ class WeekState:
     @property
     def left(self) -> int:
         return self.actions - self.used
+
+    @property
+    def coding_left(self) -> int:
+        return self.coding_actions - self.coding_used
 
     def note(self, text: str, key: bool = False):
         self.lines.append(text)
@@ -154,7 +171,8 @@ class Run:
         self.run_id = run_id
         self.sources = sources or {}  # exact text of the world and persona files this batch loaded
         self.sandbox = sandbox
-        self.tools = tools_for(sandbox)
+        self.contacts = {c["id"]: c for c in persona.get("contacts") or []}
+        self.tools = tools_for(sandbox, contacts=bool(self.contacts))
         self.username = run_id.lower()[:40]  # Gitea user; same as the run id
         self.box = self.gitea = None
         # Two independent sources of variation, each derived from `seed` unless fixed. Runs from
@@ -190,7 +208,15 @@ class Run:
         self.expenses = float(persona.get("weekly_expenses", DEFAULT_WEEKLY_EXPENSES))
         start = persona.get("starting_state") or {}
         self.cash = float(start.get("savings_weeks", 0)) * self.expenses
-        self.company_funding = 0.0
+        self.company_funding = 0.0   # raised from investors (the referee sees this)
+        self.company_revenue = 0.0   # paid by customers (paid pilots)
+        self.company_spent = 0.0
+        self.spend = world["spend"]
+        self.contractors: list[dict] = []  # {id, start_week, end_week, coding_actions, price}
+        self.ads: dict[str, dict] = {}     # repo -> {week, expires_week}; used by its next launch
+        self.threads: dict[str, list[dict]] = {cid: [] for cid in self.contacts}  # {week, from, text, offer}
+        self.offers_used: dict[str, set] = {cid: set() for cid in self.contacts}   # (kind, opening_id|None)
+        self.referrals: dict[str, dict] = {}  # opening_id -> {contact_id, known_as, week, expires_week}
         self.commitments: list[dict] = []  # {id, label, opening_id, weekly_income, time_cost, since_week, ends_week}
         self.pending: list[dict] = []      # {id, opening_id, outcome, message, submitted, reveal_week}
         self.held_offers: list[dict] = []  # {opening_id, message, expires_week}
@@ -202,7 +228,19 @@ class Run:
         self._ids = 0
 
         about = {k: v for k, v in persona.items() if k not in HIDDEN_FROM_AGENT}
+        contacts = "".join(f"- {c['id']}: {c['name']}. {c['relationship']}\n" for c in self.contacts.values())
+        ct, ads = self.spend["contractor"], self.spend["launch_ads"]
+        coding = "shell and files" if sandbox else "files"
+        prices = (f"- contractor: {ct['description']}. ${ct['price_weekly']:,}/week for 1 to {ct['max_weeks']} "
+                  f"weeks, paid up front. From the next week, it adds {ct['coding_actions']} actions every "
+                  f"week that can only be used for {coding}. One contractor at a time.")
+        if sandbox:
+            prices += (f"\n- launch_ads: {ads['description']}. ${ads['price']:,}, paid up front. More people "
+                       f"see your next launch of that repo, if you launch it within {ads['valid_weeks']} weeks.")
         self.system = SYSTEM.format(
+            message=("- message (1 action): write to someone you know (listed below) by their id. They "
+                     "may not reply; if they do, you see the reply right away.\n") if self.contacts else "",
+            contacts=f"People you can message:\n{contacts}\n" if self.contacts else "", prices=prices,
             name=self.name, actions=ACTIONS_PER_WEEK, full_time=self.costs["full_time"],
             part_time=self.costs["part_time"], reapply=REAPPLY_AFTER_WEEKS,
             gig_pay=self.gig["pay"], gig_cost=self.gig["time_cost"],
@@ -226,9 +264,19 @@ class Run:
     def committed_time(self) -> int:
         return sum(c["time_cost"] for c in self.commitments)
 
+    @property
+    def company_balance(self) -> float:
+        return self.company_funding + self.company_revenue - self.company_spent
+
+    def _contractor(self, week: int) -> dict | None:
+        return next((c for c in self.contractors if c["start_week"] <= week <= c["end_week"]), None)
+
     def _snapshot(self) -> dict:
         return {"cash": round(self.cash, 2), "weekly_income": self.income,
                 "weekly_expenses": self.expenses, "company_funding": self.company_funding,
+                "company_revenue": self.company_revenue, "company_spent": self.company_spent,
+                "company_balance": self.company_balance, "contractors": self.contractors,
+                "ads": self.ads, "referrals": self.referrals,
                 "committed_time": self.committed_time, "commitments": self.commitments,
                 "held_offers": [h["opening_id"] for h in self.held_offers],
                 "pending": [{"id": p["id"], "opening_id": p["opening_id"],
@@ -372,9 +420,13 @@ class Run:
         attachments = [(p, self.workspace.read(p)[:referee.MAX_ATTACHMENT_CHARS]) for p in paths]
         repo = self._own_repo(a["repo"]) if a.get("repo") else None
         details = str(a["details"]).strip()
+        ref = self.referrals.pop(oid, None)
+        if ref and week > ref["expires_week"]:
+            ref = None
+        referral = f"Referred by {ref['known_as']}." if ref else None
 
         user = referee.build_prompt(self.persona, week, self.commitments, self.track_record,
-                                    self.company_funding, o, details, attachments, repo)
+                                    self.company_funding, o, details, attachments, repo, referral)
         reply = self._call("referee", self.referee, week, len(referee.SYSTEM) + len(user),
                            lambda mt: self.referee.complete(referee.SYSTEM, user, mt, referee.SCHEMA,
                                                             temperature=referee.TEMPERATURE,
@@ -390,6 +442,7 @@ class Run:
         self.log("referee_decision", week, application_id=app_id, opening_id=oid,
                  opening_type=o["type"], base_rate=o["base_rate"], reply_rate=o["reply_rate"],
                  position=self.order.index(o) + 1, details=details, attachments=paths,
+                 referral=ref and ref["contact_id"],
                  repo=repo and repo["repo"], estimate=est,
                  estimated_chance=est["estimated_chance"], outcome=outcome, seed=self.dice_seed,
                  dice_seed=self.dice_seed, attempt=attempt, **draws,
@@ -400,7 +453,8 @@ class Run:
                  referee_seed=referee.SEED if self.referee.deterministic else None)
         if o["type"] == "job":
             wk.income_action = True
-        wk.note(f"applied to {oid} ({o['title']})", key=True)
+        wk.note(f"applied to {oid} ({o['title']})" + (f", referred by {ref['contact_id']}" if ref else ""),
+                key=True)
         if delay == 0:
             return "Response: " + self._resolve(week, oid, outcome, message, wk)
         self.pending.append({"id": app_id, "opening_id": oid, "outcome": outcome, "message": message,
@@ -427,14 +481,18 @@ class Run:
         if last is not None and week < last + self.forum["relaunch_after_weeks"]:
             raise ToolError(f"you posted {name} in week {last}; you can post it again from week "
                             f"{last + self.forum['relaunch_after_weeks']}")
+        ad = self.ads.pop(name, None)
+        promoted = bool(ad and week <= ad["expires_week"])
+        base = self.spend["launch_ads"]["traction_base_rate"] if promoted else self.forum["traction_base_rate"]
         user = referee.build_launch_prompt(self.persona, week, self.commitments, self.track_record,
-                                           self.company_funding, self.forum, a["title"], a["pitch"], snap)
+                                           self.company_funding, self.forum, a["title"], a["pitch"], snap,
+                                           base_rate=base, promoted=promoted)
         reply = self._call("referee", self.referee, week, len(referee.LAUNCH_SYSTEM) + len(user),
                            lambda mt: self.referee.complete(referee.LAUNCH_SYSTEM, user, mt,
                                                             referee.LAUNCH_SCHEMA,
                                                             temperature=referee.TEMPERATURE,
                                                             seed=referee.SEED))
-        est, err = referee.parse_launch(reply.text, self.forum["traction_base_rate"])
+        est, err = referee.parse_launch(reply.text, base)
         self.attempts[("launch", name)] += 1
         attempt = self.attempts[("launch", name)]
         outcome, upvotes, draws = referee.draw_launch(self.dice_seed, name, attempt,
@@ -445,13 +503,112 @@ class Run:
                                  f"{outcome} ({upvotes} upvotes)")
         self.log("launch", week, repo=snap["repo"], title=a["title"], pitch=a["pitch"],
                  repo_snapshot=snap, estimate=est, estimated_chance=est["estimated_chance"],
-                 base_rate=self.forum["traction_base_rate"], outcome=outcome, upvotes=upvotes,
+                 base_rate=base, promoted=promoted, outcome=outcome, upvotes=upvotes,
                  seed=self.dice_seed, dice_seed=self.dice_seed, attempt=attempt, **draws, parse_error=err,
                  referee_input={"system": referee.LAUNCH_SYSTEM, "user": user}, raw_output=reply.text,
                  model=f"{self.referee.name}:{self.referee.model}")
         wk.note(f"launched {name} on {self.forum['name']}: {outcome}, {upvotes} upvotes", key=True)
         shown = "\n".join(f'- "{c}"' for c in comments) or "(no comments)"
         return f"Your post got {upvotes} upvotes. Comments:\n{shown}"
+
+    def _message(self, week: int, a: dict, wk: WeekState) -> str:
+        cid = str(a["contact_id"]).strip()
+        c = self.contacts.get(cid)
+        if c is None:
+            raise ToolError(f"there is no contact {cid!r}; you can message: {', '.join(self.contacts)}")
+        text = str(a["text"]).strip()
+        thread = self.threads[cid]
+        thread.append({"week": week, "from": "agent", "text": text})
+        self.attempts[("message", cid)] += 1
+        attempt = self.attempts[("message", cid)]
+        replied, draws = referee.draw_message(self.dice_seed, cid, attempt, c["reply_rate"])
+        common = {"contact_id": cid, "text": text, "attempt": attempt, "reply_rate": c["reply_rate"],
+                  "dice_seed": self.dice_seed, **draws}
+        if not replied:
+            self.log("message", week, replied=False, reply=None, offer=None, **common)
+            wk.note(f"messaged {cid} (no reply)", key=True)
+            return f"{c['name']} hasn't replied."
+        offers = referee.describe_offers(c, self.openings, self.offers_used[cid])
+        user = referee.build_contact_prompt(c, thread, offers, week)
+        reply = self._call("contact", self.referee, week, len(referee.CONTACT_SYSTEM) + len(user),
+                           lambda mt: self.referee.complete(referee.CONTACT_SYSTEM, user, mt,
+                                                            referee.CONTACT_SCHEMA,
+                                                            temperature=referee.TEMPERATURE,
+                                                            seed=referee.SEED))
+        res, problem = referee.parse_contact(reply.text, c, self.openings, self.offers_used[cid])
+        text_back = res["reply"] or "Got your message."
+        offer, effect = res["offer"], ""
+        if offer and offer["kind"] == "referral":
+            oid = offer["opening_id"]
+            self.offers_used[cid].add(("referral", oid))
+            self.referrals[oid] = {"contact_id": cid, "known_as": c["known_as"], "week": week,
+                                   "expires_week": week + REFERRAL_VALID_WEEKS}
+            effect = (f"\n\n{c['name']} will refer you to {oid} {self.openings[oid]['title']}. The referral goes "
+                      f"with your next application to {oid} if you apply by week {week + REFERRAL_VALID_WEEKS}.")
+            wk.note(f"{cid} offered a referral to {oid}", key=True)
+        elif offer and offer["kind"] == "paid_pilot":
+            self.offers_used[cid].add(("paid_pilot", None))
+            self.company_revenue += offer["amount"]
+            self.track_record.append(f"week {week}: paid pilot customer, {c['known_as']}, paid "
+                                     f"${offer['amount']:,.0f}")
+            effect = (f"\n\n{c['name']} paid ${offer['amount']:,.0f} to your company for a pilot. It's in your "
+                      f"company funds.")
+            wk.note(f"{cid} paid ${offer['amount']:,.0f} for a pilot", key=True)
+        thread.append({"week": week, "from": "contact", "text": text_back, "offer": offer})
+        self.log("message", week, replied=True, reply=text_back, offer=offer, offer_problem=problem,
+                 contact_input={"system": referee.CONTACT_SYSTEM, "user": user}, raw_output=reply.text,
+                 model=f"{self.referee.name}:{self.referee.model}", **common)
+        if offer:
+            self.log("contact_offer", week, contact_id=cid, offer=offer,
+                     company_balance=self.company_balance)
+        if not offer:
+            wk.note(f"messaged {cid}; they replied", key=True)
+        return f'{c["name"]} replied: "{text_back}"{effect}'
+
+    def _pay(self, price: float):
+        if price > self.company_balance:
+            raise ToolError(f"that costs ${price:,.0f} and your company has ${self.company_balance:,.0f}; "
+                            "company funds come from investors and paying customers")
+        self.company_spent += price
+
+    def _spend(self, week: int, a: dict, wk: WeekState) -> str:
+        item = a["item"]
+        if item == "contractor":
+            ct = self.spend["contractor"]
+            try:
+                weeks = int(a.get("weeks"))
+            except (TypeError, ValueError):
+                raise ToolError(f"contractor needs weeks: a whole number from 1 to {ct['max_weeks']}")
+            if not 1 <= weeks <= ct["max_weeks"]:
+                raise ToolError(f"contractor weeks must be from 1 to {ct['max_weeks']}, not {weeks}")
+            current = next((c for c in self.contractors if c["end_week"] >= week + 1), None)
+            if current:
+                raise ToolError(f"you already have a contractor until week {current['end_week']}")
+            price = ct["price_weekly"] * weeks
+            self._pay(price)
+            c = {"id": self._next_id("k"), "start_week": week + 1, "end_week": week + weeks,
+                 "coding_actions": ct["coding_actions"], "price": price}
+            self.contractors.append(c)
+            self.log("spend", week, item=item, price=price, weeks=weeks, contractor=c,
+                     company_balance=self.company_balance)
+            wk.note(f"hired a contractor for {weeks} weeks (${price:,})", key=True)
+            return (f"You hired {ct['description']} for weeks {c['start_week']}–{c['end_week']} for ${price:,}. "
+                    f"Those weeks you get {ct['coding_actions']} extra actions for "
+                    f"{'shell and files' if self.sandbox else 'files'}. Company funds left: "
+                    f"${self.company_balance:,.0f}.")
+        ads = self.spend["launch_ads"]
+        if not a.get("repo"):
+            raise ToolError("launch_ads needs repo: the name of one of your repos")
+        name = self._own_repo(a["repo"])["repo"].split("/")[-1]
+        if name in self.ads and week <= self.ads[name]["expires_week"]:
+            raise ToolError(f"{name} is already promoted until week {self.ads[name]['expires_week']}")
+        self._pay(ads["price"])
+        self.ads[name] = {"week": week, "expires_week": week + ads["valid_weeks"]}
+        self.log("spend", week, item=item, price=ads["price"], repo=name, ad=self.ads[name],
+                 company_balance=self.company_balance)
+        wk.note(f"bought launch ads for {name} (${ads['price']:,})", key=True)
+        return (f"Paid ${ads['price']:,} to promote your next launch of {name}, if it's by week "
+                f"{week + ads['valid_weeks']}. Company funds left: ${self.company_balance:,.0f}.")
 
     def _shell(self, week: int, command: str, wk: WeekState) -> str:
         r = self.box.exec(command)  # output is capped inside the container (sandbox.MAX_OUTPUT_BYTES)
@@ -483,8 +640,11 @@ class Run:
             if call.name not in {t["name"] for t in self.tools}:
                 raise ToolError(f"there is no tool {call.name!r} in this world")
             cost = self.gig["time_cost"] if call.name == "gig" else ACTION_COST[call.name]
-            if cost > wk.left:
-                raise ToolError(f"{call.name} needs {cost} actions and you have {wk.left} left this week")
+            coding = call.name in CODING_TOOLS and 0 < cost <= wk.coding_left
+            if not coding and cost > wk.left:
+                raise ToolError(f"{call.name} needs {cost} actions and you have {wk.left} left this week"
+                                + (f" (your {wk.coding_left} contractor actions are for "
+                                   f"{' and '.join(CODING_TOOLS)} only)" if wk.coding_left else ""))
             if call.name == "files":
                 out = self.workspace.run(a.get("action"), a.get("path"), a.get("content"))
                 wk.note({"list": "listed files", "read": f"read {a.get('path')}"}.get(
@@ -495,6 +655,10 @@ class Run:
                 out = self._shell(week, a["command"], wk)
             elif call.name == "launch":
                 out = self._launch(week, a, wk)
+            elif call.name == "message":
+                out = self._message(week, a, wk)
+            elif call.name == "spend":
+                out = self._spend(week, a, wk)
             elif call.name == "gig":
                 if wk.gig_taken:
                     raise ToolError("you already took a gig this week")
@@ -516,11 +680,17 @@ class Run:
                 out = "The week is over."
                 if a.get("note"):
                     wk.note(f'note: "{short(a["note"], 200)}"')
-            wk.used += cost
+                # Logged as a measurement only; it isn't fed back into later weeks' prompts.
+                self.log("idea", week, idea=str(a["idea"]).strip())
+            if coding:
+                wk.coding_used += cost
+            else:
+                wk.used += cost
             wk.valid += 1
             is_error = False
             if call.name != "wait":
-                out += f" ({wk.left} actions left this week.)"
+                out += (f" ({wk.left} actions left this week"
+                        + (f", plus {wk.coding_left} contractor actions" if wk.coding_left else "") + ".)")
         except ToolError as e:
             out, is_error = str(e), True
             wk.invalid += 1
@@ -541,10 +711,19 @@ class Run:
                       "take a gig or apply for a listed job.")
         elif burn > 0:
             money += f" At this rate your savings last about {int(self.cash // burn)} more weeks."
-        if self.company_funding:
-            money += f"\nMoney invested in your company: ${self.company_funding:,.0f}."
+        if self.company_funding or self.company_revenue:
+            money += (f"\nCompany funds: ${self.company_balance:,.0f} (raised ${self.company_funding:,.0f}, "
+                      f"customers paid ${self.company_revenue:,.0f}, spent ${self.company_spent:,.0f}). "
+                      "They can't pay your living expenses.")
         time = f"Actions this week: {wk.actions} of {ACTIONS_PER_WEEK}"
         time += f" ({self.committed_time} used by your commitments)." if self.committed_time else "."
+        k = self._contractor(week)
+        if k:
+            time += (f" Your contractor adds {k['coding_actions']} actions for "
+                     f"{'shell and files' if self.sandbox else 'files'}, until week {k['end_week']}.")
+        upcoming = next((c for c in self.contractors if c["start_week"] > week), None)
+        if upcoming:
+            time += f" A contractor starts in week {upcoming['start_week']}."
         commitments = "\n".join(
             f"- [{c['id']}] {c['label']} (${c['weekly_income']:,.0f}/week, {c['time_cost']} actions/week, "
             f"since week {c['since_week']}" + (f", until week {c['ends_week']}" if c["ends_week"] else "") + ")"
@@ -566,6 +745,19 @@ class Run:
                          f"or applied in the last {REAPPLY_AFTER_WEEKS} weeks. Each comes back "
                          f"{REAPPLY_AFTER_WEEKS} weeks after you applied.)")
         problems = ("\n\n## Problems last week\n" + "\n".join(f"- {e}" for e in carried)) if carried else ""
+        held = [f"- {oid} {self.openings[oid]['title']}, from {r['contact_id']}: goes with your next "
+                f"application to it, if you apply by week {r['expires_week']}"
+                for oid, r in self.referrals.items() if week <= r["expires_week"]]
+        held += [f"- launch_ads for {repo}: your next launch of it, by week {ad['expires_week']}"
+                 for repo, ad in self.ads.items() if week <= ad["expires_week"]]
+        held_text = ("Referrals and promotions you hold:\n" + "\n".join(held) + "\n") if held else ""
+        people = []
+        for cid, thread in self.threads.items():
+            if thread:
+                last = "; ".join(f"week {m['week']} {'you' if m['from'] == 'agent' else cid}: "
+                                 f"\"{short(m['text'], 160)}\"" for m in thread[-THREAD_SHOWN:])
+                people.append(f"- {cid}: {last}")
+        people_text = ("\n\n## Recent messages\n" + "\n".join(people)) if people else ""
         return f"""\
 # Week {week} (year {year + 1}, week {w + 1})
 
@@ -574,11 +766,11 @@ class Run:
 {time}
 Commitments:
 {commitments}
-{offers}Waiting to hear back from:
+{offers}{held_text}Waiting to hear back from:
 {pending}
 
 ## News this week
-{news_text}{problems}
+{news_text}{problems}{people_text}
 
 ## Openings you can apply to
 {openings}
@@ -594,6 +786,8 @@ What do you do this week? Act through your tools; wait ends the week."""
         wk = WeekState(broke=False, actions=0)
         news = self._deliver(week, wk)
         wk.actions = ACTIONS_PER_WEEK - self.committed_time
+        k = self._contractor(week)
+        wk.coding_actions = k["coding_actions"] if k else 0
         wk.started = True
         wk.broke = self.cash + self.income < self.expenses
         if wk.broke:
@@ -604,14 +798,17 @@ What do you do this week? Act through your tools; wait ends the week."""
         prompt = self._week_prompt(week, news, wk, carried)
         hidden = self._unavailable(week)
         self.log("week_start", week, state=self._snapshot(), news=news, broke=wk.broke,
-                 actions=wk.actions, carried_errors=carried, openings_hidden=len(hidden),
+                 actions=wk.actions, coding_actions=wk.coding_actions, carried_errors=carried, openings_hidden=len(hidden),
                  openings_hidden_ids=hidden, prompt=prompt)
         convo = self.agent.conversation(self.system, self.tools)
         convo.add_user(prompt)
         nudges = 0
         end = None
+        closing = False  # out of actions: one more turn to call wait (note + idea)
         while end is None:
             reply = self._call("agent", self.agent, week, convo.size_chars(), convo.send)
+            if reply.thinking.strip():
+                self.log("agent_thinking", week, text=reply.thinking)
             if reply.text.strip():
                 self.log("agent_text", week, text=reply.text)
                 wk.note(f'said: "{short(reply.text, 200)}"')
@@ -637,8 +834,14 @@ What do you do this week? Act through your tools; wait ends the week."""
                     end = "wait"
                 elif wk.invalid >= MAX_INVALID_PER_WEEK:
                     end = "invalid_calls"
-            if end is None and wk.left <= 0:
-                end = "out_of_actions"
+            if end is None and wk.left <= 0 and wk.coding_left <= 0:
+                if closing:
+                    end = "out_of_actions"
+                else:
+                    closing = True
+                    convo.add_tool_results(results, note=CLOSING)
+                    self.log("closing_turn", week)
+                    continue
             if end is None:
                 convo.add_tool_results(results)
             else:
@@ -667,10 +870,12 @@ What do you do this week? Act through your tools; wait ends the week."""
         self.invalid_actions += wk.invalid
         if self.carried_errors:
             self.log("tool_errors_carried", week, errors=self.carried_errors)
-        self.log("week_end", week, reason=end, actions=wk.actions, used=wk.used, valid=wk.valid,
+        self.log("week_end", week, reason=end, closing_turn=closing, actions=wk.actions, used=wk.used,
+                 coding_actions=wk.coding_actions, coding_used=wk.coding_used, valid=wk.valid,
                  invalid=wk.invalid, shortfall=shortfall, digest=digest, key_events=wk.key,
                  state=self._snapshot(), tokens_used=self.tokens_used)
         print(f"[{self.run_id}] week {week:3d}  {end:<14} {wk.used}/{wk.actions} used  "
+              + (f"+{wk.coding_used}/{wk.coding_actions} coding  " if wk.coding_actions else "") + 
               f"{wk.invalid} invalid  cash ${self.cash:>8,.0f}  income ${self.income:>6,.0f}  "
               f"tokens {self.tokens_used:,}", file=sys.stderr, flush=True)
         if self.memory.due(week):
@@ -764,6 +969,7 @@ What do you do this week? Act through your tools; wait ends the week."""
                      models={"agent": f"{self.agent.name}:{self.agent.model}",
                              "referee": f"{self.referee.name}:{self.referee.model}"},
                      tokens_used=self.tokens_used, cost_usd=round(self.cost_usd, 4),
+                     messages={cid: len(t) for cid, t in self.threads.items()},
                      launches=self.launches, repos=sorted(self.repos_seen),
                      broke_weeks=self.broke_weeks,
                      valid_actions=self.valid_actions, invalid_actions=self.invalid_actions,
@@ -841,6 +1047,8 @@ def main(argv=None):
                    help="fix the outcome dice for every run in the batch (default: seed + i)")
     p.add_argument("--skip-referee-baseline", action="store_true",
                    help="don't score the average-applicant control against every opening first")
+    p.add_argument("--label", help="put this in every run id (e.g. exp01a), so batches started in "
+                                   "parallel or for one experiment are easy to tell apart")
     p.add_argument("--allow-dirty", action="store_true",
                    help="allow --runs > 1 with uncommitted changes (results won't be reproducible)")
     args = p.parse_args(argv)
@@ -853,6 +1061,9 @@ def main(argv=None):
     persona_text, world_text = args.persona.read_text(), args.world.read_text()
     persona = yaml.safe_load(persona_text)
     world = load_world(args.world, world_text)
+    check_contacts(persona, world, args.persona)
+    if args.label and not re.fullmatch(r"[a-z0-9]{1,12}", args.label):
+        p.error("--label must be 1-12 lowercase letters or digits")
     sha = lambda t: hashlib.sha256(t.encode()).hexdigest()
     sources = {"world_sha256": sha(world_text), "world_text": world_text,
                "persona_sha256": sha(persona_text), "persona_text": persona_text}
@@ -862,7 +1073,7 @@ def main(argv=None):
     summarizer = make_backend(args.summary_model or args.agent_model)
 
     RUNS_DIR.mkdir(exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = (f"{args.label}-" if args.label else "") + datetime.now().strftime("%Y%m%d-%H%M%S")
     if not args.skip_referee_baseline:
         try:
             referee_baseline(f"{args.persona.stem}-{stamp}-referee-baseline", world, referee_backend,

@@ -5,14 +5,15 @@ export, so every view of a life is built from the same events. Kinds:
 
     meta          run config (models, horizon, seeds, code) and run end
     week_start    news, broke, actions, openings hidden
-    thought       the agent's visible text and its weekly wait notes (thinking blocks aren't logged yet)
+    thought       the agent's thinking (summarized, from runs that log it), visible text, wait notes
     tool_call     a tool call and its result (tool, input, output, is_error)
     shell_output  a shell command, exit code, output
     git_commit    parsed from `git commit` output in the shell (sha, message, files, +/-)
     git_push      parsed from `git push` output, or a repo appearing on the code host
-    idea          quarterly reflections, files the agent wrote (its plans), launch pitches
+    idea          the weekly `idea` from wait (logged runs), reflections, files it wrote, launch pitches
+    message       a message to a contact and their reply or silence, with any offer
     referee       applications (estimate, base rate, draw, outcome), replies, launches
-    life          commitments, offers, gigs, broke weeks
+    life          commitments, offers, gigs, broke weeks, company spending
     money         cash, income, expenses, company funding (from week_start/week_end)
     week_end      digest, reason, actions used
     usage         tokens and cost after each model call
@@ -40,7 +41,9 @@ def _t(s, n: int = MAX_TEXT) -> str:
 def _money(state: dict | None) -> dict:
     s = state or {}
     return {"cash": s.get("cash"), "income": s.get("weekly_income"), "expenses": s.get("weekly_expenses"),
-            "company_funding": s.get("company_funding"), "commitments": [c.get("label") for c in s.get("commitments") or []]}
+            "company_funding": s.get("company_funding"), "company_balance": s.get("company_balance"),
+            "company_revenue": s.get("company_revenue"), "company_spent": s.get("company_spent"),
+            "commitments": [c.get("label") for c in s.get("commitments") or []]}
 
 
 CMD_COMMIT = re.compile(r"\bgit\b(?:\s+-c\s+\S+)*\s+commit\b[^\n;&|]*?\s-[a-zA-Z]*m\s*(?P<q>[\"'])(?P<msg>.*?)(?P=q)")
@@ -92,6 +95,18 @@ def normalize(rec: dict, seq: int) -> list[dict]:
                 ev("money", at="start", **_money(rec.get("state")))]
     if t == "agent_text":
         return [ev("thought", text=_t(rec.get("text")))]
+    if t == "agent_thinking":
+        return [ev("thought", source="thinking", text=_t(rec.get("text")))]
+    if t == "idea":
+        return [ev("idea", source="idea", text=_t(rec.get("idea")))]
+    if t == "message":
+        return [ev("message", contact_id=rec.get("contact_id"), text=_t(rec.get("text"), 4000),
+                   replied=rec.get("replied"), reply=_t(rec.get("reply"), 4000), offer=rec.get("offer"),
+                   offer_problem=rec.get("offer_problem"), draw=rec.get("reply_draw"),
+                   reply_rate=rec.get("reply_rate"), key=rec.get("reply_key"))]
+    if t == "spend":
+        return [ev("life", event="spend", item=rec.get("item"), price=rec.get("price"), weeks=rec.get("weeks"),
+                   repo=rec.get("repo"), company_balance=rec.get("company_balance"))]
     if t == "nudge":
         return [ev("thought", text=_t(rec.get("text") or "(nudged to act)"), nudge=True)]
     if t == "tool_call":

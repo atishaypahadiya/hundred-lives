@@ -312,7 +312,8 @@ function showRun(runId, wantWeek) {
     if (ev.kind === "summary") R.summary = ev;
     if (ev.kind === "money" && ev.at === "end") {
       const wk = R.events.filter(e => e.week === ev.week);
-      R.weeks[ev.week - 1] = { week: ev.week, cash: ev.cash, income: ev.income, expenses: ev.expenses, funding: ev.company_funding,
+      R.weeks[ev.week - 1] = { week: ev.week, cash: ev.cash, income: ev.income, expenses: ev.expenses,
+        funding: ev.company_balance ?? ev.company_funding, raised: ev.company_funding, revenue: ev.company_revenue, spent: ev.company_spent,
         labels: ev.commitments,
         gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke) };
     }
@@ -363,14 +364,15 @@ function showRun(runId, wantWeek) {
         h("h3", {}, "Money and commitments", h("span", { class: "muted" }, `end of week ${sel}`)),
         h("div", { class: "stats" },
           stat(money(state.cash), "cash"), stat(money(state.income), "income / week"), stat(money(state.expenses), "expenses / week"),
-          stat(money(state.funding), "company funding"), stat((state.labels || []).join(", ") || "none", "commitments", true)),
+          stat(money(state.funding), state.spent || state.revenue ? `company funds (raised ${money(state.raised)}, customers ${money(state.revenue)}, spent ${money(state.spent)})` : "company funds"),
+          stat((state.labels || []).join(", ") || "none", "commitments", true)),
         cashChart(weeks, horizon, { sel, onpick: go, width: chartW, height: chartW < 600 ? 170 : 210 }),
         lifeStrip(weeks, horizon, { width: chartW, height: 14, sel, onpick: go, pad: CHART_PAD }),
         legend(),
         h("details", {}, h("summary", {}, "Table view"), weekTable(weeks, sel, go))),
       h("div", { class: "cols" },
         h("div", { class: "stack" }, weekPanel(thisWeek, sel, doneWeeks), thinkingPanel(thisWeek), terminalPanel(upTo, sel), toolsPanel(thisWeek)),
-        h("div", { class: "stack" }, ideaPanel(upTo, sel), refereePanel(R.events, sel, go), repoPanel(upTo, sel, R))));
+        h("div", { class: "stack" }, ideaPanel(upTo, sel), messagePanel(upTo, sel), refereePanel(R.events, sel, go), repoPanel(upTo, sel, R))));
     window.scrollTo(0, scrollY);
   }
   function commitmentKind(w) {
@@ -414,8 +416,8 @@ function thinkingPanel(evs) {
   return h("div", { class: "panel" },
     h("h3", {}, "Thinking", h("span", { class: "muted" }, "the agent's own words this week")),
     th.length ? h("div", { class: "feed" }, th.map(e => h("div", { class: "item" },
-      h("div", { class: "meta" }, e.source === "note" ? "wait note" : e.nudge ? "nudge" : "text"), h("div", { class: "text" }, e.text)))) : h("div", { class: "empty" }, "Nothing this week."),
-    h("div", { class: "notice" }, "Thinking blocks aren't logged yet; this shows the agent's visible text and the note it leaves when it waits."));
+      h("div", { class: "meta" }, e.source === "thinking" ? "thinking (summarized)" : e.source === "note" ? "wait note" : e.nudge ? "nudge" : "text"), h("div", { class: "text" }, e.text)))) : h("div", { class: "empty" }, "Nothing this week."),
+    th.some(e => e.source === "thinking") ? null : h("div", { class: "notice" }, "This run didn't log thinking; showing the agent's visible text and wait notes."));
 }
 
 function terminalPanel(upTo, sel) {
@@ -442,11 +444,26 @@ function briefInput(e) {
 
 function ideaPanel(upTo, sel) {
   const ideas = upTo.filter(e => e.kind === "idea").reverse();
-  const label = { reflection: "quarterly reflection", file: "wrote", pitch: "launch pitch" };
+  const label = { idea: "idea (from wait)", reflection: "quarterly reflection", file: "wrote", pitch: "launch pitch" };
   return h("div", { class: "panel" }, h("h3", {}, "Idea log", h("span", { class: "muted" }, `reflections, plans, pitches through week ${sel}`)),
     ideas.length ? h("div", { class: "feed" }, ideas.map(e => h("div", { class: "item" + (e.week === sel ? " now" : "") },
       h("div", { class: "meta" }, `week ${e.week} · ${label[e.source] || e.source}${e.path ? " " + e.path : ""}${e.title ? " · " + e.title : ""}`),
       h("div", { class: "text" }, e.text)))) : h("div", { class: "empty" }, "No ideas recorded yet."));
+}
+
+function messagePanel(upTo, sel) {
+  const ms = upTo.filter(e => e.kind === "message");
+  if (!ms.length) return h("div", { class: "panel" }, h("h3", {}, "Messages"), h("div", { class: "empty" }, "No messages yet."));
+  const by = new Map(); for (const m of ms) { if (!by.has(m.contact_id)) by.set(m.contact_id, []); by.get(m.contact_id).push(m); }
+  const offer = o => !o ? null : o.kind === "referral" ? `offer: referral to ${o.opening_id}` : `offer: paid pilot $${Math.round(o.amount).toLocaleString()}`;
+  return h("div", { class: "panel" }, h("h3", {}, "Messages", h("span", { class: "muted" }, `${ms.length} sent through week ${sel} · ${ms.filter(m => m.replied).length} replied`)),
+    h("div", { class: "feed" }, [...by].map(([cid, thread]) => h("div", {}, h("div", { class: "meta muted", style: "font-weight:600" }, cid),
+      thread.map(m => h("div", { class: "item" + (m.week === sel ? " now" : "") },
+        h("div", { class: "meta" }, `week ${m.week} · Maya`), h("div", { class: "text" }, m.text),
+        h("div", { class: "meta", style: "margin-top:4px" }, m.replied ? `${cid} replied` : `no reply (draw ${m.draw?.toFixed(3)} ≥ reply rate ${m.reply_rate})`),
+        m.replied ? h("div", { class: "text ink2" }, m.reply) : null,
+        m.offer ? h("div", { class: "oc success" }, "✓ " + offer(m.offer)) : null,
+        m.offer_problem ? h("div", { class: "meta" }, "⚠ " + m.offer_problem) : null))))));
 }
 
 function refereePanel(all, sel, go) {

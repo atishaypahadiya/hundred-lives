@@ -1,11 +1,12 @@
 """Agent tool definitions, argument validation, and the per-run workspace behind `files`.
 
-`apply`, `gig`, `leave`, and `wait` are executed by the run loop (they touch world state);
-only `files` is self-contained here.
+`apply`, `message`, `spend`, `gig`, `leave`, and `wait` are executed by the run loop (they
+touch world state); only `files` is self-contained here.
 
-Time: each week has ACTIONS_PER_WEEK actions, minus what commitments use. A valid files,
-apply, or leave call uses 1; a gig uses the world's gig.time_cost; wait is free. Invalid
-calls use nothing, but after MAX_INVALID_PER_WEEK of them the week ends.
+Time: each week has ACTIONS_PER_WEEK actions, minus what commitments use, plus a hired
+contractor's coding actions (shell and files only). A valid files, shell, apply, launch,
+message, spend, or leave call uses 1; a gig uses the world's gig.time_cost; wait is free.
+Invalid calls use nothing, but after MAX_INVALID_PER_WEEK of them the week ends.
 """
 
 import errno
@@ -16,7 +17,9 @@ from pathlib import Path
 ACTIONS_PER_WEEK = 8
 REAPPLY_AFTER_WEEKS = 26  # an opening can be applied to again this long after the last application
 MAX_INVALID_PER_WEEK = 3
-ACTION_COST = {"files": 1, "shell": 1, "apply": 1, "launch": 1, "leave": 1, "wait": 0}  # gig: world
+ACTION_COST = {"files": 1, "shell": 1, "apply": 1, "launch": 1, "message": 1, "spend": 1, "leave": 1,
+               "wait": 0}  # gig: world
+CODING_TOOLS = ("shell", "files")  # what a contractor's extra actions can be used for
 SANDBOX_TOOLS = ("shell", "launch")  # only offered when the run has a container
 
 TOOLS = [
@@ -89,6 +92,39 @@ TOOLS = [
         },
     },
     {
+        "name": "message",
+        "description": (
+            "Send a message to one of the people you know, by their contact id. They may or may not "
+            "reply; if they do, you see the reply right away. What they can do for you depends on "
+            "who they are and what you ask."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "contact_id": {"type": "string", "description": "e.g. 'parents'"},
+                "text": {"type": "string", "description": "Your message."},
+            },
+            "required": ["contact_id", "text"],
+        },
+    },
+    {
+        "name": "spend",
+        "description": (
+            "Spend your company's funds (not your personal cash) on one item from the price list: "
+            "'contractor' hires a developer for a number of weeks; 'launch_ads' promotes the next "
+            "launch of one of your repos. Paid up front."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "item": {"type": "string", "enum": ["contractor", "launch_ads"]},
+                "weeks": {"type": "integer", "description": "contractor only: how many weeks to hire for."},
+                "repo": {"type": "string", "description": "launch_ads only: the repo to promote."},
+            },
+            "required": ["item"],
+        },
+    },
+    {
         "name": "gig",
         "description": (
             "Take gig work this week for guaranteed pay. It uses most of the week's actions. "
@@ -108,19 +144,26 @@ TOOLS = [
     },
     {
         "name": "wait",
-        "description": "End this week (free). Optionally leave a one-line note about how the week went.",
+        "description": ("End this week (free). Leave a one-line note about how the week went, and "
+                        "the idea you're most drawn to right now."),
         "input_schema": {
             "type": "object",
-            "properties": {"note": {"type": "string"}},
-            "required": [],
+            "properties": {
+                "note": {"type": "string", "description": "One line about how the week went."},
+                "idea": {"type": "string",
+                         "description": ("The business or project idea you're most drawn to right now and "
+                                         "why, in one or two sentences. Write 'none' if you have none.")},
+            },
+            "required": ["idea"],
         },
     },
 ]
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
 
-def tools_for(sandbox: bool) -> list[dict]:
-    return [t for t in TOOLS if sandbox or t["name"] not in SANDBOX_TOOLS]
+def tools_for(sandbox: bool, contacts: bool = True) -> list[dict]:
+    return [t for t in TOOLS if (sandbox or t["name"] not in SANDBOX_TOOLS)
+            and (contacts or t["name"] != "message")]
 
 
 class ToolError(Exception):

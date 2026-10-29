@@ -33,6 +33,20 @@ forum:
   upvotes_quiet: [0, 8]         # otherwise
   relaunch_after_weeks: 13      # the same repo can be posted again after this long
 
+# What company funds can buy, through `spend`. Personal cash can't be spent this way, and company
+# funds can't pay living expenses. Prices and effects are guesses, not data.
+spend:
+  contractor:
+    description: a freelance developer who writes and runs code for you
+    price_weekly: 1500       # paid from company funds up front, for the weeks hired
+    coding_actions: 3        # extra actions per week, usable only for shell and files
+    max_weeks: 13
+  launch_ads:
+    description: paid promotion for the next launch of one repo
+    price: 2000
+    traction_base_rate: 0.10 # that launch's traction base rate (the forum's default is above)
+    valid_weeks: 4           # the promotion lapses if the repo isn't launched within this long
+
 gig:
   pay: 1200          # dollars, paid the same week; more than default expenses, so a broke week can recover
   time_cost: 5       # actions it uses that week

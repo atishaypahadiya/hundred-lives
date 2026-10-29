@@ -104,9 +104,10 @@ def render_repo(snap: dict | None) -> str:
 
 def build_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                  company_funding: float, opening: dict, details: str,
-                 attachments: list[tuple[str, str]], repo: dict | None = None) -> str:
+                 attachments: list[tuple[str, str]], repo: dict | None = None,
+                 referral: str | None = None) -> str:
     return _application(_person(persona, week, commitments, track_record, company_funding),
-                        opening, details, attachments, repo)
+                        opening, details, attachments, repo, referral)
 
 
 # The referee control (run.referee_baseline): the same prompt with a person who is, by
@@ -133,7 +134,7 @@ def build_baseline_prompt(opening: dict) -> str:
 
 
 def _application(person: str, opening: dict, details: str, attachments: list[tuple[str, str]],
-                 repo: dict | None) -> str:
+                 repo: dict | None, referral: str | None = None) -> str:
     opening_view = {k: opening[k] for k in ("id", "type", "title", "org", "requirements") if k in opening}
     files = "\n\n".join(f"--- {path} ---\n{text}" for path, text in attachments) or "none"
     return f"""\
@@ -152,6 +153,9 @@ Attachments:
 
 Linked repository:
 {render_repo(repo)}
+
+Referral:
+{referral or "none"}
 """
 
 
@@ -241,12 +245,13 @@ LAUNCH_SCHEMA = {
 
 def build_launch_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                         company_funding: float, forum: dict, title: str, pitch: str,
-                        repo: dict) -> str:
+                        repo: dict, base_rate: float | None = None, promoted: bool = False) -> str:
     return f"""\
 {_person(persona, week, commitments, track_record, company_funding)}
 
 Forum: {forum['name']}
-traction_base_rate: {forum['traction_base_rate']}
+traction_base_rate: {forum['traction_base_rate'] if base_rate is None else base_rate}
+Paid promotion: {"yes (the base rate above already includes it)" if promoted else "no"}
 
 Post title: {title}
 Post text:
@@ -282,3 +287,111 @@ def draw_launch(dice_seed: int, repo: str, attempt: int, chance: float, forum: d
     lo, hi = forum["upvotes_traction" if outcome == "traction" else "upvotes_quiet"]
     upvotes = min(hi, lo + int(v * (hi - lo + 1)))
     return outcome, upvotes, {"success_draw": u, "success_key": key, "upvotes_draw": v, "upvotes_key": vkey}
+
+
+# --- contacts -------------------------------------------------------------------------------
+#
+# The same model voices the people the agent can message, in a separate call that sees only
+# that contact's side of the relationship, the thread so far, and the offers they're allowed to
+# make. Whether they reply at all is drawn with keyed dice before this call; code checks any
+# offer against the contact's list, so outcomes stay inside the world's rules.
+
+CONTACT_SYSTEM = """\
+You write one person's reply in a life simulation. You are given who they are, their \
+relationship with Maya, and the message thread so far. Reply as that person would, in their \
+own voice: a text or email, usually a few sentences.
+
+Offers: the person may make at most one offer in this reply, and only one from the list you \
+are given. Make one only if it follows naturally from what Maya asked and what this person \
+would really do; most replies make none. Never promise money, jobs, or introductions outside \
+the list. If the list is empty, make no offer. offer_kind is "none" when there's no offer; \
+otherwise fill offer_opening_id for a referral and offer_amount (dollars) for a paid pilot, and \
+mention the offer in the reply.\
+"""
+
+CONTACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "offer_kind": {"type": "string", "enum": ["none", "referral", "paid_pilot"]},
+        "offer_opening_id": {"type": "string"},
+        "offer_amount": {"type": "number"},
+    },
+    "required": ["reply", "offer_kind", "offer_opening_id", "offer_amount"],
+    "additionalProperties": False,
+}
+MAX_THREAD = 20  # messages of the thread the contact's voice sees
+
+
+def describe_offers(contact: dict, openings: dict, used: set) -> str:
+    """The offers this contact can still make, in words, for the voice prompt."""
+    lines = []
+    for off in contact.get("offers") or []:
+        if off["kind"] == "paid_pilot" and ("paid_pilot", None) not in used:
+            lines.append(f"- paid_pilot: pay Maya's company for a pilot of something she built, up to "
+                         f"${off['max_amount']:,.0f} (offer_amount), once")
+        if off["kind"] == "referral":
+            for oid in off["openings"]:
+                if ("referral", oid) not in used:
+                    o = openings[oid]
+                    lines.append(f"- referral to {oid}: {o['title']}, {o['org']} (offer_opening_id {oid!r})")
+    return "\n".join(lines) or "(none)"
+
+
+def build_contact_prompt(contact: dict, thread: list[dict], offers: str, week: int) -> str:
+    shown = thread[-MAX_THREAD:]
+    lines = "\n\n".join(f"[week {m['week']}] {'Maya' if m['from'] == 'agent' else 'You'}: {m['text']}"
+                         for m in shown)
+    return f"""\
+Who you are:
+{contact['voice']}
+
+Simulated week: {week} (week 1 is the spring Maya finishes school)
+
+Offers you may make (at most one, only if it fits):
+{offers}
+
+Message thread (oldest first{', earlier messages left out' if len(thread) > len(shown) else ''}):
+{lines}
+
+Write your reply to Maya's last message."""
+
+
+def parse_contact(text: str, contact: dict, openings: dict, used: set) -> tuple[dict, str | None]:
+    """The reply, plus an offer only if it's on the contact's list and not used up. Returns
+    (result, problem-or-None); a dropped offer is logged, and the reply still goes through."""
+    try:
+        d = json.loads(text)
+        reply = str(d.get("reply") or "").strip()
+    except (TypeError, ValueError, AttributeError) as e:
+        return {"reply": "", "offer": None}, f"unusable contact output: {e}"
+    kind = d.get("offer_kind") or "none"
+    if kind == "none":
+        return {"reply": reply, "offer": None}, None
+    allowed = {o["kind"]: o for o in contact.get("offers") or []}
+    if kind not in allowed:
+        return {"reply": reply, "offer": None}, f"offer {kind!r} isn't on {contact['id']}'s list; dropped"
+    if kind == "referral":
+        oid = str(d.get("offer_opening_id") or "").strip()
+        if oid not in allowed["referral"]["openings"] or oid not in openings:
+            return {"reply": reply, "offer": None}, f"referral to {oid!r} isn't on {contact['id']}'s list; dropped"
+        if ("referral", oid) in used:
+            return {"reply": reply, "offer": None}, f"referral to {oid} was already given; dropped"
+        return {"reply": reply, "offer": {"kind": "referral", "opening_id": oid}}, None
+    try:
+        amount = float(d.get("offer_amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    if ("paid_pilot", None) in used:
+        return {"reply": reply, "offer": None}, "paid pilot was already given; dropped"
+    if amount <= 0:
+        return {"reply": reply, "offer": None}, "paid pilot with no amount; dropped"
+    cap = float(allowed["paid_pilot"]["max_amount"])
+    problem = f"paid pilot ${amount:,.0f} capped at ${cap:,.0f}" if amount > cap else None
+    return {"reply": reply, "offer": {"kind": "paid_pilot", "amount": round(min(amount, cap), 2)}}, problem
+
+
+def draw_message(dice_seed: int, contact_id: str, attempt: int, reply_rate: float) -> tuple[bool, dict]:
+    """Whether the n-th message to this contact gets a reply."""
+    u, key = uniform(dice_seed, "message", contact_id, attempt)
+    return u < reply_rate, {"reply_draw": u, "reply_key": key}

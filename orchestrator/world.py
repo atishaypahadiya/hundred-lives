@@ -9,6 +9,33 @@ TYPES = ("job", "accelerator", "grant", "angel_intro")
 COMMITMENT_TYPES = ("job", "accelerator")  # a success becomes a commitment with a schedule
 SCHEDULES = ("full_time", "part_time")
 DEFAULT_PATH = Path(__file__).resolve().parent.parent / "world" / "openings.yaml"
+SPEND_KEYS = {"contractor": ("description", "price_weekly", "coding_actions", "max_weeks"),
+              "launch_ads": ("description", "price", "traction_base_rate", "valid_weeks")}
+OFFER_KINDS = ("referral", "paid_pilot")
+
+
+def check_contacts(persona: dict, world: dict, path: Path):
+    """Each contact needs a voice, a reply rate, and offers only of known kinds: referrals to
+    openings that exist, paid pilots with a cap."""
+    ids = {o["id"] for o in world["openings"]}
+    seen = set()
+    for c in persona.get("contacts") or []:
+        missing = [k for k in ("id", "name", "relationship", "voice", "known_as", "reply_rate") if k not in c]
+        if missing:
+            raise ValueError(f"{path}: contact {c.get('id')} is missing {missing}")
+        if c["id"] in seen:
+            raise ValueError(f"{path}: duplicate contact id {c['id']}")
+        seen.add(c["id"])
+        if not 0 < float(c["reply_rate"]) <= 1:
+            raise ValueError(f"{path}: contact {c['id']} reply_rate must be in (0, 1]")
+        for off in c.get("offers") or []:
+            if off.get("kind") not in OFFER_KINDS:
+                raise ValueError(f"{path}: contact {c['id']} offer kind must be one of {OFFER_KINDS}")
+            if off["kind"] == "referral" and not set(off.get("openings") or []) <= ids:
+                raise ValueError(f"{path}: contact {c['id']} refers to unknown openings "
+                                 f"{sorted(set(off.get('openings') or []) - ids)}")
+            if off["kind"] == "paid_pilot" and not float(off.get("max_amount", 0)) > 0:
+                raise ValueError(f"{path}: contact {c['id']} paid_pilot needs max_amount > 0")
 
 
 def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
@@ -24,6 +51,11 @@ def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
     for k in ("name", "traction_base_rate", "upvotes_traction", "upvotes_quiet", "relaunch_after_weeks"):
         if k not in forum:
             raise ValueError(f"{path}: forum.{k} is required")
+    spend = world.get("spend") or {}
+    for item, keys in SPEND_KEYS.items():
+        missing = [k for k in keys if k not in (spend.get(item) or {})]
+        if missing:
+            raise ValueError(f"{path}: spend.{item} is missing {missing}")
     costs = world.get("time_costs") or {}
     if set(costs) != set(SCHEDULES):
         raise ValueError(f"{path}: time_costs must define exactly {SCHEDULES}")

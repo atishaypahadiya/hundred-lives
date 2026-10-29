@@ -90,6 +90,7 @@ class Reply:
     latency_s: float
     raw_usage: dict | None = None    # the API's usage object, verbatim, for reconciling costs
     served_model: str | None = None  # can differ from the requested model when a fallback served it
+    thinking: str = ""               # summarized thinking text, where the backend returns it
 
 
 def make_backend(spec: str):
@@ -144,9 +145,11 @@ class AnthropicBackend:
         usage = Usage(u.input_tokens, u.output_tokens,
                       u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0)
         text = "".join(b.text for b in resp.content if b.type == "text")
+        thinking = "\n\n".join(b.thinking for b in resp.content if b.type == "thinking" and b.thinking)
         calls = [ToolCall(b.id, b.name, b.input) for b in resp.content if b.type == "tool_use"]
         return Reply(text, calls, usage, resp.stop_reason, time.monotonic() - t0,
-                     raw_usage=u.model_dump(mode="json", exclude_none=True), served_model=resp.model)
+                     raw_usage=u.model_dump(mode="json", exclude_none=True), served_model=resp.model,
+                     thinking=thinking)
 
     def conversation(self, system: str, tools: list[dict]):
         return AnthropicConversation(self, system, tools)
@@ -174,18 +177,23 @@ class AnthropicConversation:
     def add_user(self, text: str):
         self.messages.append({"role": "user", "content": text})
 
-    def add_tool_results(self, results: list[tuple[ToolCall, str, bool]]):
-        self.messages.append({"role": "user", "content": [
-            {"type": "tool_result", "tool_use_id": call.id, "content": out, "is_error": is_error}
-            for call, out, is_error in results]})
+    def add_tool_results(self, results: list[tuple[ToolCall, str, bool]], note: str | None = None):
+        content = [{"type": "tool_result", "tool_use_id": call.id, "content": out, "is_error": is_error}
+                   for call, out, is_error in results]
+        if note:  # text after the results, in the same user turn
+            content.append({"type": "text", "text": note})
+        self.messages.append({"role": "user", "content": content})
 
     def size_chars(self) -> int:
         return len(self.system[0]["text"]) + len(json.dumps(self.tools)) + len(str(self.messages))
 
     def send(self, max_tokens: int) -> Reply:
         t0 = time.monotonic()
+        # display "summarized" returns thinking summaries to log (the default omits the text);
+        # it doesn't change how much the model thinks or what it's billed for.
         resp = self.backend._create(system=self.system, tools=self.tools, messages=self.messages,
-                                    max_tokens=max_tokens, cache_control={"type": "ephemeral"})
+                                    max_tokens=max_tokens, cache_control={"type": "ephemeral"},
+                                    thinking={"type": "adaptive", "display": "summarized"})
         # Append the content blocks unchanged: thinking blocks must be passed back as returned.
         self.messages.append({"role": "assistant", "content": resp.content})
         return self.backend._reply(resp, t0)
@@ -272,10 +280,12 @@ class OllamaConversation:
     def add_user(self, text: str):
         self.messages.append({"role": "user", "content": text})
 
-    def add_tool_results(self, results: list[tuple[ToolCall, str, bool]]):
+    def add_tool_results(self, results: list[tuple[ToolCall, str, bool]], note: str | None = None):
         for call, out, is_error in results:
             self.messages.append({"role": "tool", "tool_call_id": call.id,
                                   "content": ("ERROR: " + out) if is_error else out})
+        if note:
+            self.messages.append({"role": "user", "content": note})
 
     def size_chars(self) -> int:
         return len(json.dumps(self.messages)) + len(json.dumps(self.tools))
