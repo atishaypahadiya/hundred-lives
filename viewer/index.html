@@ -279,7 +279,11 @@ input[type=range]:focus-visible { outline: 2px solid var(--ink); outline-offset:
 const $app = document.getElementById("app");
 // An exported replay (python -m viewer.export) embeds its data here; the live viewer has none.
 const REPLAY = (() => { const el = document.getElementById("hl-replay"); return el ? JSON.parse(el.textContent) : null; })();
-if (REPLAY) { document.querySelector('header.top a.pbtn[href="#/gateway"]')?.remove(); if (!location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id); }
+if (REPLAY) {
+  // A published replay links back to the project page (docs/index.html, two levels up) instead of the gateway.
+  document.querySelector('header.top a.pbtn[href="#/gateway"]')?.replaceWith(h("a", { class: "pbtn", href: "../../" }, "← hundred-lives"));
+  if (!location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id);
+}
 // Week kinds in the life strip. Lime = income, teal = building, coral = broke; the rest neutral.
 const KIND = { full_time: ["Full-time job", "var(--lime)"], part_time: ["Part-time", "color-mix(in srgb, var(--lime) 55%, var(--strip-bg))"],
                accelerator: ["Accelerator", "var(--teal)"], gig: ["Gig week", "var(--strip-gig)"], school: ["Classes only", "var(--strip-school)"],
