@@ -218,6 +218,6 @@ On commitments, the conditions with varying dice have about twice the effective 
 | 8 | ≥ 80% end week 52 in a full-time job | 77 of 80 (96%) | held |
 | 9 | no token-cap runs; $0.08–0.14 per run; total < $12 | no cap; total $6.93; per run $0.052–0.106, 20 of 80 under $0.08 | partly: cap and total held, per-run range missed |
 
-That's 4 held, 2 partly held and 3 missed. Counting the partial ones as half, 5 of 9.
+4 held, 2 partly, 3 missed.
 
 The follow-up loop from the known issue persists. Parents got 1,268 of the 1,827 contact messages across the 80 runs, a median of 16 per run.
