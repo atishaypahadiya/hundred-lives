@@ -23,8 +23,9 @@ def load_world(path: Path = DEFAULT_PATH) -> dict:
             raise ValueError(f"{path}: duplicate opening id {o['id']}")
         if o["type"] not in TYPES:
             raise ValueError(f"{path}: opening {o['id']} has unknown type {o['type']!r}")
-        if not 0 < float(o["base_rate"]) <= 1:
-            raise ValueError(f"{path}: opening {o['id']} base_rate must be in (0, 1]")
+        for k in ("base_rate", "reply_rate"):
+            if not 0 < float(o.get(k, 0)) <= 1:
+                raise ValueError(f"{path}: opening {o['id']} {k} must be in (0, 1]")
         seen.add(o["id"])
     if not seen:
         raise ValueError(f"{path}: no openings")

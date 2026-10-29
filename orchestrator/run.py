@@ -9,6 +9,7 @@ and memory. Past weeks are never replayed as raw messages, only as memory text.
 
 import argparse
 import json
+import random
 import signal
 import sys
 import traceback
@@ -104,8 +105,11 @@ class Logger:
 
 class Run:
     def __init__(self, run_id: str, persona: dict, persona_path: Path, world: dict,
-                 world_path: Path, agent, referee_backend, summarizer, budget: int, turns: int):
+                 world_path: Path, agent, referee_backend, summarizer, budget: int, turns: int,
+                 seed: int):
         self.run_id = run_id
+        self.seed = seed
+        self.rng = random.Random(seed)  # used only for outcome draws, so they replay exactly
         self.persona = persona
         self.persona_path = persona_path
         self.world_path = world_path
@@ -127,7 +131,7 @@ class Run:
         self.cash = float(start.get("savings_weeks", 0)) * self.expenses
         self.company_funding = 0.0
         self.commitments: list[dict] = []  # {id, label, opening_id, weekly_income, since_week, ends_week}
-        self.pending: list[dict] = []      # {id, opening_id, decision, submitted, reveal_week}
+        self.pending: list[dict] = []      # {id, opening_id, outcome, message, submitted, reveal_week}
         self.applied: dict[str, dict] = {}  # opening_id -> {status, week, outcome}
         self.track_record: list[str] = []  # one line per resolved application, for the referee
         self.carried_errors: list[str] = []  # errors the agent didn't see in the week they happened
@@ -174,13 +178,13 @@ class Run:
 
     # --- world ---
 
-    def _resolve(self, week: int, opening_id: str, d: dict) -> str:
-        """Apply a decision's effects (fixed by the opening). Returns the news line."""
+    def _resolve(self, week: int, opening_id: str, outcome: str, message: str) -> str:
+        """Apply an outcome's effects (fixed by the opening). Returns the news line."""
         o = self.openings[opening_id]
-        self.applied[opening_id] = {"status": "decided", "week": week, "outcome": d["outcome"]}
+        self.applied[opening_id] = {"status": "decided", "week": week, "outcome": outcome}
         effect = ""
         added = None
-        if d["outcome"] == "success":
+        if outcome == "success":
             weekly = o.get("pay_weekly") or o.get("stipend_weekly") or 0
             if o["type"] in ("job", "accelerator"):
                 duration = o.get("duration_weeks")
@@ -196,10 +200,10 @@ class Run:
             if o.get("investment"):
                 self.company_funding += o["investment"]
                 effect += f" ${o['investment']:,} was invested in your company."
-        self.track_record.append(f"week {week}: applied to {opening_id} ({o['title']}) → {d['outcome']}")
-        self.log("outcome_applied", week, opening_id=opening_id, outcome=d["outcome"], added=added,
+        self.track_record.append(f"week {week}: applied to {opening_id} ({o['title']}) → {outcome}")
+        self.log("outcome_applied", week, opening_id=opening_id, outcome=outcome, added=added,
                  cash=self.cash, company_funding=self.company_funding)
-        return f"{opening_id} {o['title']}: {d['message']} {effect}".strip()
+        return f"{opening_id} {o['title']}: {message} {effect}".strip()
 
     def _deliver(self, week: int) -> list[str]:
         news = []
@@ -209,12 +213,12 @@ class Run:
             self.log("commitment_ended", week, commitment=c, reason="term")
         for p in [p for p in self.pending if p["reveal_week"] <= week]:
             self.pending.remove(p)
-            if p["decision"]["outcome"] == "ignored":
+            if p["outcome"] == "ignored":
                 self.applied[p["opening_id"]] = {"status": "decided", "week": week, "outcome": "ignored"}
                 self.track_record.append(f"week {p['submitted']}: applied to {p['opening_id']} → no reply")
                 self.log("outcome_expired", week, opening_id=p["opening_id"])
             else:
-                news.append(self._resolve(week, p["opening_id"], p["decision"]))
+                news.append(self._resolve(week, p["opening_id"], p["outcome"], p["message"]))
         return news
 
     def _apply(self, week: int, a: dict, wk: WeekState) -> str:
@@ -242,24 +246,28 @@ class Run:
                            lambda mt: self.referee.complete(referee.SYSTEM, user, mt, referee.SCHEMA,
                                                             temperature=referee.TEMPERATURE,
                                                             seed=referee.SEED))
-        d, err = referee.parse_decision(reply.text)
+        est, err = referee.parse_estimate(reply.text, o["base_rate"])
+        outcome, draws = referee.draw(self.rng, est["estimated_chance"], o["reply_rate"])
+        message = {"success": est["message_if_success"], "failure": est["message_if_failure"]}.get(outcome, "")
         app_id = self._next_id("a")
-        delay = referee.IGNORED_DROP_WEEKS if d["outcome"] == "ignored" else d["decision_in_weeks"]
+        delay = referee.IGNORED_DROP_WEEKS if outcome == "ignored" else est["decision_in_weeks"]
         self.log("referee_decision", week, application_id=app_id, opening_id=oid,
-                 opening_type=o["type"], base_rate=o["base_rate"], details=details,
-                 attachments=paths, decision=d, reveal_week=week + delay, parse_error=err,
+                 opening_type=o["type"], base_rate=o["base_rate"], reply_rate=o["reply_rate"],
+                 details=details, attachments=paths, estimate=est,
+                 estimated_chance=est["estimated_chance"], outcome=outcome, seed=self.seed, **draws,
+                 reveal_week=week + delay, parse_error=err,
                  referee_input={"system": referee.SYSTEM, "user": user}, raw_output=reply.text,
                  model=f"{self.referee.name}:{self.referee.model}",
                  temperature=referee.TEMPERATURE if self.referee.deterministic else None,
-                 seed=referee.SEED if self.referee.deterministic else None)
+                 referee_seed=referee.SEED if self.referee.deterministic else None)
         if o["type"] == "job":
             wk.income_action = True
         label = f"applied to {oid} ({o['title']})"
         if delay == 0:
-            wk.lines.append(f"{label} → {d['outcome']}")
-            return "Response: " + self._resolve(week, oid, d)
+            wk.lines.append(f"{label} → {outcome}")
+            return "Response: " + self._resolve(week, oid, outcome, message)
         self.applied[oid] = {"status": "pending", "week": week, "outcome": None}
-        self.pending.append({"id": app_id, "opening_id": oid, "decision": d,
+        self.pending.append({"id": app_id, "opening_id": oid, "outcome": outcome, "message": message,
                              "submitted": week, "reveal_week": week + delay})
         wk.lines.append(label)
         return f"Submitted to {oid}. You'll hear back if and when they reply."
@@ -448,7 +456,7 @@ What do you do this week? Act through your tools; wait ends the week."""
 
     def execute(self) -> dict:
         self.log("run_start", persona_path=str(self.persona_path), persona=self.persona,
-                 world_path=str(self.world_path),
+                 world_path=str(self.world_path), seed=self.seed,
                  models={"agent": f"{self.agent.name}:{self.agent.model}",
                          "referee": f"{self.referee.name}:{self.referee.model}",
                          "summary": f"{self.summarizer.name}:{self.summarizer.model}"},
@@ -491,6 +499,8 @@ def main(argv=None):
     p.add_argument("--turns", type=int, help="weeks to simulate (default and cap: persona horizon)")
     p.add_argument("--referee-model", help="model for the world referee (default: --model)")
     p.add_argument("--summary-model", help="model for memory summaries (default: --model)")
+    p.add_argument("--seed", type=int, default=0,
+                   help="base seed for outcome draws; run i uses seed + i (default: the run index)")
     args = p.parse_args(argv)
 
     persona = yaml.safe_load(args.persona.read_text())
@@ -507,7 +517,8 @@ def main(argv=None):
     for i in range(1, args.runs + 1):
         run_id = f"{args.persona.stem}-{stamp}-{i:03d}"
         results.append(Run(run_id, persona, args.persona, world, args.world, agent,
-                           referee_backend, summarizer, args.max_tokens, turns).execute())
+                           referee_backend, summarizer, args.max_tokens, turns,
+                           seed=args.seed + i).execute())
     for r in results:
         print(f"{r['run_id']}  {r['reason']:<12} {r['weeks']} weeks  {r['tokens']:,} tokens  "
               f"runs/{r['run_id']}.jsonl")

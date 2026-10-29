@@ -5,7 +5,7 @@
 
 import json
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 
@@ -45,7 +45,32 @@ def summarize(path: Path) -> dict:
         "shortfall_weeks": [r["week"] for r in by("week_end") if r.get("shortfall")],
         "summaries": by("memory_summary"),
         "final_state": end.get("final_state", {}),
+        "seed": start.get("seed"),
     }
+
+
+def calibration(decisions: list[dict]) -> dict:
+    """Referee estimates vs base rates (bias) and vs the drawn outcomes (dice check)."""
+    n = len(decisions)
+    if not n:
+        return {"n": 0}
+    est = [d["estimated_chance"] for d in decisions]
+    base = [d["base_rate"] for d in decisions]
+    wins = sum(d["outcome"] == "success" for d in decisions)
+    return {"n": n, "mean_base": sum(base) / n, "mean_est": sum(est) / n,
+            "est_over_base": sum(est) / sum(base), "expected_successes": sum(est),
+            "successes": wins, "realized_rate": wins / n,
+            "ignored": sum(d["outcome"] == "ignored" for d in decisions),
+            "failures": sum(d["outcome"] == "failure" for d in decisions)}
+
+
+def fmt_calibration(c: dict) -> str:
+    if not c["n"]:
+        return "no applications"
+    return (f"{c['n']} apps · mean base rate {c['mean_base']:.3f} · mean estimated {c['mean_est']:.3f} "
+            f"({c['est_over_base']:.1f}× base) · realized {c['realized_rate']:.3f} "
+            f"({c['successes']} successes vs {c['expected_successes']:.2f} expected) · "
+            f"{c['failures']} failures, {c['ignored']} ignored")
 
 
 def main(paths: list[str]):
@@ -60,13 +85,13 @@ def main(paths: list[str]):
         print(f"money: broke in weeks {s['broke_weeks'] or 'none'} · gigs "
               f"{[f'w{w}' + ('*' if f else '') for w, f in s['gigs']] or 'none'} (* forced) · "
               f"shortfall weeks {s['shortfall_weeks'] or 'none'}")
-        print(f"applications ({len(s['decisions'])}):")
+        print(f"applications (seed {s['seed']}):")
         for d in s["decisions"]:
-            dec = d["decision"]
-            chance = "  -  " if dec["estimated_chance"] is None else f"{dec['estimated_chance']:.3f}"
-            print(f"  w{d['week']:<3} {d['opening_id']:<9} base {d['base_rate']:<6} est {chance}  "
-                  f"{dec['outcome']:<8} reveal w{d['reveal_week']:<3}"
+            print(f"  w{d['week']:<3} {d['opening_id']:<9} base {d['base_rate']:<6} "
+                  f"est {d['estimated_chance']:.3f}  draw {d['success_draw']:.3f}  "
+                  f"{d['outcome']:<8} reveal w{d['reveal_week']:<3}"
                   + (f" PARSE ERROR {d['parse_error']}" if d.get("parse_error") else ""))
+        print(f"calibration: {fmt_calibration(calibration(s['decisions']))}")
         delivered = [f"w{o['week']} {o['opening_id']} {o['outcome']}" for o in s["outcomes_applied"]]
         print(f"outcomes delivered: {delivered or 'none'}")
         print(f"tool errors ({len(s['tool_errors'])}, {s['errors_carried']} carried to next week):")
@@ -83,6 +108,15 @@ def main(paths: list[str]):
         if s["summaries"]:
             print("last memory summary:\n  " + s["summaries"][-1]["summary"].replace("\n", "\n  "))
         print()
+
+    pooled = [d for s in runs for d in s["decisions"]]
+    print(f"=== calibration, all {len(runs)} runs")
+    print(f"overall: {fmt_calibration(calibration(pooled))}")
+    by_type = defaultdict(list)
+    for d in pooled:
+        by_type[d["opening_type"]].append(d)
+    for t, ds in sorted(by_type.items()):
+        print(f"  {t:<12} {fmt_calibration(calibration(ds))}")
 
 
 if __name__ == "__main__":
