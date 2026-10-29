@@ -9,22 +9,27 @@ One row per run, then the spread across runs:
   - commits (from the normalized git events, quiet ones included), repos, shell calls;
   - big bets: applications to accelerators, angels, grants, student programs and hackathons
     (with successes), launches, hackathon placings, company spend;
-  - training: weeks with a session, streak at the end; final cash and commitments.
+  - training: sessions, weeks with a session, streak at the end; final cash and commitments;
+  - where the actions went: the share of the life's action-using calls (tools that cost an action;
+    gigs and free calls left out) that were train, post and message.
 Runs that didn't reach the horizon are marked and kept out of the spread. With name=glob
 arguments (conditions), each condition gets the report, then one comparison table: per life,
 messages sent, distinct contacts messaged, posts, followers, big bets (and wins), commits,
-as mean [min–max] over the lives that reached the horizon.
+training sessions and weeks, and the train / post / message shares of actions (%), as mean
+[min–max] over the lives that reached the horizon.
 """
 
 import glob
 import json
 import statistics
 import sys
+from collections import Counter
 from pathlib import Path
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from orchestrator.tools import ACTION_COST  # noqa: E402
 from viewer.normalize import normalize  # noqa: E402
 
 BIG_BETS = ("accelerator", "angel", "grant", "student_program", "hackathon")
@@ -46,6 +51,8 @@ def profile(path: str) -> dict:
     posts = of("post")
     bets = [d for d in of("referee_decision") if d.get("opening_type") in BIG_BETS]
     last = (of("week_end") or [{}])[-1].get("state") or {}
+    calls = Counter(r["tool"] for r in of("tool_call") if ACTION_COST.get(r["tool"], 0) >= 1)
+    share = lambda t: round(100 * calls[t] / max(1, sum(calls.values())))
     return {
         "run": Path(path).stem, "dice_seed": start.get("dice_seed"), "order_seed": start.get("order_seed"),
         "reason": (end or {}).get("reason", "running"), "weeks": len(of("week_end")),
@@ -58,6 +65,7 @@ def profile(path: str) -> dict:
         "bet_list": [f"w{d['week']} {d['opening_id']}→{d['outcome']}" for d in bets],
         "launches": len(of("launch")), "placed": sum(h["outcome"] == "placed" for h in of("hackathon_result")),
         "spend": len(of("spend")), "trained_weeks": last.get("trained_weeks"), "streak": last.get("train_streak"),
+        "train_sessions": calls["train"], "share": {t: share(t) for t in ("train", "post", "message")},
         "cash": last.get("cash"), "commitments": [c.get("label") for c in last.get("commitments") or [] if c.get("kind") != "academics"],
     }
 
@@ -66,7 +74,10 @@ COMPARE = [("messages / life", lambda r: sum(s for s, _ in r["messages"].values(
            ("distinct contacts", lambda r: sum(s > 0 for s, _ in r["messages"].values())),
            ("posts", lambda r: r["posts"]), ("followers", lambda r: r["followers"]),
            ("big bets", lambda r: r["bets"]), ("big bets won", lambda r: r["bet_wins"]),
-           ("commits", lambda r: r["commits"])]
+           ("commits", lambda r: r["commits"]),
+           ("train sessions", lambda r: r["train_sessions"]), ("trained weeks", lambda r: r["trained_weeks"] or 0),
+           ("train share %", lambda r: r["share"]["train"]), ("post share %", lambda r: r["share"]["post"]),
+           ("message share %", lambda r: r["share"]["message"])]
 
 
 def main(args: list[str]):
@@ -101,6 +112,8 @@ def report(pattern: str) -> list[dict]:
         print(f"  commits {r['commits']}, repos {r['repos']}, shell calls {r['shell']}")
         print(f"  big bets {r['bets']} ({r['bet_wins']} won): {', '.join(r['bet_list']) or 'none'}; launches {r['launches']}, "
               f"hackathons placed {r['placed']}, spend {r['spend']}")
+        print(f"  actions: train {r['share']['train']}%, post {r['share']['post']}%, message {r['share']['message']}%"
+              f" ({r['train_sessions']} train sessions)")
         print(f"  trained {r['trained_weeks']} weeks, streak {r['streak']} at the end; cash ${r['cash']:,.0f}; "
               f"holding: {', '.join(r['commitments']) or 'nothing'}")
     done = [r for r in runs if r["reason"] == "horizon"]

@@ -190,8 +190,10 @@ class Run:
         self.week1 = (world.get("calendar") or {}).get("week1", referee.DEFAULT_WEEK1)
         has_hackathons = any(o["type"] == "hackathon" for o in world["openings"])
         self.training = world.get("training")
+        # Hidden-streak worlds still count the streak (logged in `train` and the state) but never show it.
+        self.show_streak = bool(self.training) and self.training.get("show_streak", True)
         self.tools = tools_for(sandbox, contacts=bool(self.contacts), feed=bool(self.feed), hackathons=has_hackathons,
-                               training=bool(self.training))
+                               training=bool(self.training), show_streak=self.show_streak)
         self.username = run_id.lower()[:40]  # Gitea user; same as the run id
         self.box = self.gitea = None
         # Two independent sources of variation, each derived from `seed` unless fixed. Runs from
@@ -947,7 +949,8 @@ class Run:
                 streak = self.train_streak + 1  # this week counts once it has a session
                 self.log("train", week, activity=activity, first_this_week=first, streak=streak)
                 wk.note(f"trained: {short(activity, 60)}")
-                out = f"Logged. Training streak: {streak} week{'s' if streak != 1 else ''} counting this one."
+                out = (f"Logged. Training streak: {streak} week{'s' if streak != 1 else ''} counting this one."
+                       if self.show_streak else "Logged.")
             elif call.name == "submit":
                 out = self._submit(week, a, wk)
             elif call.name == "gig":
@@ -1028,7 +1031,7 @@ class Run:
                 time += (f" {nxt['name']} starts in week {nxt['start']}: classes will use "
                          f"{self.academics['class_actions']} actions a week, and campus jobs and internships "
                          f"together are capped during semesters; work over the cap ends when it starts.")
-        if self.training:
+        if self.show_streak:
             time += f" Training streak: {self.train_streak} week{'s' if self.train_streak != 1 else ''}."
         ev = next((oid for oid, e in self.events.items() if e["event_week"] == week), None)
         if ev:

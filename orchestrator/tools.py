@@ -209,9 +209,15 @@ TOOLS = [
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
 
+# `train` when the world hides the streak (`training.show_streak: false`): no count anywhere.
+TRAIN_NO_STREAK = {**TOOLS_BY_NAME["train"], "description": (
+    "Spend time on physical training (a workout, a run, sport practice). It's logged.")}
+
+
 def tools_for(sandbox: bool, contacts: bool = True, feed: bool = False, hackathons: bool = False,
-              training: bool = False) -> list[dict]:
-    return [t for t in TOOLS if (sandbox or t["name"] not in SANDBOX_TOOLS)
+              training: bool = False, show_streak: bool = True) -> list[dict]:
+    return [TRAIN_NO_STREAK if t["name"] == "train" and not show_streak else t
+            for t in TOOLS if (sandbox or t["name"] not in SANDBOX_TOOLS)
             and (training or t["name"] not in TRAINING_TOOLS)
             and (contacts or t["name"] != "message")
             and (feed or t["name"] not in FEED_TOOLS)
