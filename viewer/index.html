@@ -4,138 +4,308 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hundred Lives Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&display=swap">
 <style>
+/* ===== Design tokens ======================================================================
+   Spacing uses only 4 / 8 / 12 / 16 / 24 / 32. Radii: card 28, inner panel 20, tile 22, pill 999.
+   Semantic colours carry meaning and nothing else: lime income/success, coral broke/rejected,
+   amber pending/waiting, teal building/code. All are under 3:1 on the light base, so as marks
+   they sit on the dark strip inset or as tile backgrounds under dark ink, never as text. */
 :root {
   color-scheme: light;
-  --page: #f9f9f7; --surface: #fcfcfb; --raised: #ffffff;
-  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;   /* full-time, part-time, accelerator */
-  --gig: #c3c2b7; --none: #f0efec;
-  --good: #0ca30c; --good-text: #006300; --warning: #fab219; --critical: #d03b3b;
-  --term-bg: #1a1a19; --term-ink: #e6e5df; --term-muted: #a3a29b;
-  --hl: rgba(42,120,214,0.08);
+  --base: #ecebe8;
+  --glass: rgba(255,255,255,.55); --glass-hi: rgba(255,255,255,.5); --glass-shadow: 0 8px 24px rgba(20,20,20,.05);
+  --blur: blur(28px) saturate(140%);
+  --ink: #141414; --ink-2: #44423e; --muted: #6b6964;
+  --fill: rgba(20,20,20,.06); --fill-2: rgba(20,20,20,.10); --track: rgba(20,20,20,.12);
+  --lime: #a6e35a; --coral: #ff5b4f; --amber: #ffb547; --teal: #6fd3c4;
+  --g-success: linear-gradient(145deg, #a6e35a, #f3f7c8);
+  --g-broke: linear-gradient(145deg, #ff5b4f, #ffd2b8);
+  --g-building: linear-gradient(145deg, #6fd3c4, #d4f5e6);
+  --g-idle: linear-gradient(145deg, #f7f6f3, #e2e0db);
+  --idle-a: #d6d4cf; --idle-b: #f4f3f0; --idle-ink: #141414; --idle-muted: #6b6964;
+  --strip-bg: #1b1b1b; --strip-none: rgba(255,255,255,.12); --strip-gig: rgba(255,255,255,.42); --strip-school: rgba(255,255,255,.26); --strip-future: rgba(255,255,255,.05);
+  --term-bg: #161616; --term-ink: #e6e5df; --term-muted: #9a9890;
+  --blob-a: #ffffff; --blob-b: #d9d7d1; --blob-c: #f5f4f1;
+  --r-card: 28px; --r-panel: 20px; --r-tile: 22px; --r-pill: 999px;
+  --ease: 180ms cubic-bezier(.2,.7,.3,1);
+  --font: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --raised: #222220;
-    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
-    --gig: #5c5b56; --none: #2a2a28;
-    --good-text: #0ca30c; --term-bg: #0d0d0d; --hl: rgba(57,135,229,0.14);
+    --base: #121212;
+    --glass: rgba(30,30,30,.55); --glass-hi: rgba(255,255,255,.06); --glass-shadow: 0 8px 24px rgba(0,0,0,.25);
+    --ink: #f0efec; --ink-2: #c9c7c0; --muted: #97958e;
+    --fill: rgba(255,255,255,.07); --fill-2: rgba(255,255,255,.12); --track: rgba(255,255,255,.12);
+    --g-idle: linear-gradient(145deg, #2c2c2b, #1f1f1e);
+    --idle-a: #3a3a38; --idle-b: #242423; --idle-ink: #f0efec; --idle-muted: #97958e;
+    --strip-bg: #0b0b0b;
+    --term-bg: #0b0b0b;
+    --blob-a: #222221; --blob-b: #0a0a0a; --blob-c: #1a1a19;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0d0d; --surface: #1a1a19; --raised: #222220;
-  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
-  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
-  --gig: #5c5b56; --none: #2a2a28;
-  --good-text: #0ca30c; --term-bg: #0d0d0d; --hl: rgba(57,135,229,0.14);
+  --base: #121212;
+  --glass: rgba(30,30,30,.55); --glass-hi: rgba(255,255,255,.06); --glass-shadow: 0 8px 24px rgba(0,0,0,.25);
+  --ink: #f0efec; --ink-2: #c9c7c0; --muted: #97958e;
+  --fill: rgba(255,255,255,.07); --fill-2: rgba(255,255,255,.12); --track: rgba(255,255,255,.12);
+  --g-idle: linear-gradient(145deg, #2c2c2b, #1f1f1e);
+  --idle-a: #3a3a38; --idle-b: #242423; --idle-ink: #f0efec; --idle-muted: #97958e;
+  --strip-bg: #0b0b0b;
+  --term-bg: #0b0b0b;
+  --blob-a: #222221; --blob-b: #0a0a0a; --blob-c: #1a1a19;
 }
+
+/* ===== Base ===== */
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+html { background: var(--base); }
+body { margin: 0; min-height: 100vh; background: var(--base); color: var(--ink); font: 400 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(40vmax 40vmax at 12% 8%, var(--blob-a), transparent 70%),
+              radial-gradient(36vmax 36vmax at 88% 28%, var(--blob-b), transparent 70%),
+              radial-gradient(44vmax 44vmax at 40% 96%, var(--blob-c), transparent 70%); }
 a { color: inherit; }
 button, input, select { font: inherit; color: inherit; }
-header.top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 5; }
-header.top h1 { font-size: 15px; margin: 0; font-weight: 600; }
-header.top .sp { flex: 1; }
-main { max-width: 1400px; margin: 0 auto; padding: 16px; }
-.btn { border: 1px solid var(--border); background: var(--raised); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
-.btn:hover { background: var(--hl); }
-.btn[aria-pressed="true"] { background: var(--hl); border-color: var(--s1); }
-.muted { color: var(--muted); } .ink2 { color: var(--ink-2); }
+b, strong { font-weight: 400; color: var(--ink); }
+h1, h2, h3, .t { font-weight: 500; }
 .num { font-variant-numeric: tabular-nums; }
-.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
-.badge.live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: pulse 1.6s infinite; }
-.badge.pilot { border-color: var(--warning); }
-@keyframes pulse { 50% { opacity: .3; } }
-.filters { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-.filters input { border: 1px solid var(--border); background: var(--raised); border-radius: 6px; padding: 5px 9px; min-width: 240px; }
-.batch h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 18px 0 8px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-decoration: none; display: block; }
-.card:hover { border-color: var(--s1); }
-.card .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.card .id { font-weight: 600; font-size: 13px; }
-.card .facts { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
-.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; min-width: 0; }
-.panel h3 { font-size: 13px; margin: 0 0 8px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
-.panel h3 .muted { font-weight: 400; }
-.detail-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 12px; }
-.detail-head h2 { margin: 0; font-size: 18px; }
-.kv { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-2); }
-.kv b { color: var(--ink); font-weight: 600; }
-.scrub { display: flex; gap: 10px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
-.scrub input[type=range] { flex: 1; min-width: 180px; accent-color: var(--s1); }
-.scrub .wk { font-weight: 600; min-width: 120px; }
-.cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; }
-.stack { display: grid; gap: 12px; align-content: start; }
-@media (max-width: 900px) { .cols { grid-template-columns: minmax(0, 1fr); } }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 16px; margin-bottom: 10px; }
-.stat .v { font-size: 20px; font-weight: 600; }
-.stat .l { font-size: 12px; color: var(--muted); }
+.muted { color: var(--muted); } .ink2 { color: var(--ink-2); }
+.lab { font-size: 12px; font-weight: 400; color: var(--muted); }
+.big { font-weight: 300; font-size: 40px; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.big.xl { font-size: 56px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.text { white-space: pre-wrap; word-break: break-word; }
+.pre { white-space: pre-wrap; word-break: break-word; margin: 4px 0 0; font: 12.5px/1.5 var(--mono); }
+.empty { color: var(--muted); font-size: 13px; }
+.notice { font-size: 12px; color: var(--muted); margin-top: 12px; }
+
+/* ===== GlassCard ===== */
+.glass { background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow); }
+.card { border-radius: var(--r-card); padding: 24px; min-width: 0; }
+.card > h3, .tile > h3 { margin: 0 0 16px; font-size: 14px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.card > h3 .lab, .tile > h3 .lab { font-weight: 400; }
+.inner { border-radius: var(--r-panel); background: var(--fill); padding: 12px 16px; }
+
+/* ===== Pill ===== */
+.pill { display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 12px; border-radius: var(--r-pill);
+  background: var(--fill); font-size: 12px; color: var(--ink-2); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pill .k { color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+.dot.lime { background: var(--lime); } .dot.coral { background: var(--coral); } .dot.amber { background: var(--amber); } .dot.teal { background: var(--teal); }
+.dot.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .dot.pulse { animation: none; } }
+
+/* ===== IconButton + pill buttons ===== */
+.ibtn, .pbtn { border: 0; cursor: pointer; background: var(--fill); color: var(--ink); display: inline-grid; place-items: center;
+  transition: filter var(--ease), transform var(--ease), background-color var(--ease); text-decoration: none; flex: none; }
+.ibtn { width: 44px; height: 44px; border-radius: 50%; padding: 0; }
+.pbtn { height: 44px; border-radius: var(--r-pill); padding: 0 16px; font-size: 13px; white-space: nowrap; }
+.ibtn:hover, .pbtn:hover { filter: brightness(1.06); background: var(--fill-2); }
+.ibtn:active, .pbtn:active { transform: scale(.97); }
+.ibtn[disabled], .pbtn[disabled] { opacity: .35; cursor: default; filter: none; transform: none; }
+.pbtn[aria-pressed="true"], .ibtn[aria-pressed="true"] { background: var(--ink); color: var(--base); }
+.ibtn svg { width: 20px; height: 20px; }
+
+/* ===== Top bar ===== */
+header.top { position: sticky; top: 12px; z-index: 10; margin: 12px 16px 0; padding: 8px 8px 8px 24px; border-radius: var(--r-card);
+  display: flex; align-items: center; gap: 12px; }
+header.top h1 { font-size: 16px; margin: 0; white-space: nowrap; }
+@media (max-width: 480px) { body.replay header.top h1 { display: none; } }  /* the back link names the project */
+.replay-banner { max-width: 1440px; margin: 12px auto 0; padding: 10px 16px; border-radius: var(--r-pill); background: var(--fill);
+  color: var(--ink); font-size: 13px; line-height: 1.4; text-align: center; margin-inline: 16px; }
+@media (min-width: 900px) { .replay-banner { margin-inline: 24px; } }
+@media (min-width: 1488px) { .replay-banner { margin-inline: auto; } }
+@media (max-width: 640px) { .replay-banner { border-radius: var(--r-panel); } }
+@media (max-width: 640px) { header.top .crumb { display: none; } }
+header.top h1 a { text-decoration: none; }
+header.top .crumb { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+header.top .sp { flex: 1; }
+main { max-width: 1440px; margin: 0 auto; padding: 24px 16px 32px; }
+@media (min-width: 900px) { main { padding: 24px 24px 32px; } header.top { margin: 12px 24px 0; } }
+
+/* ===== Grid of lives ===== */
+.filters { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; }
+.search { height: 44px; border: 0; border-radius: var(--r-pill); background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  box-shadow: inset 0 1px 0 var(--glass-hi); padding: 0 24px; min-width: 0; width: 320px; max-width: 100%; }
+.search::placeholder { color: var(--muted); }
+.batch { margin-bottom: 32px; }
+.batch h2 { font-size: 16px; margin: 0 0 4px; word-break: break-all; }
+.batch .lab { display: block; margin-bottom: 12px; }
+.lives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+
+/* StatTile, and the life tile built from it. Each tone sets its own ink. */
+.tile { border-radius: var(--r-tile); padding: 24px; min-width: 0; display: flex; flex-direction: column; gap: 16px; color: var(--t-ink, var(--ink)); }
+.tile .lab { color: var(--t-muted, var(--muted)); }
+.tile .pill { background: color-mix(in srgb, var(--t-ink, var(--ink)) 8%, transparent); color: var(--t-ink, var(--ink-2)); }
+.t-success { background: var(--g-success); --t-ink: #141414; --t-muted: rgba(20,20,20,.68); }
+.t-broke { background: var(--g-broke); --t-ink: #141414; --t-muted: rgba(20,20,20,.68); }
+.t-building { background: var(--g-building); --t-ink: #141414; --t-muted: rgba(20,20,20,.68); }
+.t-idle { background: var(--g-idle); --t-ink: var(--idle-ink); --t-muted: var(--idle-muted); }
+.t-glass { background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow); }
+.tile-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tile-head .t { font-size: 14px; margin-right: auto; }
+.tile-body { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-width: 0; }
+.tile-body .big { min-width: 0; }
+@media (max-width: 720px) { .span1 .tile-body { flex-direction: column; align-items: flex-start; } .span1 .big { font-size: 40px; } }
+.tile-facts { font-size: 12px; color: var(--t-muted, var(--muted)); display: grid; gap: 4px; }
+a.life { text-decoration: none; transition: filter var(--ease), transform var(--ease); }
+a.life:hover { filter: brightness(1.03); }
+a.life:active { transform: scale(.99); }
+a.life .act { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.legend { display: flex; gap: 8px 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+.legend > span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { display: inline-grid; place-items: center; width: 24px; height: 12px; border-radius: var(--r-pill); background: var(--strip-bg); flex: none; }
+.sw::after { content: ""; width: 12px; height: 6px; border-radius: 3px; background: var(--c); }
+.sw.broke::after { background: radial-gradient(circle, #fff 0 1.2px, transparent 1.6px), var(--coral); }
+.swt { width: 16px; height: 16px; border-radius: 6px; flex: none; }
+
+/* ===== One life ===== */
+.dhead { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; }
+.dhead h2 { margin: 0 0 8px; font-size: 20px; word-break: break-all; }
+.dhead .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.life-detail { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) {
+  .life-detail { grid-template-columns: 400px minmax(0, 1fr); }
+  .figcol { position: sticky; top: 92px; align-self: start; }
+}
+.bento { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.span1 { grid-column: span 1; } .span2 { grid-column: span 2; } .span4 { grid-column: 1 / -1; }
+@media (max-width: 720px) { .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } .span2 { grid-column: 1 / -1; } }
+.panels { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.panels .wide { grid-column: 1 / -1; }
+@media (max-width: 1300px) { .panels { grid-template-columns: minmax(0, 1fr); } }
+
+/* Figure with callouts */
+.figure { position: relative; aspect-ratio: 4 / 5; border-radius: var(--r-panel); overflow: hidden; background: var(--fill); container-type: inline-size; }
+.figure > svg.body { position: absolute; inset: 0; width: 100%; height: 100%; }
+.figure > svg.leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.figure .pin { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); transform: translate(-50%, -50%); }
+.figure .pin.hollow { background: var(--base); box-shadow: inset 0 0 0 2px var(--ink); }
+.callout { position: absolute; width: 44%; border-radius: var(--r-panel); padding: 12px 16px; display: grid; gap: 4px; }
+.callout .v { font-weight: 300; font-size: 20px; line-height: 1.15; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.callout .v.cash { font-size: min(28px, 7cqw); }
+.callout .v.txt { font-size: 13px; font-weight: 400; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; white-space: normal; }
+.figcap { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Cash tile */
+.money { display: flex; gap: 16px 32px; flex-wrap: wrap; align-items: flex-end; }
+.money .sm { display: grid; gap: 4px; }
+.money .sm .v { font-size: 20px; font-weight: 300; font-variant-numeric: tabular-nums; }
 .chart { position: relative; }
 .chart svg, svg.strip { display: block; width: 100%; height: auto; overflow: visible; }
-.tip { position: absolute; pointer-events: none; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12); white-space: nowrap; z-index: 3; display: none; }
-.tip b { font-weight: 600; }
-.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
-.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-.legend i.broke { background: transparent; border: 2px solid var(--critical); }
-.feed { display: grid; gap: 8px; max-height: 520px; overflow: auto; }
-.item { border-left: 2px solid var(--grid); padding: 2px 0 2px 10px; }
-.item.now { border-left-color: var(--s1); background: var(--hl); }
-.item .meta { font-size: 12px; color: var(--muted); }
-.item pre, .pre { white-space: pre-wrap; word-break: break-word; margin: 2px 0 0; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.text { white-space: pre-wrap; word-break: break-word; }
-.term { background: var(--term-bg); color: var(--term-ink); border-radius: 6px; padding: 10px 12px; max-height: 460px; overflow: auto; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.term .cmd { color: #9ec5f4; white-space: pre-wrap; word-break: break-word; }
-.term .out { white-space: pre-wrap; word-break: break-word; color: var(--term-ink); margin: 2px 0 10px; }
+.tip { position: absolute; pointer-events: none; border-radius: var(--r-panel); padding: 12px 16px; font-size: 12px; white-space: nowrap; z-index: 3; display: none; color: var(--ink); }
+.tip .t { font-size: 13px; }
+
+/* Ring */
+.ring { position: relative; flex: none; color: var(--t-ink, var(--ink)); }
+.ring svg { display: block; }
+
+/* Feeds */
+.feed { display: grid; gap: 8px; max-height: 420px; overflow: auto; overscroll-behavior: contain; }
+.item { border-radius: var(--r-panel); background: var(--fill); padding: 12px 16px; }
+.item.now { background: var(--fill-2); }
+.item .meta, .meta { font-size: 12px; color: var(--muted); }
+.thread + .thread { margin-top: 16px; }
+.thread > .t { font-size: 13px; margin-bottom: 8px; }
+
+/* Terminal: dark mono in both modes */
+.term { background: var(--term-bg); color: var(--term-ink); border-radius: var(--r-panel); padding: 16px; max-height: 460px; overflow: auto; font: 12.5px/1.5 var(--mono); }
+.term .cmd { color: var(--teal); white-space: pre-wrap; word-break: break-word; }
+.term .out { white-space: pre-wrap; word-break: break-word; margin: 4px 0 12px; }
 .term .info { color: var(--term-muted); }
-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
-th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--grid); vertical-align: top; }
-th { color: var(--muted); font-weight: 500; font-size: 12px; }
+
+/* Tables: no rules; rows separate by spacing and a fill on hover / the selected week */
+.tbl { overflow: auto; max-height: 520px; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px; vertical-align: top; }
+th { color: var(--muted); font-weight: 400; font-size: 12px; position: sticky; top: 0; }
 td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
-tr.now td { background: var(--hl); }
-tr.click { cursor: pointer; } tr.click:hover td { background: var(--hl); }
-.oc { white-space: nowrap; }
-.oc.success { color: var(--good-text); } .oc.failure { color: var(--critical); } .oc.ignored, .oc.quiet { color: var(--muted); }
-.tools { display: grid; gap: 6px; }
-.tool { font-size: 12.5px; }
-.tool .name { font-weight: 600; }
-.tool.err .name { color: var(--critical); }
-details > summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
-.empty { color: var(--muted); font-size: 13px; }
-.notice { font-size: 12px; color: var(--muted); margin-top: 6px; }
-.repo { border-top: 1px solid var(--grid); padding-top: 8px; margin-top: 8px; }
-.repo:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
-.commit { display: flex; gap: 8px; font-size: 12.5px; align-items: baseline; }
-.commit code { color: var(--muted); }
-.plus { color: var(--good-text); } .minus { color: var(--critical); }
-:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+tr.now td { background: var(--fill-2); }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--fill); }
+tr td:first-child { border-radius: 12px 0 0 12px; } tr td:last-child { border-radius: 0 12px 12px 0; }
+.oc { display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
+div.oc { display: flex; margin-top: 4px; }
+details > summary { cursor: pointer; color: var(--ink-2); font-size: 12px; list-style: none; display: inline-flex; gap: 8px; align-items: center; padding: 4px 0; border-radius: var(--r-pill); }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "›"; display: inline-block; transition: transform var(--ease); color: var(--muted); }
+details[open] > summary::before { transform: rotate(90deg); }
+.tools { display: grid; gap: 8px; }
+.tool { font-size: 13px; }
+.tool .name { color: var(--ink); }
+.commit { display: flex; gap: 8px; font-size: 13px; align-items: baseline; flex-wrap: wrap; }
+.commit code { color: var(--muted); font: 12px var(--mono); }
+.repo { margin-top: 16px; display: grid; gap: 8px; }
+
+/* ===== Scrubber, pinned to the bottom ===== */
+.scrubber { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 10; width: min(1100px, calc(100vw - 32px));
+  border-radius: var(--r-card); padding: 8px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; }
+.scrubber .wk { font-size: 13px; padding: 0 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.track { position: relative; height: 44px; min-width: 0; }
+.track .ticks { position: absolute; left: 10px; right: 10px; top: 32px; height: 8px; pointer-events: none; }
+.track .ticks i { position: absolute; top: 0; width: 2px; height: 4px; border-radius: 1px; background: var(--muted); opacity: .45; transform: translateX(-50%); }
+.track .ticks i.q { height: 8px; opacity: .8; }
+input[type=range] { -webkit-appearance: none; appearance: none; position: absolute; inset: 0; width: 100%; height: 44px; margin: 0; background: transparent; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: var(--r-pill); background: linear-gradient(90deg, var(--ink-2) 0 var(--p, 0%), var(--track) var(--p, 0%) 100%); }
+input[type=range]::-moz-range-track { height: 8px; border-radius: var(--r-pill); background: var(--track); }
+input[type=range]::-moz-range-progress { height: 8px; border-radius: var(--r-pill); background: var(--ink-2); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -6px; border-radius: 50%; background: var(--ink); border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: transform var(--ease); }
+input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--ink); border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+input[type=range]:active::-webkit-slider-thumb { transform: scale(.97); }
+input[type=range]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--r-pill); }
+@media (max-width: 640px) {
+  .scrubber { grid-template-columns: auto auto auto minmax(0, 1fr) auto; bottom: 12px; width: calc(100vw - 24px); }
+  .scrubber .track { grid-column: 1 / -1; grid-row: 1; margin: 0 8px; }
+  .scrubber .wk { padding: 0 4px; text-align: center; }
+}
+@media (max-width: 420px) { .scrubber .wk { font-size: 12px; padding: 0 2px; } .scrubber .pbtn { padding: 0 12px; } }
+@media (max-width: 380px) { .scrubber .wkw { display: none; } }
+.has-scrubber { padding-bottom: 136px; }
+@media (max-width: 640px) { .has-scrubber { padding-bottom: 160px; } }
 </style>
 </head>
 <body>
-<header class="top">
-  <h1><a href="#/" style="text-decoration:none">Hundred Lives</a></h1>
-  <span class="muted" id="crumb"></span>
+<header class="top glass">
+  <span id="back"></span>
+  <h1><a href="#/">Hundred Lives</a></h1>
+  <span class="crumb" id="crumb"></span>
   <span class="sp"></span>
-  <button class="btn" id="theme" title="Switch light / dark">Theme</button>
+  <a class="pbtn" href="#/gateway">Gateway</a>
+  <span id="themeSlot"></span>
 </header>
 <main id="app"></main>
 <script>
 "use strict";
 // Every value from a log is agent- or model-made text: it only ever reaches the DOM as text nodes.
 const $app = document.getElementById("app");
-const KIND = { full_time: ["Full-time job", "var(--s1)"], part_time: ["Part-time", "var(--s2)"],
-               accelerator: ["Accelerator", "var(--s3)"], gig: ["Gig week", "var(--gig)"], none: ["No commitment", "var(--none)"] };
-const OUTCOME = { success: "✓ success", failure: "✕ failure", ignored: "– no reply", traction: "✓ traction", quiet: "– quiet" };
+// An exported replay (python -m viewer.export) embeds its data here; the live viewer has none.
+const REPLAY = (() => { const el = document.getElementById("hl-replay"); return el ? JSON.parse(el.textContent) : null; })();
+if (REPLAY) {
+  document.body.classList.add("replay");
+  document.body.prepend(h("div", { class: "replay-banner", role: "note" },
+    "Simulated life. Fictional world, organizations and odds; contacts are invented. Not a record of real events, people, or companies."));
+  // A published replay links back to the project page (docs/index.html, two levels up) instead of the gateway.
+  document.querySelector('header.top a.pbtn[href="#/gateway"]')?.replaceWith(h("a", { class: "pbtn", href: "../../" }, "← hundred-lives"));
+  if (!location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id);
+}
+// Week kinds in the life strip. Lime = income, teal = building, coral = broke; the rest neutral.
+const KIND = { full_time: ["Full-time job", "var(--lime)"], part_time: ["Part-time", "color-mix(in srgb, var(--lime) 55%, var(--strip-bg))"],
+               accelerator: ["Accelerator", "var(--teal)"], gig: ["Gig week", "var(--strip-gig)"], school: ["Classes only", "var(--strip-school)"],
+               none: ["No commitment", "var(--strip-none)"] };
+const OUTCOME = { success: ["success", "lime"], failure: ["rejected", "coral"], ignored: ["no reply", ""], traction: ["traction", "lime"], quiet: ["quiet", ""],
+                  placed: ["placed", "lime"], not_placed: ["didn't place", "coral"], no_submission: ["no submission", ""] };
+const TONE = { success: "In a job", broke: "Broke", building: "Building", idle: "Idle" };
 const money = v => v == null ? "–" : (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
 const pct = v => v == null ? "–" : (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
 const SVG = "http://www.w3.org/2000/svg";
+let uid = 0;
 
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -150,108 +320,253 @@ function h(tag, attrs, ...kids) {
 }
 function s(tag, attrs) { const el = document.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v); return el; }
 
-// ---------- theme ----------
-document.getElementById("theme").onclick = () => {
-  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
-  try { localStorage.setItem("hl-theme", document.documentElement.dataset.theme); } catch {}
-  route();
+// ================= Components =================
+const ICON = {
+  back: ["M15 5l-7 7 7 7"], prev: ["M15 6l-6 6 6 6"], next: ["M9 6l6 6-6 6"],
+  play: ["M8 5.5v13l11-6.5z", true], pause: ["M7 5h3.5v14H7zM13.5 5H17v14h-3.5z", true],
+  end: ["M6 6l6 6-6 6M13 6l6 6-6 6"],
+  sun: ["M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z"],
+  moon: ["M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"],
 };
+function Icon(name) {
+  const [d, filled] = ICON[name];
+  const svg = s("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", fill: filled ? "currentColor" : "none", stroke: filled ? "none" : "currentColor",
+    "stroke-width": 1.75, "stroke-linecap": "round", "stroke-linejoin": "round" });
+  svg.append(s("path", { d }));
+  return svg;
+}
+function IconButton({ icon, label, onclick, disabled, pressed, href }) {
+  const attrs = { class: "ibtn", "aria-label": label, title: label, onclick, disabled: disabled || null,
+                  "aria-pressed": pressed == null ? null : String(pressed) };
+  return href ? h("a", { ...attrs, href }, Icon(icon)) : h("button", { ...attrs, type: "button" }, Icon(icon));
+}
+function Pill(text, { tone, title, live, k } = {}) {
+  return h("span", { class: "pill", title }, tone != null ? h("i", { class: `dot ${tone}${live ? " pulse" : ""}` }) : null,
+    k ? h("span", { class: "k" }, k) : null, text);
+}
+function GlassCard({ title, sub, cls }, ...kids) {
+  return h("section", { class: "glass card " + (cls || "") }, title ? h("h3", {}, title, sub ? h("span", { class: "lab" }, sub) : null) : null, kids);
+}
+// A stat tile: label, big numeral, optional sub-label, ring or sparkline. tone = success | broke | building | idle | glass.
+function StatTile({ label, value, sub, ring, spark, tone = "glass", span, xl }, ...kids) {
+  return h("section", { class: `tile t-${tone}${span ? " span" + span : ""}` },
+    h("div", { class: "lab" }, label),
+    h("div", { class: "tile-body" }, h("div", { class: "big" + (xl ? " xl" : "") }, value), ring ? Ring(ring) : null),
+    sub ? h("div", { class: "lab" }, sub) : null,
+    spark ? Spark(spark) : null, kids);
+}
+// A thin arc: 6px, rounded cap, track at 12% opacity. value in [0, 1]; tick marks a reference point.
+function Ring({ value, tick, size = 72, label }) {
+  const r = (size - 6) / 2, c = 2 * Math.PI * r, wrap = h("div", { class: "ring", role: "img", "aria-label": label || "" });
+  const svg = s("svg", { width: size, height: size, viewBox: `0 0 ${size} ${size}` });
+  svg.append(s("circle", { cx: size / 2, cy: size / 2, r, fill: "none", stroke: "currentColor", "stroke-opacity": .12, "stroke-width": 6 }));
+  const v = Math.max(0, Math.min(1, value || 0));
+  if (v > 0) svg.append(s("circle", { cx: size / 2, cy: size / 2, r, fill: "none", stroke: "currentColor", "stroke-width": 6, "stroke-linecap": "round",
+    "stroke-dasharray": `${Math.max(0.001, v * c - (v < 1 ? 0 : 0))} ${c}`, transform: `rotate(-90 ${size / 2} ${size / 2})` }));
+  if (tick != null) {
+    const a = tick * 2 * Math.PI - Math.PI / 2, x1 = size / 2 + (r - 7) * Math.cos(a), y1 = size / 2 + (r - 7) * Math.sin(a);
+    const x2 = size / 2 + (r + 3) * Math.cos(a), y2 = size / 2 + (r + 3) * Math.sin(a);
+    svg.append(s("line", { x1, y1, x2, y2, stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-opacity": .7 }));
+  }
+  wrap.append(svg);
+  return wrap;
+}
+function Spark(values, W = 240, H = 40) {
+  const max = Math.max(1, ...values), n = Math.max(values.length - 1, 1), id = "sp" + (++uid);
+  const x = i => i / n * W, y = v => H - 2 - v / max * (H - 4);
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", style: "width:100%;height:40px;display:block;overflow:visible", "aria-hidden": "true" });
+  const g = s("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+  g.append(s("stop", { offset: 0, style: "stop-color:currentColor;stop-opacity:.18" }), s("stop", { offset: 1, style: "stop-color:currentColor;stop-opacity:0" }));
+  const defs = s("defs"); defs.append(g); svg.append(defs);
+  if (values.length) {
+    const d = values.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+    svg.append(s("path", { d: d + ` L${x(values.length - 1)} ${H} L0 ${H} Z`, fill: `url(#${id})` }),
+               s("path", { d, fill: "none", stroke: "currentColor", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }));
+  }
+  return svg;
+}
+// Pill track, round thumb, one tick per week (every 13th taller). The range's own keyboard handling stays.
+function Scrubber({ sel, max, horizon, onpick, playing, onplay, follow, onfollow, ended }) {
+  const top = Math.max(max, 1), p = top > 1 ? (sel - 1) / (top - 1) * 100 : 100;
+  const range = h("input", { type: "range", min: 1, max: top, value: sel, "aria-label": "Week", "aria-valuetext": `Week ${sel} of ${horizon || "?"}`, style: `--p:${p}%` });
+  range.addEventListener("input", () => onpick(+range.value));
+  const step = top <= 60 ? 1 : top <= 130 ? 2 : 4, ticks = h("div", { class: "ticks", "aria-hidden": "true" });
+  for (let w = 1; w <= top; w += step) ticks.append(h("i", { class: w % 13 === 0 ? "q" : null, style: `left:${top > 1 ? (w - 1) / (top - 1) * 100 : 50}%` }));
+  return h("div", { class: "scrubber glass", role: "group", "aria-label": "Week scrubber" },
+    IconButton({ icon: "prev", label: "Previous week", onclick: () => onpick(sel - 1), disabled: sel <= 1 }),
+    IconButton({ icon: playing ? "pause" : "play", label: playing ? "Pause" : "Play", onclick: onplay, pressed: !!playing }),
+    h("div", { class: "track" }, ticks, range),
+    IconButton({ icon: "next", label: "Next week", onclick: () => onpick(sel + 1), disabled: sel >= max }),
+    h("span", { class: "wk", "aria-label": `Week ${sel} of ${horizon || "?"}` }, h("span", { class: "wkw" }, "Week "), `${sel} of ${horizon || "?"}`),
+    h("button", { class: "pbtn", type: "button", "aria-pressed": String(follow), onclick: onfollow }, ended ? "Last week" : "Follow live"));
+}
+
+// ---------- theme ----------
+function themeButton() {
+  const dark = (document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
+  document.getElementById("themeSlot").replaceChildren(IconButton({ icon: dark ? "sun" : "moon", label: dark ? "Switch to light" : "Switch to dark", onclick: () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
+    try { localStorage.setItem("hl-theme", document.documentElement.dataset.theme); } catch {}
+    themeButton(); route();
+  } }));
+}
 try { const t = localStorage.getItem("hl-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+themeButton();
 
 // ---------- routing ----------
 let cleanup = () => {};
 function route() {
   cleanup(); cleanup = () => {};
-  const m = location.hash.match(/^#\/run\/([^?]+)(?:\?w=(\d+))?/);
-  if (m) showRun(decodeURIComponent(m[1]), m[2] ? +m[2] : null); else showGrid();
+  const m = location.hash.match(/^#\/run\/([^?]+)(?:\?w=(\d+))?/), g = location.hash.match(/^#\/gateway(?:\?mode=(dry|live))?/);
+  if (m) showRun(decodeURIComponent(m[1]), m[2] ? +m[2] : null); else if (g) showGateway(g[1] || "dry"); else showGrid();
 }
 addEventListener("hashchange", route);
 
-// ---------- life strip + cash chart (shared by grid cards and the detail view) ----------
-function weekKind(w) { return w.commitment && w.commitment !== "none" ? w.commitment : (w.gig ? "gig" : "none"); }
+// ---------- life strip + cash chart (shared by grid tiles and the detail view) ----------
+function weekKind(w) { return w.commitment && w.commitment !== "none" ? w.commitment : w.gig ? "gig" : w.school ? "school" : "none"; }
+// A tile's tone from one week's state: broke, in a job, building (accelerator, or no job but a funded company or repos), idle.
+function lifeTone(w, building) {
+  if (!w) return "idle";
+  if (w.broke) return "broke";
+  if (w.commitment === "accelerator") return "building";
+  if (w.commitment === "full_time" || w.commitment === "part_time") return "success";
+  return building ? "building" : "idle";
+}
 
+// The strip sits on its own dark inset so the semantic colours read in both modes.
 function lifeStrip(weeks, horizon, opts = {}) {
-  const n = Math.max(horizon || 0, weeks.length, 1), W = opts.width || 300, H = opts.height || 12;
-  const pad = opts.pad || { l: 0, r: 0 }, slot = (W - pad.l - pad.r) / n, gap = Math.min(2, slot / 4), cw = slot - gap;
-  const svg = s("svg", { viewBox: `0 0 ${W} ${H + 4}`, class: "strip", role: "img", "aria-label": `Life strip, ${weeks.length} of ${n} weeks` });
+  const n = Math.max(horizon || 0, weeks.length, 1), W = opts.width || 300, H = opts.height || 10;
+  const pad = opts.pad || { l: 0, r: 0 }, inset = 4, slot = (W - pad.l - pad.r) / n, gap = Math.min(2, slot / 4), cw = slot - gap;
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H + 2 * inset}`, class: "strip", role: "img", "aria-label": `Life strip, ${weeks.length} of ${n} weeks` });
+  svg.append(s("rect", { x: pad.l - inset, y: 0, width: W - pad.l - pad.r + 2 * inset, height: H + 2 * inset, rx: (H + 2 * inset) / 2, fill: "var(--strip-bg)" }));
   for (let i = 0; i < n; i++) {
     const w = weeks[i], x = pad.l + i * slot + gap / 2;
-    const r = s("rect", { x, y: 2, width: Math.max(cw, 1), height: H, rx: Math.min(2, cw / 2),
-      fill: w ? KIND[weekKind(w)][1] : "transparent", stroke: w ? "none" : "var(--grid)", "stroke-width": w ? 0 : 1 });
-    if (w && w.broke) { r.setAttribute("stroke", "var(--critical)"); r.setAttribute("stroke-width", 2); }
+    const r = s("rect", { x, y: inset, width: Math.max(cw, 1), height: H, rx: Math.min(H / 2, cw / 2),
+      fill: !w ? "var(--strip-future)" : w.broke ? "var(--coral)" : KIND[weekKind(w)][1] });
     if (opts.onpick && w) { r.style.cursor = "pointer"; r.addEventListener("click", () => opts.onpick(w.week)); }
     if (w) { const t = s("title"); t.textContent = `Week ${w.week}: ${KIND[weekKind(w)][0]}${w.broke ? " · broke" : ""} · cash ${money(w.cash)}`; r.append(t); }
     svg.append(r);
-    if (opts.sel && w && w.week === opts.sel) svg.append(s("rect", { x: x - 1, y: 0, width: cw + 2, height: H + 4, rx: 3, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }));
+    if (w && w.broke && cw >= 3) svg.append(s("circle", { cx: x + cw / 2, cy: inset + H / 2, r: Math.min(1.4, cw / 4), fill: "#fff", "pointer-events": "none" }));
+    if (opts.sel && w && w.week === opts.sel) svg.append(s("rect", { x: x - 1.5, y: inset - 2.5, width: cw + 3, height: H + 5, rx: Math.min((H + 5) / 2, (cw + 3) / 2),
+      fill: "none", stroke: "#fff", "stroke-width": 1.5, "pointer-events": "none" }));
   }
   return svg;
 }
 
-function legend(extra) {
+function legend(extra, school) {
   return h("div", { class: "legend" },
-    ["full_time", "part_time", "accelerator", "gig", "none"].map(k => h("span", {}, h("i", { style: `background:${KIND[k][1]}` }), KIND[k][0])),
-    h("span", {}, h("i", { class: "broke" }), "Broke (outline)"), extra || []);
+    ["full_time", "part_time", "accelerator", "gig", ...(school ? ["school"] : []), "none"].map(k => h("span", {}, h("i", { class: "sw", style: `--c:${KIND[k][1]}` }), KIND[k][0])),
+    h("span", {}, h("i", { class: "sw broke" }), "Broke (coral, white dot)"), extra || []);
 }
 
+// LineChart: 1.5px line, soft fill below, no gridlines, a dot on hover. Click picks the week.
 function cashChart(weeks, horizon, opts = {}) {
-  const wrap = h("div", { class: "chart" }), tip = h("div", { class: "tip" });
-  const W = opts.width || 640, H = opts.height || 180, pad = { ...(opts.mini ? CHART_PAD_MINI : CHART_PAD), t: opts.mini ? 4 : 10, b: opts.mini ? 2 : 22 };
+  const wrap = h("div", { class: "chart" }), tip = h("div", { class: "tip glass" });
+  const W = opts.width || 640, H = opts.height || 180, pad = { ...CHART_PAD, t: 12, b: 24 };
   const n = Math.max(horizon || 0, weeks.length, 1), slot = (W - pad.l - pad.r) / n;
-  const vals = weeks.map(w => w.cash ?? 0), max = Math.max(1, ...vals) * 1.08;
+  const vals = weeks.map(w => w.cash ?? 0), max = Math.max(1, ...vals) * 1.08, id = "lc" + (++uid);
   const x = wk => pad.l + (wk - 0.5) * slot, y = v => H - pad.b - v / max * (H - pad.t - pad.b);
   const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
     "aria-label": `Cash by week: ${weeks.length ? money(vals[0]) + " in week 1, " + money(vals[vals.length - 1]) + " in week " + weeks[weeks.length - 1].week : "no weeks yet"}` });
-  if (!opts.mini) {
-    const step = niceStep(max / 4);
-    for (let v = 0; v <= max; v += step) {
-      svg.append(s("line", { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
-      const t = s("text", { x: pad.l - 8, y: y(v) + 4, "text-anchor": "end", "font-size": 11, fill: "var(--muted)", class: "num" }); t.textContent = money(v); svg.append(t);
-    }
-    for (const wk of ticks(n)) { const t = s("text", { x: x(wk), y: H - 6, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }); t.textContent = "w" + wk; svg.append(t); }
-  }
-  if (opts.sel) svg.append(s("line", { x1: x(opts.sel), x2: x(opts.sel), y1: pad.t, y2: H - pad.b, stroke: "var(--axis)", "stroke-width": 1, "stroke-dasharray": "3 3" }));
+  const g = s("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+  g.append(s("stop", { offset: 0, style: "stop-color:var(--ink);stop-opacity:.14" }), s("stop", { offset: 1, style: "stop-color:var(--ink);stop-opacity:0" }));
+  const defs = s("defs"); defs.append(g); svg.append(defs);
+  const top = niceStep(max / 3) * Math.floor(max / niceStep(max / 3));
+  for (const v of [0, top]) { const t = s("text", { x: pad.l - 12, y: y(v) + 4, "text-anchor": "end", "font-size": 12, fill: "var(--muted)", class: "num" }); t.textContent = money(v); svg.append(t); }
+  for (const wk of ticks(n)) { const t = s("text", { x: x(wk), y: H - 4, "text-anchor": "middle", "font-size": 12, fill: "var(--muted)" }); t.textContent = "w" + wk; svg.append(t); }
+  if (opts.sel) svg.append(s("line", { x1: x(opts.sel), x2: x(opts.sel), y1: pad.t, y2: H - pad.b, stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "2 4", "stroke-linecap": "round" }));
   if (weeks.length) {
     const d = weeks.map((w, i) => (i ? "L" : "M") + x(w.week).toFixed(1) + " " + y(w.cash ?? 0).toFixed(1)).join(" ");
-    svg.append(s("path", { d, fill: "none", stroke: "var(--ink-2)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
-    const last = weeks[weeks.length - 1];
-    svg.append(s("circle", { cx: x(last.week), cy: y(last.cash ?? 0), r: opts.mini ? 2.5 : 4, fill: "var(--ink-2)", stroke: "var(--surface)", "stroke-width": 2 }));
-    if (opts.sel) { const w = weeks.find(w => w.week === opts.sel); if (w) svg.append(s("circle", { cx: x(w.week), cy: y(w.cash ?? 0), r: 5, fill: "var(--surface)", stroke: "var(--ink)", "stroke-width": 2 })); }
+    svg.append(s("path", { d: d + ` L${x(weeks[weeks.length - 1].week).toFixed(1)} ${y(0)} L${x(weeks[0].week).toFixed(1)} ${y(0)} Z`, fill: `url(#${id})` }));
+    svg.append(s("path", { d, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    if (opts.sel) { const w = weeks.find(w => w.week === opts.sel); if (w) svg.append(s("circle", { cx: x(w.week), cy: y(w.cash ?? 0), r: 4.5, fill: "var(--base)", stroke: "var(--ink)", "stroke-width": 1.5 })); }
   }
-  if (!opts.mini) {
-    const hair = s("line", { y1: pad.t, y2: H - pad.b, stroke: "var(--ink-2)", "stroke-width": 1, visibility: "hidden" });
-    const hit = s("rect", { x: pad.l, y: 0, width: W - pad.l - pad.r, height: H, fill: "transparent" });
-    svg.append(hair, hit);
-    const at = ev => { const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W;
-      const wk = Math.floor((px - pad.l) / slot) + 1; return weeks.find(w => w.week === wk) || null; };
-    hit.addEventListener("pointermove", ev => {
-      const w = at(ev); if (!w) { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); return; }
-      hair.setAttribute("x1", x(w.week)); hair.setAttribute("x2", x(w.week)); hair.setAttribute("visibility", "visible");
-      tip.replaceChildren(h("div", {}, h("b", {}, "Week " + w.week)), h("div", {}, h("b", {}, money(w.cash)), " cash"),
-        h("div", {}, h("b", {}, money(w.income)), " income/wk"), w.funding ? h("div", {}, h("b", {}, money(w.funding)), " company funding") : null,
-        h("div", { class: "muted" }, KIND[weekKind(w)][0], w.broke ? " · broke" : ""), opts.onpick ? h("div", { class: "muted" }, "click to go to this week") : null);
-      const r = wrap.getBoundingClientRect(), left = ev.clientX - r.left;
-      tip.style.display = "block"; tip.style.top = "8px";
-      tip.style.left = Math.min(left + 12, r.width - tip.offsetWidth - 4) + "px";
-    });
-    hit.addEventListener("pointerleave", () => { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); });
-    if (opts.onpick) hit.addEventListener("click", ev => { const w = at(ev); if (w) opts.onpick(w.week); });
-  }
+  const hair = s("line", { y1: pad.t, y2: H - pad.b, stroke: "var(--ink-2)", "stroke-width": 1, visibility: "hidden" });
+  const dot = s("circle", { r: 4, fill: "var(--ink)", visibility: "hidden" });
+  const hit = s("rect", { x: pad.l, y: 0, width: W - pad.l - pad.r, height: H, fill: "transparent" });
+  svg.append(hair, dot, hit);
+  const at = ev => { const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W;
+    const wk = Math.floor((px - pad.l) / slot) + 1; return weeks.find(w => w.week === wk) || null; };
+  const hide = () => { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); };
+  hit.addEventListener("pointermove", ev => {
+    const w = at(ev); if (!w) return hide();
+    hair.setAttribute("x1", x(w.week)); hair.setAttribute("x2", x(w.week)); hair.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", x(w.week)); dot.setAttribute("cy", y(w.cash ?? 0)); dot.setAttribute("visibility", "visible");
+    tip.replaceChildren(h("div", { class: "t" }, "Week " + w.week), h("div", {}, h("b", { class: "num" }, money(w.cash)), " cash"),
+      h("div", {}, h("b", { class: "num" }, money(w.income)), " income/wk"), w.funding ? h("div", {}, h("b", { class: "num" }, money(w.funding)), " company funds") : null,
+      h("div", { class: "muted" }, KIND[weekKind(w)][0], w.broke ? " · broke" : ""), opts.onpick ? h("div", { class: "muted" }, "click to go to this week") : null);
+    const r = wrap.getBoundingClientRect(), left = ev.clientX - r.left;
+    tip.style.display = "block"; tip.style.top = "8px";
+    tip.style.left = Math.max(0, Math.min(left + 12, r.width - tip.offsetWidth - 4)) + "px";
+  });
+  hit.addEventListener("pointerleave", hide);
+  if (opts.onpick) hit.addEventListener("click", ev => { const w = at(ev); if (w) opts.onpick(w.week); });
   wrap.append(svg, tip);
   return wrap;
 }
-const CHART_PAD = { l: 56, r: 8 }, CHART_PAD_MINI = { l: 0, r: 0 };
+const CHART_PAD = { l: 64, r: 8 };
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); return [1, 2, 2.5, 5, 10].map(m => m * p).find(v => v >= raw) || p * 10; }
 function ticks(n) { const st = n <= 13 ? 1 : n <= 30 ? 5 : n <= 60 ? 10 : 26, out = [1]; for (let i = st; i <= n; i += st) if (i !== 1) out.push(i); return out; }
+
+// ---------- the live gateway's outbox (Track B) ----------
+// Drafts wait here for a person. Approve and Reject append a decision to the gateway's own log;
+// the gateway checks its rules again before sending. Nothing on this page posts anything.
+function showGateway(mode) {
+  document.getElementById("crumb").textContent = "gateway · " + mode;
+  document.getElementById("back").replaceChildren(IconButton({ icon: "back", label: "Back to all lives", href: "#/" }));
+  $app.classList.remove("has-scrubber");
+  let token = null, timer = null, msg = "";
+  const STATUS = { pending: "amber", approved: "teal", sent: "lime", rejected: null, blocked: "coral", failed: "coral" };
+  async function act(path) {
+    try {
+      token = token || (await (await fetch("/api/gateway/token")).json()).token;
+      const r = await fetch(`/api/gateway/${mode}/${path}`, { method: "POST", headers: { "X-HL-Token": token } });
+      msg = r.ok ? "" : (await r.json()).error || `error ${r.status}`;
+    } catch (e) { msg = String(e); }
+    load();
+  }
+  async function load() {
+    let d;
+    try { d = await (await fetch(`/api/gateway?mode=${mode}`)).json(); } catch (e) { msg = String(e); return; }
+    const pending = d.items.filter(i => i.status === "pending");
+    $app.replaceChildren(h("div", {},
+      h("div", { class: "bento" },
+        StatTile({ label: "Kill switch", value: d.killed ? "On" : "Off", tone: d.killed ? "broke" : "glass", sub: d.killed ? "no turns, no sends" : "turns and sends allowed" },
+          h("div", { style: "margin-top:12px" }, h("button", { class: "pbtn", type: "button", onclick: () => act(d.killed ? "unkill" : "kill") }, d.killed ? "Turn off" : "Stop everything"))),
+        StatTile({ label: "Posted today (UTC)", value: `${d.sent_today} / ${d.limits.posts}`, sub: `link posts ≤ ${d.limits.links} a day` }),
+        StatTile({ label: "Reads today", value: `${d.reads_today} / ${d.limits.reads}`, sub: "mentions and replies read" }),
+        StatTile({ label: "Waiting for you", value: pending.length, sub: mode === "dry" ? "dry run: nothing reaches X" : "live: approved items are sent" })),
+      h("div", { class: "tile-head", style: "margin:16px 0" },
+        h("a", { class: "pbtn", href: "#/gateway?mode=dry", "aria-pressed": String(mode === "dry") }, "Dry run"),
+        h("a", { class: "pbtn", href: "#/gateway?mode=live", "aria-pressed": String(mode === "live") }, "Live"),
+        msg ? h("span", { class: "lab", role: "alert" }, msg) : null),
+      GlassCard({ title: "Outbox", sub: `${d.items.length} item${d.items.length === 1 ? "" : "s"}`, cls: "wide" },
+        d.items.length ? h("div", { class: "feed", style: "max-height:none" }, d.items.map(i => h("div", { class: "item" },
+          h("div", { class: "tile-head" }, Pill(i.status, { tone: STATUS[i.status] }), Pill(i.kind), h("span", { class: "meta" }, `${i.id} · ${i.created}`)),
+          i.replying_to ? h("div", { class: "inner", style: "margin-top:8px" }, h("div", { class: "meta" }, `replying to @${i.replying_to.author} (untrusted)`), h("div", { class: "text" }, i.replying_to.text)) : null,
+          h("div", { class: "text", style: "margin-top:8px" }, i.kind === "publish_repo" ? `Mirror ${i.run_id}/${i.repo} to GitHub as ${i.publish_as} (private)` : i.text),
+          i.kind !== "publish_repo" ? h("div", { class: "meta" }, `${[...(i.text || "")].length} characters`) : null,
+          (i.history || []).filter(x => x.reason).map(x => h("div", { class: "meta" }, `${x.status}: ${x.reason}`)),
+          i.status === "pending" || i.status === "approved" ? h("div", { class: "tile-head", style: "margin-top:8px" },
+            i.status === "pending" ? h("button", { class: "pbtn", type: "button", onclick: () => act(`${i.id}/approve`) }, "Approve") : null,
+            h("button", { class: "pbtn", type: "button", onclick: () => act(`${i.id}/reject`) }, "Reject")) : null)))
+          : h("div", { class: "empty" }, "Nothing in the outbox."))));
+  }
+  load(); timer = setInterval(load, 5000);
+  cleanup = () => clearInterval(timer);
+}
 
 // ---------- grid of lives ----------
 function showGrid() {
   document.getElementById("crumb").textContent = "";
+  document.getElementById("back").replaceChildren();
+  $app.classList.remove("has-scrubber");
   let filter = sessionStorageGet("hl-filter") || "", data = [];
-  const input = h("input", { type: "search", placeholder: "Filter by run, model, persona…", value: filter, "aria-label": "Filter runs" });
-  const count = h("span", { class: "muted" });
+  const input = h("input", { class: "search", type: "search", placeholder: "Filter by run, model, persona…", value: filter, "aria-label": "Filter runs" });
+  const count = h("span", { class: "lab" });
   const body = h("div");
-  $app.replaceChildren(h("div", { class: "filters" }, input, count, h("span", { class: "muted" }, " · updates every 3 s")), body);
+  $app.replaceChildren(h("div", { class: "filters" }, input, count, h("span", { class: "lab" }, "updates every 3 s")), body);
   input.addEventListener("input", () => { filter = input.value; sessionStorageSet("hl-filter", filter); render(); });
 
   function render() {
@@ -261,26 +576,33 @@ function showGrid() {
     const batches = new Map();
     for (const r of shown) { const b = r.run_id.replace(/-\d{3}$/, ""); if (!batches.has(b)) batches.set(b, []); batches.get(b).push(r); }
     body.replaceChildren(...[...batches].map(([b, rs]) => h("section", { class: "batch" },
-      h("h2", {}, b, h("span", { class: "muted" }, ` · ${rs.length} run${rs.length > 1 ? "s" : ""} · ${modelLine(rs[0].models)}`)),
-      h("div", { class: "cards" }, rs.sort((a, z) => a.run_id.localeCompare(z.run_id)).map(card)))),
-      data.length ? legend() : h("p", { class: "empty" }, "No run logs in runs/ yet."));
+      h("h2", {}, b), h("span", { class: "lab" }, `${rs.length} run${rs.length > 1 ? "s" : ""} · ${modelLine(rs[0].models)}`),
+      h("div", { class: "lives" }, rs.sort((a, z) => a.run_id.localeCompare(z.run_id)).map(card)))),
+      data.length ? GlassCard({ title: "Reading a tile", cls: "legend-card" },
+        h("div", { class: "legend", style: "margin-bottom:12px" }, ["success", "broke", "building", "idle"].map(t => h("span", {}, h("i", { class: "swt t-" + t }),
+          { success: "In a job", broke: "Broke this week", building: "Building: accelerator, or no job and a funded company or repos", idle: "Idle" }[t])),
+          h("span", {}, "· colour is the latest week's state")),
+        legend(null, data.some(r => (r.weeks || []).some(w => w.school)))) : h("p", { class: "empty" }, "No run logs in runs/ yet."));
   }
   function card(r) {
-    const last = r.last || {}, weeks = r.weeks || [];
-    return h("a", { class: "card", href: "#/run/" + encodeURIComponent(r.run_id) },
-      h("div", { class: "row" }, h("span", { class: "id" }, r.run_id.match(/-(\d{3})$/) ? "run " + r.run_id.slice(-3) : r.run_id),
-        r.status === "live" ? h("span", { class: "badge live" }, "live") : h("span", { class: "badge" }, r.reason || "ended"),
-        r.pilot ? h("span", { class: "badge pilot", title: "uncommitted or unrecorded code" }, "⚠ PILOT") : null,
-        h("span", { class: "muted", style: "margin-left:auto;font-size:12px" }, `week ${weeks.length} / ${r.horizon ?? "?"}`)),
-      h("div", { style: "margin-top:8px" }, cashChart(weeks, r.horizon, { mini: true, width: 300, height: 36 })),
-      lifeStrip(weeks, r.horizon, { width: 300, height: 10 }),
-      h("div", { class: "facts" }, h("b", { class: "num" }, money(last.cash)), " cash",
-        last.labels && last.labels.length ? " · " + last.labels.join(", ") : "",
-        h("br"), `${r.applications} applications · ${r.successes} accepted · ${r.shell} shell · ${r.repos} repo${r.repos === 1 ? "" : "s"} · ${r.launches} launch${r.launches === 1 ? "" : "es"}`,
-        h("br"), h("span", { class: "muted num" }, `${(r.tokens_used || 0).toLocaleString()} tokens · $${(r.cost_usd || 0).toFixed(4)}`)));
+    const last = r.last || {}, weeks = (r.weeks || []).map(w => ({ ...w, commitment: { full_time: "full_time", part_time: "part_time", accelerator: "accelerator" }[w.commitment] || "none" }));
+    const lw = weeks[weeks.length - 1], tone = lifeTone(lw, (last.funding || 0) > 0 || r.repos > 0);
+    const reasonTone = r.status === "live" ? "amber" : r.reason === "horizon" ? "" : "coral";
+    return h("a", { class: "tile life t-" + tone, href: "#/run/" + encodeURIComponent(r.run_id), "aria-label": `${r.run_id}: ${TONE[tone]}, week ${weeks.length}, cash ${money(last.cash)}` },
+      h("div", { class: "tile-head" }, h("span", { class: "t" }, r.run_id.match(/-(\d{3})$/) ? "run " + r.run_id.slice(-3) : r.run_id),
+        r.pilot ? Pill("PILOT", { tone: "amber", title: "uncommitted or unrecorded code" }) : null,
+        Pill(r.status === "live" ? "live" : r.reason || "ended", { tone: reasonTone, live: r.status === "live" })),
+      h("div", {}, h("div", { class: "lab" }, `week ${weeks.length} of ${r.horizon ?? "?"} · ${TONE[tone].toLowerCase()}`),
+        h("div", { class: "big num", style: "margin-top:4px" }, money(last.cash)),
+        h("div", { class: "act", title: (last.labels || []).join(", ") }, last.labels && last.labels.length ? last.labels.join(", ") : "no commitment")),
+      lifeStrip(weeks, r.horizon, { width: 300, height: 8 }),
+      h("div", { class: "tile-facts num" },
+        h("span", {}, `${r.applications} applied · ${r.successes} accepted · ${r.shell} shell · ${r.repos} repo${r.repos === 1 ? "" : "s"} · ${r.launches} launch${r.launches === 1 ? "" : "es"}`),
+        h("span", {}, `${(r.tokens_used || 0).toLocaleString()} tokens · $${(r.cost_usd || 0).toFixed(4)}`)));
   }
   let stop = false;
   async function poll() {
+    if (REPLAY) { data = REPLAY.runs; render(); return; }
     try { data = await (await fetch("/api/runs", { cache: "no-store" })).json(); render(); } catch (e) { count.textContent = "can't reach the viewer server"; }
     if (!stop) timer = setTimeout(poll, 3000);
   }
@@ -293,14 +615,19 @@ function sessionStorageSet(k, v) { try { sessionStorage.setItem(k, v); } catch {
 
 // ---------- one life ----------
 function showRun(runId, wantWeek) {
-  document.getElementById("crumb").textContent = "/ " + runId;
+  document.getElementById("crumb").textContent = runId;
+  document.getElementById("back").replaceChildren(IconButton({ icon: "back", label: "All lives", href: "#/" }));
+  $app.classList.add("has-scrubber");
   const R = { meta: null, summary: null, events: [], weeks: [], maxWeek: 0, ended: false, repos: null, error: null };
   let sel = wantWeek, follow = wantWeek == null, playing = null, pending = false;
   const view = h("div"); $app.replaceChildren(view);
 
-  const es = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
-  es.addEventListener("ev", m => { ingest(JSON.parse(m.data)); schedule(); });
-  es.addEventListener("end", () => { es.close(); R.ended = true; loadRepos(); schedule(); });
+  const es = REPLAY ? { close() {} } : new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+  if (REPLAY) { (REPLAY.events[runId] || []).forEach(ingest); R.ended = true; R.repos = REPLAY.repos[runId] || []; setTimeout(schedule); }
+  else {
+    es.addEventListener("ev", m => { ingest(JSON.parse(m.data)); schedule(); });
+    es.addEventListener("end", () => { es.close(); R.ended = true; loadRepos(); schedule(); });
+  }
   es.onerror = () => { if (!R.ended) { R.error = "lost the stream; reconnecting…"; schedule(); } };
   let resizeT; const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(schedule, 150); };
   addEventListener("resize", onResize);
@@ -314,7 +641,9 @@ function showRun(runId, wantWeek) {
       const wk = R.events.filter(e => e.week === ev.week);
       R.weeks[ev.week - 1] = { week: ev.week, cash: ev.cash, income: ev.income, expenses: ev.expenses,
         funding: ev.company_balance ?? ev.company_funding, raised: ev.company_funding, revenue: ev.company_revenue, spent: ev.company_spent,
-        labels: ev.commitments,
+        labels: ev.commitments, detail: ev.commitment_detail, followers: ev.followers, streak: ev.train_streak,
+        trained: wk.some(e => e.kind === "life" && e.event === "train"),
+        school: (ev.commitment_detail || []).some(c => c.kind === "academics"),
         gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke) };
     }
     if (ev.week) R.maxWeek = Math.max(R.maxWeek, ev.week);
@@ -325,7 +654,9 @@ function showRun(runId, wantWeek) {
 
   function render() {
     const scrollY = window.scrollY, horizon = R.meta?.horizon || R.maxWeek;
-    const chartW = Math.max(280, Math.min(1340, $app.clientWidth - 2 * 16 - 30));  // the panel's inner width, in px
+    const inner = $app.clientWidth - 2 * (parseFloat(getComputedStyle($app).paddingLeft) || 16);
+    const colW = matchMedia("(min-width: 1100px)").matches ? inner - 400 - 12 : inner;
+    const chartW = Math.max(240, Math.round(colW - 2 * 24));  // the cash tile's inner width, in px
     const weeks = R.weeks.filter(Boolean).map(w => ({ ...w, commitment: commitmentKind(w) }));
     const doneWeeks = weeks.length ? weeks[weeks.length - 1].week : 0;
     if (follow || sel == null) sel = Math.max(R.maxWeek, 1);
@@ -335,47 +666,55 @@ function showRun(runId, wantWeek) {
     const state = weeks.find(w => w.week === sel) || [...weeks].reverse().find(w => w.week < sel) || {};
     const cost = sm?.cost_usd ?? [...R.events].reverse().find(e => e.kind === "usage")?.cost_usd_total;
     const tokens = sm?.tokens_used ?? [...R.events].reverse().find(e => e.kind === "usage")?.tokens_used;
+    const git = upTo.filter(e => e.kind === "git_commit" || e.kind === "git_push");
+    const tone = lifeTone(state.week ? state : null, (state.funding || 0) > 0 || git.length > 0);
 
-    const slider = h("input", { type: "range", min: 1, max: Math.max(R.maxWeek, 1), value: sel, "aria-label": "Week" });
-    slider.addEventListener("input", () => go(+slider.value));
     view.replaceChildren(
-      h("div", { class: "detail-head" },
-        h("h2", {}, m.persona ? `${m.persona} · ` : "", runId),
-        sm ? h("span", { class: "badge" }, `ended: ${sm.reason}`) : h("span", { class: "badge live" }, "live"),
-        m.pilot ? h("span", { class: "badge pilot", title: "uncommitted or unrecorded code" }, "⚠ PILOT") : null,
-        m.illustrative ? h("span", { class: "badge", title: "world numbers are illustrative, not sourced" }, "illustrative world") : null,
-        R.error ? h("span", { class: "badge" }, R.error) : null),
-      h("div", { class: "kv" },
-        h("span", {}, "agent ", h("b", {}, m.models?.agent || "–")), h("span", {}, "referee ", h("b", {}, m.models?.referee || "–")),
-        h("span", {}, "order seed ", h("b", {}, m.order_seed ?? "–")), h("span", {}, "dice seed ", h("b", {}, m.dice_seed ?? "–"), m.dice_scheme === "sequential" ? " (sequential)" : ""),
-        h("span", {}, "code ", h("b", {}, (m.code?.git_sha || "–").slice(0, 7)), m.code?.dirty ? " dirty" : ""),
-        h("span", {}, "sandbox ", h("b", {}, m.sandbox ? "docker" : "none")),
-        h("span", { class: "num" }, "tokens ", h("b", {}, (tokens || 0).toLocaleString()), m.token_budget ? ` / ${m.token_budget.toLocaleString()}` : ""),
-        h("span", { class: "num" }, "cost ", h("b", {}, cost != null ? "$" + cost.toFixed(4) : "–"))),
-      h("div", { class: "scrub" },
-        h("button", { class: "btn", onclick: () => go(sel - 1), "aria-label": "Previous week", disabled: sel <= 1 }, "◀"),
-        slider,
-        h("button", { class: "btn", onclick: () => go(sel + 1), "aria-label": "Next week", disabled: sel >= R.maxWeek }, "▶"),
-        h("span", { class: "wk num" }, `Week ${sel} of ${horizon || "?"}`),
-        h("button", { class: "btn", "aria-pressed": String(!!playing), onclick: togglePlay }, playing ? "Pause" : "Play"),
-        h("button", { class: "btn", "aria-pressed": String(follow), onclick: () => { follow = true; history.replaceState(null, "", `#/run/${encodeURIComponent(runId)}`); render(); } },
-          R.ended ? "Last week" : "Follow live")),
-      h("div", { class: "panel" },
-        h("h3", {}, "Money and commitments", h("span", { class: "muted" }, `end of week ${sel}`)),
-        h("div", { class: "stats" },
-          stat(money(state.cash), "cash"), stat(money(state.income), "income / week"), stat(money(state.expenses), "expenses / week"),
-          stat(money(state.funding), state.spent || state.revenue ? `company funds (raised ${money(state.raised)}, customers ${money(state.revenue)}, spent ${money(state.spent)})` : "company funds"),
-          stat((state.labels || []).join(", ") || "none", "commitments", true)),
-        cashChart(weeks, horizon, { sel, onpick: go, width: chartW, height: chartW < 600 ? 170 : 210 }),
-        lifeStrip(weeks, horizon, { width: chartW, height: 14, sel, onpick: go, pad: CHART_PAD }),
-        legend(),
-        h("details", {}, h("summary", {}, "Table view"), weekTable(weeks, sel, go))),
-      h("div", { class: "cols" },
-        h("div", { class: "stack" }, weekPanel(thisWeek, sel, doneWeeks), thinkingPanel(thisWeek), terminalPanel(upTo, sel), toolsPanel(thisWeek)),
-        h("div", { class: "stack" }, ideaPanel(upTo, sel), messagePanel(upTo, sel), refereePanel(R.events, sel, go), repoPanel(upTo, sel, R))));
+      h("div", { class: "dhead" },
+        h("div", { style: "min-width:0" },
+          h("h2", {}, m.persona ? `${m.persona} · ` : "", runId),
+          h("div", { class: "pills" },
+            sm ? Pill(`ended: ${sm.reason}`, { tone: sm.reason === "horizon" ? "" : "coral" }) : Pill("live", { tone: "amber", live: true }),
+            m.pilot ? Pill("PILOT", { tone: "amber", title: "uncommitted or unrecorded code" }) : null,
+            m.illustrative ? Pill("illustrative world", { title: "world numbers are illustrative, not sourced" }) : null,
+            R.error ? Pill(R.error, { tone: "amber" }) : null,
+            Pill(m.models?.agent || "–", { k: "agent" }), Pill(m.models?.referee || "–", { k: "referee" }),
+            Pill(String(m.order_seed ?? "–"), { k: "order seed" }),
+            Pill(String(m.dice_seed ?? "–") + (m.dice_scheme === "sequential" ? " (sequential)" : ""), { k: "dice seed" }),
+            Pill((m.code?.git_sha || "–").slice(0, 7) + (m.code?.dirty ? " dirty" : ""), { k: "code" }),
+            Pill(m.sandbox ? "docker" : "none", { k: "sandbox" }),
+            Pill((tokens || 0).toLocaleString() + (m.token_budget ? ` / ${m.token_budget.toLocaleString()}` : ""), { k: "tokens" }),
+            Pill(cost != null ? "$" + cost.toFixed(4) : "–", { k: "cost" })))),
+      h("div", { class: "life-detail" },
+        h("div", { class: "figcol" }, figureCard(state, thisWeek, upTo, sel, horizon, tone)),
+        h("div", { style: "min-width:0" },
+          h("div", { class: "bento" },
+            cashTile(weeks, state, sel, horizon, chartW, go),
+            validTile(upTo, sel),
+            refereeRingTile(R.events, sel),
+            projectsTile(upTo, sel, weeks),
+            weeks.some(w => w && w.streak != null) ? trainTile(weeks, sel) : null,
+            ideaPanel(upTo, sel),
+            thinkingPanel(thisWeek)),
+          h("div", { class: "panels" },
+            weekPanel(thisWeek, sel, doneWeeks),
+            messagePanel(upTo, sel),
+            weeks.some(w => w.followers != null) || upTo.some(e => e.kind === "post") ? feedPanel(upTo, weeks, sel, horizon) : null,
+            terminalPanel(upTo, sel),
+            toolsPanel(thisWeek),
+            refereePanel(R.events, sel, go),
+            repoPanel(upTo, sel, R)))),
+      Scrubber({ sel, max: R.maxWeek, horizon, onpick: go, playing, onplay: togglePlay, follow, ended: R.ended,
+        onfollow: () => { follow = true; history.replaceState(null, "", `#/run/${encodeURIComponent(runId)}`); render(); } }));
     window.scrollTo(0, scrollY);
   }
   function commitmentKind(w) {
+    if (w.detail) {  // newer logs: classes aren't a job; part-time by the actions it uses
+      const cs = w.detail.filter(c => c.kind !== "academics");
+      if (!cs.length) return "none";
+      if (cs.some(c => (c.opening_id || "").startsWith("acc-"))) return "accelerator";
+      return Math.max(...cs.map(c => c.time_cost || 0)) >= 5 ? "full_time" : "part_time";
+    }
     const labels = w.labels || [];
     if (!labels.length) return "none";
     const starts = R.events.filter(e => e.kind === "life" && e.event === "commitment_started" && e.week <= w.week && labels.includes(e.label));
@@ -391,33 +730,128 @@ function showRun(runId, wantWeek) {
   }
 }
 
-function stat(v, l, small) { return h("div", { class: "stat" }, h("div", { class: "v num", style: small ? "font-size:14px;font-weight:600" : null }, v), h("div", { class: "l" }, l)); }
+// A soft, blurred abstract figure in the week's tone, with four callouts on leader lines.
+const FIG_TONE = { success: ["#a6e35a", "#f3f7c8"], broke: ["#ff5b4f", "#ffd2b8"], building: ["#6fd3c4", "#d4f5e6"], idle: ["var(--idle-a)", "var(--idle-b)"] };
+function figureCard(state, thisWeek, upTo, sel, horizon, tone) {
+  const [c1, c2] = FIG_TONE[tone], id = "fg" + (++uid);
+  const svg = s("svg", { class: "body", viewBox: "0 0 400 500", preserveAspectRatio: "xMidYMid slice", "aria-hidden": "true" });
+  const defs = s("defs"), g = s("linearGradient", { id: id + "g", x1: 0, y1: 0, x2: 0.4, y2: 1 });
+  g.append(s("stop", { offset: 0, style: `stop-color:${c1}` }), s("stop", { offset: 1, style: `stop-color:${c2}` }));
+  const blur = (fid, sd) => { const f = s("filter", { id: fid, x: "-50%", y: "-50%", width: "200%", height: "200%" }); f.append(s("feGaussianBlur", { stdDeviation: sd })); return f; };
+  defs.append(g, blur(id + "a", 40), blur(id + "b", 9), blur(id + "c", 8));
+  svg.append(defs,
+    s("circle", { cx: 200, cy: 260, r: 170, style: `fill:${c2}`, opacity: .8, filter: `url(#${id}a)` }),
+    s("path", { d: "M78 520 C 78 350, 140 278, 200 278 C 260 278, 322 350, 322 520 Z", fill: `url(#${id}g)`, filter: `url(#${id}b)` }),
+    s("circle", { cx: 200, cy: 182, r: 56, style: `fill:${c1}`, filter: `url(#${id}b)` }),
+    s("ellipse", { cx: 180, cy: 162, rx: 22, ry: 14, fill: "#fff", opacity: .45, filter: `url(#${id}c)` }));
+  const thoughts = upTo.filter(e => (e.kind === "thought" && e.source === "note") || (e.kind === "idea" && e.source === "idea"));
+  const plan = [...thoughts].reverse().find(e => e.week === sel) || thoughts[thoughts.length - 1];
+  const gig = thisWeek.some(e => e.kind === "life" && e.event === "gig");
+  const doing = [(state.labels || []).join(", ") || "no commitment", gig ? "took a gig" : null, state.broke ? "broke" : null].filter(Boolean).join(" · ");
+  // [label, value, value class, anchor on the figure (x%, y%), box placement]. Top boxes join at their bottom edge,
+  // bottom boxes at their top edge; the leader lines are drawn after layout, from the boxes' measured size.
+  const C = [
+    ["cash", money(state.cash), "cash", [40, 33], "left:4%;top:4%"],
+    ["week", `${sel} of ${horizon || "?"}`, "", [60, 33], "right:4%;top:4%"],
+    ["doing", doing, "txt", [32, 68], "left:4%;bottom:4%"],
+    [plan?.source === "idea" ? `idea · week ${plan.week}` : plan ? `plan · week ${plan.week}` : "plan", plan ? plan.text : "nothing written yet", "txt", [68, 68], "right:4%;bottom:4%"],
+  ];
+  const lines = s("svg", { class: "leaders", "aria-hidden": "true" });
+  const pins = C.map(() => h("i", { class: "pin" })), anchors = C.map(([, , , a]) => h("i", { class: "pin hollow", style: `left:${a[0]}%;top:${a[1]}%` }));
+  const boxes = C.map(([l, v, cls, , pos]) => h("div", { class: "callout glass", style: pos, title: cls === "txt" ? v : null },
+    h("div", { class: "lab" }, l), h("div", { class: "v " + cls }, v)));
+  const fig = h("div", { class: "figure", role: "img", "aria-label": `Week ${sel}: ${TONE[tone]}. Cash ${money(state.cash)}. ${doing}.` }, svg, lines,
+    anchors, pins, boxes);
+  requestAnimationFrame(() => {
+    const f = fig.getBoundingClientRect(); if (!f.width) return;
+    lines.setAttribute("viewBox", `0 0 ${f.width} ${f.height}`); lines.replaceChildren();
+    boxes.forEach((b, i) => {
+      const r = b.getBoundingClientRect(), top = i < 2, px = r.left - f.left + r.width / 2, py = (top ? r.bottom : r.top) - f.top;
+      const ax = C[i][3][0];  // keep each anchor at least 32px clear of its box, whatever the box's height
+      const ay = top ? Math.max(C[i][3][1] / 100 * f.height, py + 32) / f.height * 100 : Math.min(C[i][3][1] / 100 * f.height, py - 32) / f.height * 100;
+      anchors[i].style.top = ay + "%";
+      pins[i].style.left = px + "px"; pins[i].style.top = py + "px";
+      lines.append(s("line", { x1: ax / 100 * f.width, y1: ay / 100 * f.height, x2: px, y2: py, stroke: "var(--ink)", "stroke-opacity": .55, "stroke-width": 1 }));
+    });
+  });
+  return GlassCard({}, fig, h("div", { class: "figcap" }, Pill(TONE[tone], { tone: { success: "lime", broke: "coral", building: "teal", idle: "" }[tone] }),
+    Pill(`end of week ${sel}`)));
+}
+
+function cashTile(weeks, state, sel, horizon, chartW, go) {
+  return h("section", { class: "tile t-glass span4" },
+    h("div", { class: "lab" }, `Cash · end of week ${sel}`),
+    h("div", { class: "money" },
+      h("div", { class: "big xl" }, money(state.cash)),
+      h("div", { class: "sm" }, h("div", { class: "v" }, money(state.income)), h("div", { class: "lab" }, "income / week")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, money(state.expenses)), h("div", { class: "lab" }, "expenses / week")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, money(state.funding)), h("div", { class: "lab" },
+        state.spent || state.revenue ? `company funds (raised ${money(state.raised)}, customers ${money(state.revenue)}, spent ${money(state.spent)})` : "company funds")),
+      h("div", { class: "sm", style: "min-width:0" }, h("div", { style: "font-size:14px" }, (state.labels || []).join(", ") || "none"), h("div", { class: "lab" }, "commitments"))),
+    cashChart(weeks, horizon, { sel, onpick: go, width: chartW, height: chartW < 600 ? 160 : 200 }),
+    lifeStrip(weeks, horizon, { width: chartW, height: 12, sel, onpick: go, pad: CHART_PAD }),
+    legend(null, weeks.some(w => w.school)),
+    h("details", {}, h("summary", {}, "Table view"), h("div", { class: "tbl" }, weekTable(weeks, sel, go))));
+}
+
+function validTile(upTo, sel) {
+  const we = upTo.filter(e => e.kind === "week_end"), valid = we.reduce((a, e) => a + (e.valid || 0), 0), invalid = we.reduce((a, e) => a + (e.invalid || 0), 0);
+  const rate = valid + invalid ? valid / (valid + invalid) : null;
+  return StatTile({ label: "Valid actions", value: rate == null ? "–" : pct(rate), span: 1,
+    sub: rate == null ? "no finished weeks yet" : `${valid} of ${valid + invalid} calls through week ${sel}`,
+    ring: { value: rate, label: `valid-action rate ${pct(rate)}` } });
+}
+
+function refereeRingTile(all, sel) {
+  const apps = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch") && e.week <= sel && e.base_rate);
+  const ratio = apps.length ? apps.reduce((a, e) => a + e.estimated_chance / e.base_rate, 0) / apps.length : null;
+  return StatTile({ label: "Referee estimate ÷ base", value: ratio == null ? "–" : ratio.toFixed(2) + "×", span: 1,
+    sub: apps.length ? `mean of ${apps.length} decision${apps.length === 1 ? "" : "s"} · tick = 1×` : "no decisions yet",
+    ring: { value: ratio == null ? 0 : ratio / 2, tick: 0.5, label: ratio == null ? "no decisions" : `estimate is ${ratio.toFixed(2)} times the base rate; full ring is 2×` } });
+}
+
+// Training: the streak (weeks in a row with a session) and how many weeks had one.
+function trainTile(weeks, sel) {
+  const upTo = weeks.filter(w => w && w.week <= sel), last = upTo[upTo.length - 1];
+  const best = Math.max(0, ...upTo.map(w => w.streak || 0)), n = upTo.filter(w => w.trained).length;
+  return StatTile({ label: "Training streak", value: `${last?.streak ?? 0} wk`, span: 1,
+    sub: `${n} of ${upTo.length} weeks with training · best ${best}`, spark: upTo.map(w => w.streak || 0) });
+}
+
+function projectsTile(upTo, sel, weeks) {
+  const commits = upTo.filter(e => e.kind === "git_commit"), pushes = upTo.filter(e => e.kind === "git_push" && !e.first);
+  const repos = upTo.filter(e => e.kind === "git_push" && e.first), launches = upTo.filter(e => e.kind === "referee" && e.event === "launch");
+  const shell = upTo.filter(e => e.kind === "shell_output").length;
+  let run = 0; const cum = Array.from({ length: Math.max(sel, 1) }, (_, i) => (run += commits.filter(c => c.week === i + 1).length));
+  return StatTile({ label: "Projects and commits", value: String(commits.length), tone: "building", span: 2,
+    sub: `commit${commits.length === 1 ? "" : "s"} · ${repos.length} repo${repos.length === 1 ? "" : "s"} · ${pushes.length} push${pushes.length === 1 ? "" : "es"} · ${launches.length} launch${launches.length === 1 ? "" : "es"} · ${shell} shell command${shell === 1 ? "" : "s"} through week ${sel}`,
+    spark: cum },
+    repos.length ? h("div", { class: "tile-head" }, repos.map(r => Pill((r.repo || "").split("/").pop(), { k: "w" + r.week }))) : null);
+}
 
 function weekTable(weeks, sel, go) {
   return h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Week"), h("th", { class: "r" }, "Cash"), h("th", { class: "r" }, "Income"), h("th", { class: "r" }, "Funding"), h("th", {}, "Commitment"), h("th", {}, "Gig"), h("th", {}, "Broke"))),
     h("tbody", {}, weeks.map(w => h("tr", { class: "click" + (w.week === sel ? " now" : ""), onclick: () => go(w.week) },
       h("td", { class: "num" }, w.week), h("td", { class: "r" }, money(w.cash)), h("td", { class: "r" }, money(w.income)), h("td", { class: "r" }, money(w.funding)),
-      h("td", {}, (w.labels || []).join(", ") || "–"), h("td", {}, w.gig ? "yes" : ""), h("td", {}, w.broke ? "⚠ broke" : "")))));
+      h("td", {}, (w.labels || []).join(", ") || "–"), h("td", {}, w.gig ? "yes" : ""), h("td", {}, w.broke ? h("span", { class: "oc" }, h("i", { class: "dot coral" }), "broke") : "")))));
 }
 
 function weekPanel(evs, sel, doneWeeks) {
   const ws = evs.find(e => e.kind === "week_start"), we = evs.find(e => e.kind === "week_end");
-  return h("div", { class: "panel" },
-    h("h3", {}, `Week ${sel}`, we ? h("span", { class: "muted" }, `ended: ${we.reason} · ${we.used}/${we.actions} actions · ${we.invalid} invalid`) : h("span", { class: "muted" }, sel > doneWeeks ? "in progress" : "")),
-    ws?.broke ? h("p", { style: "margin:0 0 6px" }, "⚠ Broke this week: cash plus income didn't cover expenses.") : null,
-    ws?.news?.length ? h("div", {}, h("div", { class: "meta muted" }, "News"), h("ul", { style: "margin:2px 0 8px;padding-left:18px" }, ws.news.map(n => h("li", { class: "text" }, n)))) : null,
-    ws?.carried_errors?.length ? h("div", {}, h("div", { class: "meta muted" }, "Problems carried from last week"), h("ul", { style: "margin:2px 0 8px;padding-left:18px" }, ws.carried_errors.map(n => h("li", { class: "text" }, n)))) : null,
+  return GlassCard({ title: `Week ${sel}`, sub: we ? `ended: ${we.reason} · ${we.used}/${we.actions} actions · ${we.invalid} invalid` : sel > doneWeeks ? "in progress" : "" },
+    ws?.broke ? h("div", { style: "margin-bottom:12px" }, Pill("Broke this week: cash plus income didn't cover expenses", { tone: "coral" })) : null,
+    ws?.news?.length ? h("div", { style: "margin-bottom:12px" }, h("div", { class: "meta" }, "News"), h("ul", { style: "margin:4px 0 0;padding-left:16px" }, ws.news.map(n => h("li", { class: "text" }, n)))) : null,
+    ws?.carried_errors?.length ? h("div", { style: "margin-bottom:12px" }, h("div", { class: "meta" }, "Problems carried from last week"), h("ul", { style: "margin:4px 0 0;padding-left:16px" }, ws.carried_errors.map(n => h("li", { class: "text" }, n)))) : null,
     we ? h("div", { class: "text ink2" }, we.digest) : h("div", { class: "empty" }, "Week not finished yet."),
     ws && ws.openings_hidden ? h("div", { class: "notice" }, `${ws.openings_hidden} openings hidden from the agent this week (pending, accepted, or before the reapply week).`) : null);
 }
 
 function thinkingPanel(evs) {
   const th = evs.filter(e => e.kind === "thought");
-  return h("div", { class: "panel" },
-    h("h3", {}, "Thinking", h("span", { class: "muted" }, "the agent's own words this week")),
+  return h("section", { class: "tile t-glass span2" }, h("h3", {}, "Thinking", h("span", { class: "lab" }, "the agent's own words this week")),
     th.length ? h("div", { class: "feed" }, th.map(e => h("div", { class: "item" },
-      h("div", { class: "meta" }, e.source === "thinking" ? "thinking (summarized)" : e.source === "note" ? "wait note" : e.nudge ? "nudge" : "text"), h("div", { class: "text" }, e.text)))) : h("div", { class: "empty" }, "Nothing this week."),
-    th.some(e => e.source === "thinking") ? null : h("div", { class: "notice" }, "This run didn't log thinking; showing the agent's visible text and wait notes."));
+      h("div", { class: "meta" }, e.source === "thinking" ? "thinking (summarized)" : e.source === "note" ? "wait note" : e.nudge ? "nudge" : "text"), h("div", { class: "text", style: "margin-top:4px" }, e.text)))) : h("div", { class: "empty" }, "Nothing this week."),
+    th.some(e => e.source === "thinking") ? null : h("div", { class: "notice", style: "margin-top:0" }, "This run didn't log thinking; showing the agent's visible text and wait notes."));
 }
 
 function terminalPanel(upTo, sel) {
@@ -426,15 +860,15 @@ function terminalPanel(upTo, sel) {
     sh.length ? sh.map(e => [h("div", { class: "info" }, `── week ${e.week} · exit ${e.exit_code}${e.timed_out ? " · timed out" : ""}${e.stopped ? " · output capped" : ""}`),
       h("div", { class: "cmd" }, "$ " + e.command), h("div", { class: "out" }, e.output || "")]) : h("div", { class: "info" }, "No shell commands yet."));
   queueMicrotask(() => { term.scrollTop = term.scrollHeight; });
-  return h("div", { class: "panel" }, h("h3", {}, "Terminal", h("span", { class: "muted" }, `${sh.length} command${sh.length === 1 ? "" : "s"} through week ${sel}`)), term);
+  return GlassCard({ title: "Terminal", sub: `${sh.length} command${sh.length === 1 ? "" : "s"} through week ${sel}`, cls: "wide" }, term);
 }
 
 function toolsPanel(evs) {
   const tc = evs.filter(e => e.kind === "tool_call");
-  return h("div", { class: "panel" }, h("h3", {}, "Tool calls", h("span", { class: "muted" }, `${tc.length} this week`)),
-    tc.length ? h("div", { class: "tools" }, tc.map(e => h("details", { class: "tool" + (e.is_error ? " err" : "") },
-      h("summary", {}, h("span", { class: "name" }, e.tool), e.is_error ? " · error" : "", " ", h("span", { class: "muted" }, briefInput(e))),
-      h("div", { class: "pre" }, JSON.stringify(e.input, null, 2)), h("div", { class: "meta muted", style: "margin-top:4px" }, "result"), h("div", { class: "pre" }, e.output)))) : h("div", { class: "empty" }, "None."));
+  return GlassCard({ title: "Tool calls", sub: `${tc.length} this week` },
+    tc.length ? h("div", { class: "tools" }, tc.map(e => h("details", { class: "tool" },
+      h("summary", {}, e.is_error ? h("i", { class: "dot coral", title: "error" }) : null, h("span", { class: "name" }, e.tool), e.is_error ? h("span", { class: "muted" }, "error") : null, h("span", { class: "muted" }, briefInput(e))),
+      h("div", { class: "inner", style: "margin-top:8px" }, h("div", { class: "pre" }, JSON.stringify(e.input, null, 2)), h("div", { class: "meta", style: "margin-top:8px" }, "result"), h("div", { class: "pre" }, e.output))))) : h("div", { class: "empty" }, "None."));
 }
 function briefInput(e) {
   const a = e.input || {};
@@ -445,50 +879,82 @@ function briefInput(e) {
 function ideaPanel(upTo, sel) {
   const ideas = upTo.filter(e => e.kind === "idea").reverse();
   const label = { idea: "idea (from wait)", reflection: "quarterly reflection", file: "wrote", pitch: "launch pitch" };
-  return h("div", { class: "panel" }, h("h3", {}, "Idea log", h("span", { class: "muted" }, `reflections, plans, pitches through week ${sel}`)),
+  return h("section", { class: "tile t-glass span2" }, h("h3", {}, "Idea log", h("span", { class: "lab" }, `reflections, plans, pitches through week ${sel}`)),
     ideas.length ? h("div", { class: "feed" }, ideas.map(e => h("div", { class: "item" + (e.week === sel ? " now" : "") },
       h("div", { class: "meta" }, `week ${e.week} · ${label[e.source] || e.source}${e.path ? " " + e.path : ""}${e.title ? " · " + e.title : ""}`),
-      h("div", { class: "text" }, e.text)))) : h("div", { class: "empty" }, "No ideas recorded yet."));
+      h("div", { class: "text", style: "margin-top:4px" }, e.text)))) : h("div", { class: "empty" }, "No ideas recorded yet."));
 }
 
 function messagePanel(upTo, sel) {
   const ms = upTo.filter(e => e.kind === "message");
-  if (!ms.length) return h("div", { class: "panel" }, h("h3", {}, "Messages"), h("div", { class: "empty" }, "No messages yet."));
+  if (!ms.length) return GlassCard({ title: "Messages" }, h("div", { class: "empty" }, "No messages yet."));
   const by = new Map(); for (const m of ms) { if (!by.has(m.contact_id)) by.set(m.contact_id, []); by.get(m.contact_id).push(m); }
   const offer = o => !o ? null : o.kind === "referral" ? `offer: referral to ${o.opening_id}` : `offer: paid pilot $${Math.round(o.amount).toLocaleString()}`;
-  return h("div", { class: "panel" }, h("h3", {}, "Messages", h("span", { class: "muted" }, `${ms.length} sent through week ${sel} · ${ms.filter(m => m.replied).length} replied`)),
-    h("div", { class: "feed" }, [...by].map(([cid, thread]) => h("div", {}, h("div", { class: "meta muted", style: "font-weight:600" }, cid),
-      thread.map(m => h("div", { class: "item" + (m.week === sel ? " now" : "") },
-        h("div", { class: "meta" }, `week ${m.week} · Maya`), h("div", { class: "text" }, m.text),
-        h("div", { class: "meta", style: "margin-top:4px" }, m.replied ? `${cid} replied` : `no reply (draw ${m.draw?.toFixed(3)} ≥ reply rate ${m.reply_rate})`),
-        m.replied ? h("div", { class: "text ink2" }, m.reply) : null,
-        m.offer ? h("div", { class: "oc success" }, "✓ " + offer(m.offer)) : null,
-        m.offer_problem ? h("div", { class: "meta" }, "⚠ " + m.offer_problem) : null))))));
+  return GlassCard({ title: "Messages", sub: `${ms.length} sent through week ${sel} · ${ms.filter(m => m.replied).length} replied` },
+    h("div", { class: "feed" }, [...by].map(([cid, thread]) => h("div", { class: "thread" }, h("div", { class: "t" }, cid),
+      h("div", { class: "tools" }, thread.map(m => h("div", { class: "item" + (m.week === sel ? " now" : "") },
+        h("div", { class: "meta" }, `week ${m.week} · Maya`), h("div", { class: "text", style: "margin-top:4px" }, m.text),
+        h("div", { class: "meta", style: "margin-top:8px" }, m.replied ? `${cid} replied` : `no reply (draw ${m.draw?.toFixed(3)} ≥ reply rate ${m.reply_rate})`),
+        m.replied ? h("div", { class: "text ink2", style: "margin-top:4px" }, m.reply) : null,
+        m.offer ? h("div", { style: "margin-top:8px" }, Pill(offer(m.offer), { tone: "lime" })) : null,
+        m.offer_problem ? h("div", { style: "margin-top:8px" }, Pill(m.offer_problem, { tone: "amber" })) : null)))))));
+}
+
+// The feed: follower curve, likes per week, and every post with the replies the author saw.
+function feedPanel(upTo, weeks, sel, horizon) {
+  const posts = upTo.filter(e => e.kind === "post"), n = Math.max(horizon || 0, sel, 1);
+  const followers = weeks.filter(w => w.week <= sel).map(w => w.followers || 0), now = followers[followers.length - 1] || 0;
+  const likes = Array.from({ length: n }, (_, i) => posts.filter(p => p.week === i + 1).reduce((a, p) => a + (p.likes || 0), 0));
+  const W = 640, H = 48, max = Math.max(1, ...likes), slot = W / n;
+  const bars = s("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", style: "width:100%;height:48px;display:block", role: "img",
+    "aria-label": `Likes per week through week ${sel}; most in one week ${max}` });
+  likes.forEach((v, i) => { if (!v) return; const bh = Math.max(2, v / max * (H - 2)), r = s("rect", { x: i * slot + slot * 0.15, y: H - bh, width: slot * 0.7, height: bh, rx: Math.min(2, slot * 0.35), fill: "var(--ink-2)" });
+    const t = s("title"); t.textContent = `Week ${i + 1}: ${v} likes`; r.append(t); bars.append(r); });
+  return GlassCard({ title: "Feed", sub: `${posts.length} post${posts.length === 1 ? "" : "s"} through week ${sel}`, cls: "wide" },
+    h("div", { class: "money", style: "margin-bottom:16px" },
+      h("div", {}, h("div", { class: "big" }, now.toLocaleString()), h("div", { class: "lab" }, "followers")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, posts.reduce((a, p) => a + (p.likes || 0), 0).toLocaleString()), h("div", { class: "lab" }, "likes, all posts")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, posts.filter(p => p.breakout).length), h("div", { class: "lab" }, "broke out"))),
+    h("div", { class: "lab" }, "Followers by week"), Spark(followers.length ? followers : [0]),
+    h("div", { class: "lab", style: "margin-top:12px" }, `Likes per week (tallest: ${max})`), bars,
+    posts.length ? h("div", { class: "feed", style: "margin-top:16px" }, [...posts].reverse().map(p => h("div", { class: "item" + (p.week === sel ? " now" : "") },
+      h("div", { class: "meta" }, `week ${p.week} · post ${p.n} · about ${(p.reach || 0).toLocaleString()} people saw it`),
+      h("div", { class: "text", style: "margin-top:4px" }, p.text),
+      h("div", { class: "tile-head", style: "margin-top:8px" }, Pill(`${p.likes} likes`, { tone: p.breakout ? "lime" : null }), Pill(`${p.replies} replies`),
+        Pill(`+${p.new_followers} followers`), p.breakout ? Pill("broke out", { tone: "lime" }) : null, p.repo ? Pill(p.repo.split("/").pop(), { k: "repo" }) : null),
+      p.shown?.length ? h("div", { class: "tools", style: "margin-top:8px" }, p.shown.map(r => h("div", { class: "inner" }, h("div", { class: "meta" }, "@" + r.handle), h("div", { class: "text" }, r.text)))) : null,
+      h("details", { style: "margin-top:8px" }, h("summary", {}, "referee"), h("div", { class: "inner", style: "margin-top:8px" },
+        h("div", { class: "meta" }, `breakout chance ${pct(p.estimated_chance)} (base ${pct(p.base_rate)}) · draw ${p.draw?.toFixed(3)} · luck ${p.luck}×`),
+        h("div", { class: "text" }, p.rationale || "–")))))) : h("div", { class: "empty", style: "margin-top:12px" }, "No posts yet."));
 }
 
 function refereePanel(all, sel, go) {
-  const every = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch"));
+  const every = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch" || e.event === "hackathon"));
   const apps = every.filter(e => e.week <= sel), later = every.length - apps.length;
   const rows = apps.map(e => {
-    const revealed = e.event === "launch" || (e.reveal_week != null && e.reveal_week <= sel);
-    const oc = h("span", { class: "oc " + e.outcome }, OUTCOME[e.outcome] || e.outcome);
+    const revealed = e.event !== "apply" || (e.reveal_week != null && e.reveal_week <= sel);
+    const [ocText, ocTone] = OUTCOME[e.outcome] || [e.outcome, ""];
+    const oc = h("span", { class: "oc" }, h("i", { class: "dot " + ocTone }), ocText);
     return [h("tr", { class: "click" + (e.week === sel ? " now" : ""), onclick: () => go(e.week), title: "Go to week " + e.week },
-      h("td", { class: "num" }, e.week), h("td", {}, e.event === "launch" ? "launch " + (e.repo || "").split("/").pop() : e.opening_id, h("div", { class: "muted", style: "font-size:11px" }, e.event === "launch" ? "forum" : e.opening_type)),
+      h("td", { class: "num" }, e.week), h("td", {}, e.event === "launch" ? "launch " + (e.repo || "").split("/").pop() : e.opening_id,
+        h("div", { class: "lab" }, e.event === "launch" ? "forum" : e.event === "hackathon" ? "hackathon judging" : e.opening_type)),
       h("td", { class: "r" }, pct(e.base_rate)), h("td", { class: "r" }, pct(e.estimated_chance)),
       h("td", { class: "r" }, e.base_rate ? (e.estimated_chance / e.base_rate).toFixed(2) + "×" : "–"),
       h("td", { class: "r" }, e.draw != null ? e.draw.toFixed(3) : "–"),
-      h("td", {}, oc, e.event === "launch" ? h("div", { class: "muted", style: "font-size:11px" }, `${e.upvotes ?? 0} upvotes`) :
-        h("div", { class: "muted", style: "font-size:11px" }, revealed ? `heard week ${e.reveal_week}` : `already drawn · agent hears week ${e.reveal_week}`))),
+      h("td", {}, oc, e.event === "launch" ? h("div", { class: "lab" }, `${e.upvotes ?? 0} upvotes`) :
+        e.event === "hackathon" ? h("div", { class: "lab" }, e.prize ? `prize ${money(e.prize)}` : "") :
+        h("div", { class: "lab oc" }, revealed ? `heard week ${e.reveal_week}` : [h("i", { class: "dot amber" }), `already drawn · agent hears week ${e.reveal_week}`]))),
       h("tr", {}, h("td", { colspan: 7, style: "padding-top:0" }, h("details", {}, h("summary", {}, "submission and rationale"),
-        e.details ? h("div", {}, h("div", { class: "meta muted" }, "submission"), h("div", { class: "text" }, e.details)) : null,
-        e.repo ? h("div", { class: "meta muted" }, "repo: " + e.repo) : null,
-        e.key ? h("div", { class: "meta muted" }, "dice key: " + e.key) : null,
-        h("div", { class: "meta muted" }, "referee rationale"), h("div", { class: "text" }, e.rationale || "–"),
-        e.comments?.length ? h("div", {}, h("div", { class: "meta muted" }, "forum comments"), h("ul", {}, e.comments.map(c => h("li", { class: "text" }, c)))) : null)))];
+        h("div", { class: "inner", style: "margin-top:8px" },
+          e.details ? h("div", {}, h("div", { class: "meta" }, "submission"), h("div", { class: "text" }, e.details)) : null,
+          e.repo ? h("div", { class: "meta", style: "margin-top:8px" }, "repo: " + e.repo) : null,
+          e.key ? h("div", { class: "meta" }, "dice key: " + e.key) : null,
+          h("div", { class: "meta", style: "margin-top:8px" }, "referee rationale"), h("div", { class: "text" }, e.rationale || "–"),
+          e.comments?.length ? h("div", {}, h("div", { class: "meta", style: "margin-top:8px" }, "forum comments"), h("ul", { style: "margin:4px 0 0;padding-left:16px" }, e.comments.map(c => h("li", { class: "text" }, c)))) : null))))];
   });
   const done = apps, mean = done.length ? done.reduce((a, e) => a + (e.base_rate ? e.estimated_chance / e.base_rate : 0), 0) / done.length : null;
-  return h("div", { class: "panel" }, h("h3", {}, "Referee", h("span", { class: "muted" }, `${done.length} decisions through week ${sel}${mean ? ` · mean estimate ${mean.toFixed(2)}× base` : ""}`)),
-    apps.length ? h("div", { style: "max-height:520px;overflow:auto" }, h("table", {},
+  return GlassCard({ title: "Referee", sub: `${done.length} decisions through week ${sel}${mean ? ` · mean estimate ${mean.toFixed(2)}× base` : ""}`, cls: "wide" },
+    apps.length ? h("div", { class: "tbl" }, h("table", {},
       h("thead", {}, h("tr", {}, h("th", {}, "Wk"), h("th", {}, "Opening"), h("th", { class: "r" }, "Base"), h("th", { class: "r" }, "Est."), h("th", { class: "r" }, "Est./base"), h("th", { class: "r" }, "Draw u"), h("th", {}, "Outcome"))),
       h("tbody", {}, rows))) : h("div", { class: "empty" }, "No applications yet."),
     h("div", { class: "notice" }, `Success if u < estimate. The referee only estimates; the keyed dice pick the outcome.${later ? ` ${later} later decision${later === 1 ? "" : "s"} not shown.` : ""}`));
@@ -498,20 +964,20 @@ function repoPanel(upTo, sel, R) {
   const git = upTo.filter(e => e.kind === "git_commit" || e.kind === "git_push");
   const launches = upTo.filter(e => e.kind === "referee" && e.event === "launch");
   const atEnd = R.ended && sel >= R.maxWeek;
-  return h("div", { class: "panel" }, h("h3", {}, "Repos and commits", h("span", { class: "muted" }, `through week ${sel}`)),
+  return GlassCard({ title: "Repos and commits", sub: `through week ${sel}`, cls: "wide" },
     git.length ? h("div", { class: "tools" }, git.map(e => e.kind === "git_commit"
-      ? h("div", { class: "commit" }, h("span", { class: "muted num" }, "w" + e.week), h("code", { title: e.sha ? null : "git ran with -q; read from the command, not git's output" }, e.sha || "commit -q"), h("span", { class: "text" }, e.message),
-          e.files != null ? h("span", { class: "muted num" }, `${e.files} file${e.files === 1 ? "" : "s"} `, h("span", { class: "plus" }, "+" + e.insertions), " ", h("span", { class: "minus" }, "−" + e.deletions)) : null)
-      : h("div", { class: "commit" }, h("span", { class: "muted num" }, "w" + e.week), h("span", {}, e.first ? "⬆ new repo on the code host: " : "⬆ push "), h("code", {}, e.repo || e.url || ""), e.refs?.length ? h("span", { class: "muted" }, e.refs.join(", ")) : null)))
+      ? h("div", { class: "commit" }, h("i", { class: "dot teal" }), h("span", { class: "muted num" }, "w" + e.week), h("code", { title: e.sha ? null : "git ran with -q; read from the command, not git's output" }, e.sha || "commit -q"), h("span", { class: "text" }, e.message),
+          e.files != null ? h("span", { class: "muted num" }, `${e.files} file${e.files === 1 ? "" : "s"} +${e.insertions} −${e.deletions}`) : null)
+      : h("div", { class: "commit" }, h("i", { class: "dot" }), h("span", { class: "muted num" }, "w" + e.week), h("span", {}, e.first ? "new repo on the code host" : "push"), h("code", {}, e.repo || e.url || ""), e.refs?.length ? h("span", { class: "muted" }, e.refs.join(", ")) : null)))
       : h("div", { class: "empty" }, "No commits or pushes seen in the shell yet."),
-    launches.map(l => h("div", { class: "repo" }, h("div", {}, h("b", {}, "Launched "), l.title || "", h("span", { class: "muted" }, ` · week ${l.week} · ${l.snapshot?.commits ?? "?"} commits · ${l.snapshot?.file_count ?? "?"} files`)),
+    launches.map(l => h("div", { class: "repo inner" }, h("div", {}, h("span", { class: "t" }, "Launched "), l.title || "", h("span", { class: "muted" }, ` · week ${l.week} · ${l.snapshot?.commits ?? "?"} commits · ${l.snapshot?.file_count ?? "?"} files`)),
       l.snapshot?.files?.length ? h("div", { class: "pre muted" }, l.snapshot.files.join("  ")) : null,
       l.snapshot?.readme ? h("details", {}, h("summary", {}, "README as the referee saw it"), h("div", { class: "pre" }, l.snapshot.readme)) : null)),
-    atEnd && R.repos ? h("div", { class: "repo" }, h("div", { class: "meta muted" }, "Exported at run end (runs/<id>/repos/*.bundle)"),
-      R.repos.length ? R.repos.map(b => h("div", { class: "repo" },
-        h("div", {}, h("b", {}, b.repo), h("span", { class: "muted" }, b.error ? " · " + b.error : ` · ${b.commits.length} commit${b.commits.length === 1 ? "" : "s"} · ${b.file_count} files · ${b.bundle_bytes.toLocaleString()} bytes`)),
+    atEnd && R.repos ? h("div", { class: "repo" }, h("div", { class: "meta" }, "Exported at run end (runs/<id>/repos/*.bundle)"),
+      R.repos.length ? R.repos.map(b => h("div", { class: "repo inner" },
+        h("div", {}, h("span", { class: "t" }, b.repo), h("span", { class: "muted" }, b.error ? " · " + b.error : ` · ${b.commits.length} commit${b.commits.length === 1 ? "" : "s"} · ${b.file_count} files${b.bundle_bytes != null ? ` · ${b.bundle_bytes.toLocaleString()} bytes` : ""}`)),
         (b.commits || []).map(c => h("div", { class: "commit" }, h("code", {}, c.sha.slice(0, 7)), h("span", { class: "text" }, c.subject),
-          h("span", { class: "muted num" }, `${c.files} file${c.files === 1 ? "" : "s"} `, h("span", { class: "plus" }, "+" + c.insertions), " ", h("span", { class: "minus" }, "−" + c.deletions)))),
+          h("span", { class: "muted num" }, `${c.files} file${c.files === 1 ? "" : "s"} +${c.insertions} −${c.deletions}`))),
         b.files?.length ? h("div", { class: "pre muted" }, b.files.join("  ")) : null,
         b.readme ? h("details", {}, h("summary", {}, b.readme_path), h("div", { class: "pre" }, b.readme)) : null)) : h("div", { class: "empty" }, "No repos were exported."))
       : R.ended ? h("div", { class: "notice" }, "Move to the last week to see the exported repos.") : h("div", { class: "notice" }, "Exported repos appear when the run ends."));

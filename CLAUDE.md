@@ -21,7 +21,7 @@ orchestrator/sandbox.py  per-agent container (AgentBox), in-container workspace 
 sandbox/                 compose.yaml (Gitea + the internal hl-agents network), agent.Dockerfile, init.py (the container's PID 1)
 viewer/normalize.py      raw log records -> standard viewer events (thought, tool_call, shell_output, git_commit, git_push, idea, referee, life, money, week_end, usage, summary); shared by live, replay and export
 viewer/server.py         Starlette: run grid summaries, SSE tail of a run log (live and finished runs take one path), repo bundles via a bare clone in a temp dir
-viewer/index.html        the page: grid of lives, one life with week scrubber, money, thinking, terminal, tools, idea log, referee, repos
+viewer/index.html        the page: grid of lives, one life with week scrubber, money, thinking, terminal, tools, idea log, referee, feed, repos
 analysis/summarize.py    per-run paths and metrics; first-applied opening vs position; valid-action rate; calibration
 experiments/             experiment plans (question, conditions, commands, measures, cost), one file each
 runs/                    <run_id>.jsonl, <run_id>/workspace/, <run_id>/repos/*.bundle, <batch>-referee-baseline.jsonl (gitignored)
@@ -36,9 +36,11 @@ uv run python -m orchestrator.sandbox up       # once: Gitea on 127.0.0.1:3000, 
 uv run python -m orchestrator.sandbox check    # isolation probes from a throwaway agent container
 uv run python -m orchestrator.run --persona agents/personas/maya.yaml --runs 10   # 52 weeks each
 uv run python analysis/summarize.py runs/maya-*.jsonl
-uv run python -m viewer.server                  # http://127.0.0.1:8711, read-only on runs/
+uv run python -m viewer.server                  # http://127.0.0.1:8711, read-only on runs/ (--runs-dir repeatable)
+uv run python -m viewer.export <run_id> --deny real-names.txt   # docs/replays/<run_id>/ + scrub-report.json
 ```
 
+- `viewer.export` (Phase 3) writes a self-contained replay: the page with the run's normalized events, summary and repo summaries embedded as JSON (no server, no fetches, no Google Fonts; opens from `file://`). It scrubs what it publishes: home paths → `~`, emails → `[email removed]`, and any secret-looking string, secret-named field, or `--deny` name (a local list of real people, never committed) refuses the export with nothing written. It lists the persona's contacts in `scrub-report.json` for a person to confirm they're fictional.
 - The viewer never writes under `runs/` and renders every logged string as text, never HTML (agent-made content). It reads logs only, so anything it shows must be in the log. `idea` events are derived for now (reflections, files the agent wrote, launch pitches); thinking blocks aren't logged yet. Quiet git (`commit -q`, `push -q`) is read from the command text and labelled as such.
 
 - `--agent-model ollama:<model>` (default `ollama:qwen3:8b`; `--model` is an alias) or `claude-*` / `anthropic:<model>`. `--referee-model` and `--summary-model` default to the agent model. Both are logged in `run_start` and `run_end`, and every `llm_call` logs its model. For showcase runs keep the referee fixed at `claude-haiku-5-5` even when the agent model changes.
@@ -65,6 +67,35 @@ uv run python -m viewer.server                  # http://127.0.0.1:8711, read-on
 7. `spend(item)` uses company funds only (`company_funding` raised + `company_revenue` from pilots − `company_spent`; never personal cash, which can't be spent at all). Prices are in `world/openings.yaml` `spend`: `contractor` (per week, paid up front, starts next week, one at a time, adds `coding_actions`), `launch_ads` (the next launch of that repo within `valid_weeks` uses the ads' `traction_base_rate`, and the launch referee is told it was promoted). The referee's "money raised" is still `company_funding` only.
 8. With a sandbox, new Gitea repos are logged (`repo_created`) and the workspace is copied to `runs/<id>/workspace/` within the sync caps.
 9. Cash += income − expenses. **Memory facts are kept by code**: each week adds a `WeekRecord` (full digest plus key events: applications, replies, commitments starting or ending, offers). The agent sees the current quarter in full and older quarters condensed to key events plus gig and broke counts; cash, commitments, and open applications come from state. The LLM writes only a short "reflections and plans" note (≤120 words) every 13 weeks (`memory_reflection`). No LLM-written facts, so there's nothing to cite-check.
+
+## The student world (`world/student.yaml`, persona `self.yaml`)
+
+A second world for the "Self" persona: two years of a CS degree as an international student, then the months after. Every new mechanic switches on only when its key is in the world file, so Maya's prompts are byte-identical to before (checked by rendering every prompt on both commits).
+
+- `calendar`: the referee's and contacts' "week 1 is …" text and the opening kinds named in the referee's system prompt.
+- `academics`: semesters; classes are a commitment (`kind: "academics"`) of `class_actions` each semester week that `leave` refuses; `graduated` event at `graduation_week + 1`. The referee's person block gets a student-status line and follower count (`Run._status`), new worlds only.
+- `work_authorization`: each opening's `auth` kind is allowed `always`, while `enrolled`, or once `graduated`, with an optional semester cap on actions (`world.auth_problem`). Applying to something not allowed is a tool error; the catalog marks it; a commitment that loses authorization ends (`commitment_ended.reason = "work_authorization"`). Illustrative F-1 rules, not legal advice.
+- Openings may have `listed_weeks` (hidden outside, not counted as hidden), `start_week` (accepted → "coming up", becomes a held offer that week), `company_amount` (non-dilutive, to company funds).
+- Hackathons (`type: hackathon`): decision before `event_week`; that week uses `attend_actions` and adds `build_actions` to the coding pool; `submit(opening_id, repo, pitch)` (free) is judged with `prize_base_rate` (`referee.JUDGE_SYSTEM`), dice `[dice_seed, "hackathon", id, 1]`; logs `hackathon_week`, `hackathon_result` (placed / not_placed / no_submission).
+- `feed` + `post(text, repo?)`: the referee (role `audience`) estimates a breakout chance and writes candidate replies with made-up handles; code draws breakout, Pareto luck, likes, follows, replies, each on its own key (`referee.draw_post`). Logged as `post`; followers in every snapshot. With the file's numbers a new account's post gets 0–2 likes most of the time (p99 ≈ 20).
+- Contacts in `self.yaml` are fictional. `address_as` (contact) and optional `address_note` (persona) say how to address the persona. Offer kinds beyond `referral`/`paid_pilot`: `money` (to personal cash, `max_amount`, once per semester via `world.term`, breaks counting with the semester before), `teammate` (listed `hackathons`, once each: +`TEAMMATE_BUILD_ACTIONS` in the event week and the judges see the team), `boost` (`reach`, `community`, once: added reach on the next post within `BOOST_VALID_WEEKS`). A persona with any of these gets `CONTACT_SYSTEM_EXTENDED` / `CONTACT_SCHEMA_EXTENDED`; others keep the originals byte for byte.
+- `experience` is a public field (`PUBLIC_FIELDS`); Maya has none, so her referee prompts are unchanged.
+- Sensitivity variants (`agents/personas/self-nosolo.yaml`, `self-socialgoal.yaml`, `self-goalonly.yaml`) carry `referee_view`: the base persona's public fields plus `network`, which the referee uses instead of the persona's own (hidden from the agent, `HIDDEN_FROM_AGENT`). So the referee sees the same person in every condition, and a changed trait reaches outcomes only through the agent's choices. Contacts are identical to `self.yaml`, so goal-only still meets De Anza and ISA friends through the contact list. Compare conditions with `analysis/self_lives.py name=glob ...`.
+- `training` (world key) enables `train(activity)` (1 action, no effect on the world): logged as `train`; `train_streak` (weeks in a row with a session) is in the snapshot and the week prompt, and the viewer shows a streak tile. A week with no free actions holds the streak instead of resetting it (`train_streak_held`).
+- Hours: with `time_costs.hours_per_action` (10.5 in the student world: ~84 usable waking hours / 8), a part-time opening may give `hours_weekly`; its cost is hours / hours_per_action rounded half up, at least 1 (`world.time_cost`), and the catalog says "About N hours a week". Student world: classes 3, a 10-hour campus job 1 (so a semester week with both leaves 4), full-time 4, gig 2 for $360, semester work capped at 2 actions (20 hours).
+- In worlds with `academics`, the reflection prompt states the week ("It is the end of week N"); Maya's is unchanged.
+
+## The live gateway (`gateway/`, Track B)
+
+The Self persona in real time on X: `python -m gateway.run turn|dispatch|loop|status|publish|kill|unkill`. Built and tested offline; **nothing has been posted**.
+
+- The agent only drafts (`draft_post`, `draft_reply`, `done`); drafts wait in the outbox until a person approves them on the viewer's `#/gateway` page. There is no code for DMs, follows, likes, reposts, or search.
+- Rules are constants in `gateway/policy.py`, checked at draft time and again just before sending: ≤3 posts a day (UTC) including replies, ≤1 of them with a link, replies only to someone who engaged first and only mentioning them, no other mentions, ≤100 reads a day, and the profile bio must disclose an AI agent running a simulated life with the project link (checked live before any send).
+- Dry run is the default (no request leaves the machine; fake ids). `--live` calls X; `--live-github` pushes approved mirrors. Dry and live state are separate: `gateway/state/{dry,live}/gateway.jsonl` (gitignored) is the only state, an append-only event log; `KILL` in that dir stops every turn and send.
+- Inbound posts reach the agent inside `<untrusted>` blocks with control/bidi characters stripped and the closing tag neutralized.
+- The GitHub publisher mirrors a run's exported bundle (never live Gitea), refuses any repo whose history has a secret-looking string or a real email, and creates the repo private in `GITHUB_ORG`. The token reaches git only as an env-config header.
+- Credentials (`X_USER_ACCESS_TOKEN`, `X_USER_ID`, `GITHUB_TOKEN`, `GITHUB_ORG`, optional `X_COST_PER_*_USD`) live in `.env` only, never in prompts, logs, containers, or commits.
+- The viewer's gateway endpoints are its only writes, and they go to the gateway state dir, never `runs/`; they need the `X-HL-Token` header (token in `gateway/state/approve.token`, 0600) and a loopback Origin.
 
 ## Sandbox
 

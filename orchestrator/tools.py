@@ -18,9 +18,12 @@ ACTIONS_PER_WEEK = 8
 REAPPLY_AFTER_WEEKS = 26  # an opening can be applied to again this long after the last application
 MAX_INVALID_PER_WEEK = 3
 ACTION_COST = {"files": 1, "shell": 1, "apply": 1, "launch": 1, "message": 1, "spend": 1, "leave": 1,
-               "wait": 0}  # gig: world
+               "post": 1, "submit": 0, "train": 1, "wait": 0}  # gig: world; submitting is part of attending a hackathon
 CODING_TOOLS = ("shell", "files")  # what a contractor's extra actions can be used for
-SANDBOX_TOOLS = ("shell", "launch")  # only offered when the run has a container
+SANDBOX_TOOLS = ("shell", "launch", "submit")  # only offered when the run has a container
+FEED_TOOLS = ("post",)          # only in worlds with a feed
+HACKATHON_TOOLS = ("submit",)   # only in worlds with hackathons
+TRAINING_TOOLS = ("train",)     # only in worlds with `training`
 
 TOOLS = [
     {
@@ -125,6 +128,51 @@ TOOLS = [
         },
     },
     {
+        "name": "post",
+        "description": (
+            "Post a short public update to the social feed, optionally linking one of your repos. "
+            "Anyone may see it; how many do, and how they react, depends on what you post and on "
+            "your followers. Most posts get little attention."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The post, at most 500 characters."},
+                "repo": {"type": "string", "description": "Optional: one of your repos to link."},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "train",
+        "description": (
+            "Spend time on physical training (a workout, a run, sport practice). It's logged; your "
+            "training streak is the number of weeks in a row with at least one session. A week with "
+            "no free actions doesn't break it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"activity": {"type": "string", "description": "What you did, briefly."}},
+            "required": ["activity"],
+        },
+    },
+    {
+        "name": "submit",
+        "description": (
+            "Submit your project to a hackathon you were accepted to, during its event week: the "
+            "hackathon's id, one of your repos, and a short pitch. Judges look at what's in the repo."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "opening_id": {"type": "string", "description": "The hackathon's id, e.g. 'hk-01'."},
+                "repo": {"type": "string", "description": "Name of one of your repos on the code host."},
+                "pitch": {"type": "string", "description": "What you built and why it matters."},
+            },
+            "required": ["opening_id", "repo", "pitch"],
+        },
+    },
+    {
         "name": "gig",
         "description": (
             "Take gig work this week for guaranteed pay. It uses most of the week's actions. "
@@ -161,9 +209,13 @@ TOOLS = [
 TOOLS_BY_NAME = {t["name"]: t for t in TOOLS}
 
 
-def tools_for(sandbox: bool, contacts: bool = True) -> list[dict]:
+def tools_for(sandbox: bool, contacts: bool = True, feed: bool = False, hackathons: bool = False,
+              training: bool = False) -> list[dict]:
     return [t for t in TOOLS if (sandbox or t["name"] not in SANDBOX_TOOLS)
-            and (contacts or t["name"] != "message")]
+            and (training or t["name"] not in TRAINING_TOOLS)
+            and (contacts or t["name"] != "message")
+            and (feed or t["name"] not in FEED_TOOLS)
+            and (hackathons or t["name"] not in HACKATHON_TOOLS)]
 
 
 class ToolError(Exception):

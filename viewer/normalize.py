@@ -12,8 +12,9 @@ export, so every view of a life is built from the same events. Kinds:
     git_push      parsed from `git push` output, or a repo appearing on the code host
     idea          the weekly `idea` from wait (logged runs), reflections, files it wrote, launch pitches
     message       a message to a contact and their reply or silence, with any offer
-    referee       applications (estimate, base rate, draw, outcome), replies, launches
-    life          commitments, offers, gigs, broke weeks, company spending
+    post          a post on the feed: text, reach, likes, replies, new followers, the replies shown
+    referee       applications (estimate, base rate, draw, outcome), replies, launches, hackathon judging
+    life          commitments, offers, gigs, broke weeks, company spending, graduation, hackathon weeks
     money         cash, income, expenses, company funding (from week_start/week_end)
     week_end      digest, reason, actions used
     usage         tokens and cost after each model call
@@ -43,7 +44,10 @@ def _money(state: dict | None) -> dict:
     return {"cash": s.get("cash"), "income": s.get("weekly_income"), "expenses": s.get("weekly_expenses"),
             "company_funding": s.get("company_funding"), "company_balance": s.get("company_balance"),
             "company_revenue": s.get("company_revenue"), "company_spent": s.get("company_spent"),
-            "commitments": [c.get("label") for c in s.get("commitments") or []]}
+            "commitments": [c.get("label") for c in s.get("commitments") or []],
+            "commitment_detail": [{"label": c.get("label"), "opening_id": c.get("opening_id"), "time_cost": c.get("time_cost"),
+                                   "kind": c.get("kind")} for c in s.get("commitments") or []],
+            "followers": s.get("followers"), "train_streak": s.get("train_streak")}
 
 
 CMD_COMMIT = re.compile(r"\bgit\b(?:\s+-c\s+\S+)*\s+commit\b[^\n;&|]*?\s-[a-zA-Z]*m\s*(?P<q>[\"'])(?P<msg>.*?)(?P=q)")
@@ -104,6 +108,23 @@ def normalize(rec: dict, seq: int) -> list[dict]:
                    replied=rec.get("replied"), reply=_t(rec.get("reply"), 4000), offer=rec.get("offer"),
                    offer_problem=rec.get("offer_problem"), draw=rec.get("reply_draw"),
                    reply_rate=rec.get("reply_rate"), key=rec.get("reply_key"))]
+    if t == "post":
+        return [ev("post", n=rec.get("n"), text=_t(rec.get("text"), 2000), repo=rec.get("repo"), reach=rec.get("reach"),
+                   likes=rec.get("likes"), replies=rec.get("replies"), new_followers=rec.get("new_followers"),
+                   followers_after=rec.get("followers_after"), breakout=rec.get("breakout"), luck=rec.get("luck"),
+                   shown=[{"handle": _t(r.get("handle"), 40), "text": _t(r.get("text"), 400)} for r in rec.get("shown") or []],
+                   estimated_chance=rec.get("estimated_chance"), base_rate=rec.get("base_rate"),
+                   draw=rec.get("post_breakout_draw"), rationale=_t((rec.get("estimate") or {}).get("rationale"), 2000))]
+    if t == "hackathon_result":
+        e = rec.get("estimate") or {}
+        return [ev("referee", event="hackathon", opening_id=rec.get("opening_id"), outcome=rec.get("outcome"),
+                   prize=rec.get("prize"), base_rate=rec.get("base_rate"), estimated_chance=rec.get("estimated_chance"),
+                   draw=rec.get("success_draw"), key=rec.get("success_key"), repo=rec.get("repo"),
+                   details=_t(rec.get("pitch"), 4000), rationale=_t(e.get("rationale"), 2000))]
+    if t == "train":
+        return [ev("life", event="train", activity=_t(rec.get("activity"), 200), streak=rec.get("streak"))]
+    if t in ("graduated", "hackathon_week"):
+        return [ev("life", event=t, opening_id=rec.get("opening_id"))]
     if t == "spend":
         return [ev("life", event="spend", item=rec.get("item"), price=rec.get("price"), weeks=rec.get("weeks"),
                    repo=rec.get("repo"), company_balance=rec.get("company_balance"))]
