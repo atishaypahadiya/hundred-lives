@@ -11,8 +11,11 @@ SCHEDULES = ("full_time", "part_time")
 DEFAULT_PATH = Path(__file__).resolve().parent.parent / "world" / "openings.yaml"
 
 
-def load_world(path: Path = DEFAULT_PATH) -> dict:
-    world = yaml.safe_load(path.read_text())
+def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
+    """Parse and validate. Pass `text` to parse exactly what the caller read (and logged)."""
+    world = yaml.safe_load(path.read_text() if text is None else text)
+    if not isinstance(world.get("illustrative"), bool):
+        raise ValueError(f"{path}: set `illustrative: true` (placeholder numbers) or false (sourced)")
     gig = world.get("gig") or {}
     for k in ("pay", "time_cost", "description"):
         if k not in gig:

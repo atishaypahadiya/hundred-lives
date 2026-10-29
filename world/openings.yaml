@@ -1,5 +1,11 @@
 # The world's opportunities, v0. Every organization here is fictional.
 #
+# ILLUSTRATIVE: every number in this file (base and reply rates, pay, amounts, durations,
+# time costs, the gig, the forum) is a placeholder chosen for plausibility, not sourced data.
+# Sourcing them is question 3. Results from this world are about the agent and the setup,
+# not about real odds. The flag below is logged in every run_start.
+illustrative: true
+#
 # base_rate is the share of ALL applicants who get accepted. The referee sees it; the agent
 # doesn't. reply_rate is the share of rejected applicants who hear back at all; the rest are
 # ignored. Both are rough guesses for illustration, NOT real data. Replacing them with
@@ -28,8 +34,8 @@ forum:
   relaunch_after_weeks: 13      # the same repo can be posted again after this long
 
 gig:
-  pay: 1000          # dollars, paid the same week
-  time_cost: 6       # actions it uses that week
+  pay: 1200          # dollars, paid the same week; more than default expenses, so a broke week can recover
+  time_cost: 5       # actions it uses that week
   description: gig work (delivery driving, tutoring, freelance odd jobs)
 
 openings:

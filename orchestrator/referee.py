@@ -105,10 +105,39 @@ def render_repo(snap: dict | None) -> str:
 def build_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                  company_funding: float, opening: dict, details: str,
                  attachments: list[tuple[str, str]], repo: dict | None = None) -> str:
+    return _application(_person(persona, week, commitments, track_record, company_funding),
+                        opening, details, attachments, repo)
+
+
+# The referee control (run.referee_baseline): the same prompt with a person who is, by
+# construction, the average applicant. A calibrated referee gives them the base rate.
+BASELINE_PERSON = """\
+Person:
+A typical applicant for this opening. They meet the listed requirements about as well as most \
+people who apply, and nothing about them stands out either way.
+Money raised for their company so far: $0
+
+Simulated week: 1 (week 1 is the spring they finish school)
+
+Current commitments:
+none
+
+Track record (most recent last):
+none"""
+BASELINE_DETAILS = ("I'd like to be considered for this opportunity. I meet the listed requirements "
+                    "and I'm ready to start.")
+
+
+def build_baseline_prompt(opening: dict) -> str:
+    return _application(BASELINE_PERSON, opening, BASELINE_DETAILS, [], None)
+
+
+def _application(person: str, opening: dict, details: str, attachments: list[tuple[str, str]],
+                 repo: dict | None) -> str:
     opening_view = {k: opening[k] for k in ("id", "type", "title", "org", "requirements") if k in opening}
     files = "\n\n".join(f"--- {path} ---\n{text}" for path, text in attachments) or "none"
     return f"""\
-{_person(persona, week, commitments, track_record, company_funding)}
+{person}
 
 Opening:
 {yaml.safe_dump(opening_view, sort_keys=False).strip()}

@@ -77,8 +77,17 @@ def summarize(path: Path) -> dict:
     first_real = (by("referee_decision") or [{}])[0].get("opening_id")
     starts = by("commitment_started")
     code = start.get("code")
+    shells = by("shell")
     return {
         "run_id": start["run_id"], "seed": start["seed"], "order": order,
+        # runs from before the seed split used `seed` for both
+        "order_seed": start.get("order_seed", start["seed"]), "dice_seed": start.get("dice_seed", start["seed"]),
+        "illustrative": start.get("world_illustrative", True),
+        "hidden": [w.get("openings_hidden") for w in by("week_start") if "openings_hidden" in w],
+        "shell": {"calls": len(shells), "nonzero_exit": sum(x["exit_code"] != 0 for x in shells),
+                  "timed_out": sum(x["timed_out"] for x in shells), "stopped": sum(x.get("stopped", False) for x in shells),
+                  "repos": [r["repo"] for r in by("repo_created")], "launches": by("launch"),
+                  "exported": [e for x in by("repos_exported") for e in x["repos"]]} if start.get("sandbox") else None,
         "code": f"{code['git_sha'][:7]}{'+dirty' if code['dirty'] else ''}" if code else None,
         "pilot": not code or code["dirty"],
         "end": end.get("reason"), "weeks": end.get("weeks_completed"), "tokens": end.get("tokens_used"),
@@ -122,14 +131,32 @@ def fmt_calibration(c: dict) -> str:
             f"{c['failures']} no, {c['ignored']} ignored")
 
 
+def baseline(path: Path):
+    recs = load(path)
+    start = recs[0]
+    rows = [r for r in recs if r["type"] == "referee_baseline"]
+    summ = next((r for r in recs if r["type"] == "referee_baseline_summary"), None)
+    print(f"=== referee baseline {start['run_id']} · {start['model']} · average applicant vs every opening")
+    if summ:
+        print(f"  estimate / base rate: mean {summ['mean_est_over_base']:.2f}× · "
+              + ", ".join(f"{t} {v:.2f}×" for t, v in summ["by_type"].items()))
+    print("  per opening: " + ", ".join(f"{r['opening_id']} {r['est_over_base']:.1f}×" for r in rows))
+    print()
+
+
 def main(paths: list[str]):
-    runs = [summarize(Path(p)) for p in paths]
+    firsts = {p: load(Path(p))[0]["type"] for p in paths}
+    for p in [p for p in paths if firsts[p] == "referee_baseline_start"]:
+        baseline(Path(p))
+    runs = [summarize(Path(p)) for p in paths if firsts[p] == "run_start"]
+    if not runs:
+        return
     for s in runs:
         fs = s["final_state"]
         jobs = [c["opening_id"] for c in fs.get("commitments", [])]
         label = "PILOT (code state not reproducible) · " if s["pilot"] else ""
-        print(f"=== {s['run_id']} (seed {s['seed']}) · {label}code {s['code'] or 'not recorded'} · "
-              f"{s['end']} after {s['weeks']} weeks · {s['tokens']:,} tokens")
+        print(f"=== {s['run_id']} (order seed {s['order_seed']}, dice seed {s['dice_seed']}) · {label}"
+              f"code {s['code'] or 'not recorded'} · {s['end']} after {s['weeks']} weeks · {s['tokens']:,} tokens")
         print(f"  first apply: {s['first']} (position {s['first_pos']}/30; job-02 at {s['job02_pos']}) · "
               f"valid-action rate {s['valid_rate']} ({s['valid']} valid, {s['invalid']} invalid) · "
               f"weeks ended by {dict(s['week_end_reasons'])}")
@@ -137,12 +164,21 @@ def main(paths: list[str]):
         print(f"  end: cash ${fs.get('cash', 0):,.0f} · income ${fs.get('weekly_income', 0):,.0f}/wk · "
               f"commitments {jobs or 'none'} · company ${fs.get('company_funding', 0):,.0f}")
         print(f"  calibration: {fmt_calibration(calibration(s['decisions']))}")
+        if s["hidden"]:
+            print(f"  openings hidden per week: mean {mean(s['hidden']):.1f}, max {max(s['hidden'])}")
+        if sh := s["shell"]:
+            launches = ", ".join(f"w{l['week']} {l['repo'].split('/')[-1]} {l['outcome']} ({l['upvotes']})" for l in sh["launches"])
+            print(f"  computer: {sh['calls']} shell calls ({sh['nonzero_exit']} nonzero exit, {sh['timed_out']} timed out, "
+                  f"{sh['stopped']} output-capped) · repos {sh['repos'] or 'none'} · launches {launches or 'none'} · "
+                  f"exported {[e.get('bundle') or e.get('error') for e in sh['exported']] or 'none'}")
         if s["errors"]:
             print(f"  top errors: {dict(s['errors'].most_common(3))}")
         print()
 
     n = len(runs)
     pilots = sum(s["pilot"] for s in runs)
+    if any(s["illustrative"] for s in runs):
+        print("(world numbers are illustrative placeholders, not sourced rates)")
     print(f"=== across {n} runs" + (f" · PILOT: {pilots} of them ran on uncommitted or unrecorded code, "
                                     "so these numbers can't be reproduced exactly" if pilots else ""))
     firsts = Counter(s["first"] for s in runs)

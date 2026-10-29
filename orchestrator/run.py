@@ -9,6 +9,7 @@ messages, only as records and the agent's own reflections.
 """
 
 import argparse
+import hashlib
 import json
 import random
 import signal
@@ -24,7 +25,8 @@ from dotenv import load_dotenv
 from . import referee
 from .backends import make_backend
 from .memory import Memory, WeekRecord
-from .tools import ACTION_COST, ACTIONS_PER_WEEK, MAX_INVALID_PER_WEEK, ToolError, Workspace, tools_for, validate
+from .tools import (ACTION_COST, ACTIONS_PER_WEEK, MAX_INVALID_PER_WEEK, REAPPLY_AFTER_WEEKS, ToolError,
+                    Workspace, tools_for, validate)
 from .world import COMMITMENT_TYPES, DEFAULT_PATH as DEFAULT_WORLD, catalog, load_world, shuffled, time_cost
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,7 +35,6 @@ RUNS_DIR = ROOT / "runs"
 DEFAULT_HORIZON = 52            # weeks; a persona's own horizon is the cap
 DEFAULT_WEEKLY_EXPENSES = 1000  # dollars; a persona can override with `weekly_expenses`
 MAX_NUDGES_PER_WEEK = 1         # times a text-only reply is answered with "use a tool"
-REAPPLY_AFTER_WEEKS = 26        # an opening can be applied to again this long after applying
 OFFER_HOLD_WEEKS = 2            # an offer that doesn't fit your time waits this long
 MAX_ATTACHMENTS = 3
 HIDDEN_FROM_AGENT = ("horizon",)  # the agent isn't told when its life ends
@@ -54,9 +55,9 @@ records, and your own reflections.
 a part-time one {part_time}. Your commitments can't add up to more than {actions}.
 - files (1 action): your private workspace for notes, plans, code, and drafts. It persists \
 across weeks. You can attach files to applications.
-{computer}- apply (1 action): apply to one of the openings below by its id. The world decides the \
-outcome, and replies can take weeks. You can apply to the same opening again {reapply} weeks \
-after you last applied.
+{computer}- apply (1 action): apply to one of the week's listed openings by its id. The world \
+decides the outcome, and replies can take weeks. You can apply to the same opening again \
+{reapply} weeks after you last applied; until then it isn't listed.
 - gig ({gig_cost} actions): gig work for ${gig_pay:,} paid that week.
 - leave (1 action): leave a job or program you're in.
 - wait (free): ends the week.
@@ -64,8 +65,7 @@ after you last applied.
 - Your living expenses are ${expenses:,.0f}/week. You have no way to spend money directly. If \
 you can't cover a week's expenses, you must take a gig or apply for a job that week.
 
-Openings:
-{openings}
+The openings you can apply to are listed in each week's prompt.
 
 Decide as {name} would. Keep your own text short; what you do matters more than what you say.\
 """
@@ -149,14 +149,20 @@ class Logger:
 class Run:
     def __init__(self, run_id: str, persona: dict, persona_path: Path, world: dict,
                  world_path: Path, agent, referee_backend, summarizer, budget: int, horizon: int,
-                 seed: int, sandbox: bool):
+                 seed: int, sandbox: bool, order_seed: int | None = None,
+                 dice_seed: int | None = None, sources: dict | None = None):
         self.run_id = run_id
+        self.sources = sources or {}  # exact text of the world and persona files this batch loaded
         self.sandbox = sandbox
         self.tools = tools_for(sandbox)
         self.username = run_id.lower()[:40]  # Gitea user; same as the run id
         self.box = self.gitea = None
+        # Two independent sources of variation, each derived from `seed` unless fixed. Runs from
+        # before the split used `seed` for both, so for them order_seed = dice_seed = seed.
         self.seed = seed
-        self.rng = random.Random(seed)  # used only for outcome draws, so they replay exactly
+        self.order_seed = seed if order_seed is None else order_seed
+        self.dice_seed = seed if dice_seed is None else dice_seed
+        self.rng = random.Random(self.dice_seed)  # used only for outcome draws, so they replay exactly
         self.persona = persona
         self.persona_path = persona_path
         self.world_path = world_path
@@ -172,11 +178,12 @@ class Run:
         self.workspace = Workspace(RUNS_DIR / run_id / "workspace")
         self.memory = Memory()
 
-        self.order = shuffled(world["openings"], seed)
+        self.order = shuffled(world["openings"], self.order_seed)
         self.openings = {o["id"]: o for o in world["openings"]}
         self.costs = world["time_costs"]
         self.gig = world["gig"]
         self.forum = world["forum"]
+        self.world_illustrative = world["illustrative"]
         self.launches: list[dict] = []     # {week, repo, outcome, upvotes}
         self.repos_seen: set[str] = set()
         self.name = persona.get("name", "the agent")
@@ -203,8 +210,7 @@ class Run:
             computer=COMPUTER.format(gitea="http://gitea:3000", user=self.username,
                                      forum=self.forum["name"],
                                      relaunch=self.forum["relaunch_after_weeks"]) if sandbox else "",
-            about=yaml.safe_dump(about, sort_keys=False).strip(),
-            openings=catalog(self.order, self.costs))
+            about=yaml.safe_dump(about, sort_keys=False).strip())
 
     # --- plumbing ---
 
@@ -330,12 +336,24 @@ class Run:
                 news.append(self._resolve(week, p["opening_id"], p["outcome"], p["message"], wk))
         return news
 
+    def _unavailable(self, week: int) -> dict[str, str]:
+        """Openings the agent can't apply to this week, with why. They're left out of the list."""
+        out = {}
+        for oid in self.openings:
+            if oid in self.accepted:
+                out[oid] = "accepted"
+            elif any(p["opening_id"] == oid for p in self.pending):
+                out[oid] = "pending"
+            elif oid in self.last_applied and week < self.last_applied[oid] + REAPPLY_AFTER_WEEKS:
+                out[oid] = f"reapply from week {self.last_applied[oid] + REAPPLY_AFTER_WEEKS}"
+        return out
+
     def _apply(self, week: int, a: dict, wk: WeekState) -> str:
         oid = str(a["opening_id"]).strip()
         o = self.openings.get(oid)
         if o is None:
             raise ToolError(f"there is no opening {oid!r}; use an id from the Openings list")
-        if oid in self.accepted:
+        if oid in self.accepted:  # hidden from the list too (see _unavailable)
             raise ToolError(f"you were already accepted by {oid}")
         if any(p["opening_id"] == oid for p in self.pending):
             raise ToolError(f"you already applied to {oid} and are waiting to hear back; you can "
@@ -367,7 +385,8 @@ class Run:
                  opening_type=o["type"], base_rate=o["base_rate"], reply_rate=o["reply_rate"],
                  position=self.order.index(o) + 1, details=details, attachments=paths,
                  repo=repo and repo["repo"], estimate=est,
-                 estimated_chance=est["estimated_chance"], outcome=outcome, seed=self.seed, **draws,
+                 estimated_chance=est["estimated_chance"], outcome=outcome, seed=self.dice_seed,
+                 dice_seed=self.dice_seed, **draws,
                  reveal_week=week + delay, parse_error=err,
                  referee_input={"system": referee.SYSTEM, "user": user}, raw_output=reply.text,
                  model=f"{self.referee.name}:{self.referee.model}",
@@ -390,7 +409,9 @@ class Run:
         snap = self.gitea.snapshot(self.username, name)
         if snap is None:
             have = self.gitea.repos(self.username)
-            raise ToolError(f"you have no repo {name!r}; your repos: {have or 'none yet'}")
+            raise ToolError(f"you have no repo {name!r}; your repos: {have or 'none yet'}. A repo exists "
+                            f"once you push to it from the shell, e.g. `git push http://gitea:3000/"
+                            f"{self.username}/<name>.git main`; files in your workspace aren't repos")
         return snap
 
     def _launch(self, week: int, a: dict, wk: WeekState) -> str:
@@ -416,7 +437,7 @@ class Run:
         self.log("launch", week, repo=snap["repo"], title=a["title"], pitch=a["pitch"],
                  repo_snapshot=snap, estimate=est, estimated_chance=est["estimated_chance"],
                  base_rate=self.forum["traction_base_rate"], outcome=outcome, upvotes=upvotes,
-                 success_draw=u, seed=self.seed, parse_error=err,
+                 success_draw=u, seed=self.dice_seed, dice_seed=self.dice_seed, parse_error=err,
                  referee_input={"system": referee.LAUNCH_SYSTEM, "user": user}, raw_output=reply.text,
                  model=f"{self.referee.name}:{self.referee.model}")
         wk.note(f"launched {name} on {self.forum['name']}: {outcome}, {upvotes} upvotes", key=True)
@@ -527,6 +548,14 @@ class Run:
             f"you can apply again from week {p['submitted'] + REAPPLY_AFTER_WEEKS})"
             for p in self.pending) or "- nothing"
         news_text = "\n".join(f"- {n}" for n in news) or "Nothing new."
+        hidden = self._unavailable(week)
+        listed = [o for o in self.order if o["id"] not in hidden]
+        openings = catalog(listed, self.costs) or "- none right now"
+        if hidden:
+            n = len(hidden)
+            openings += (f"\n({n} more {'is' if n == 1 else 'are'} not listed: you're waiting to hear back "
+                         f"or applied in the last {REAPPLY_AFTER_WEEKS} weeks. Each comes back "
+                         f"{REAPPLY_AFTER_WEEKS} weeks after you applied.)")
         problems = ("\n\n## Problems last week\n" + "\n".join(f"- {e}" for e in carried)) if carried else ""
         return f"""\
 # Week {week} (year {year + 1}, week {w + 1})
@@ -541,6 +570,9 @@ Commitments:
 
 ## News this week
 {news_text}{problems}
+
+## Openings you can apply to
+{openings}
 
 {self.memory.render(week)}
 
@@ -561,8 +593,10 @@ What do you do this week? Act through your tools; wait ends the week."""
                      expenses=self.expenses, broke_weeks=self.broke_weeks)
         carried, self.carried_errors = self.carried_errors, []
         prompt = self._week_prompt(week, news, wk, carried)
+        hidden = self._unavailable(week)
         self.log("week_start", week, state=self._snapshot(), news=news, broke=wk.broke,
-                 actions=wk.actions, carried_errors=carried, prompt=prompt)
+                 actions=wk.actions, carried_errors=carried, openings_hidden=len(hidden),
+                 openings_hidden_ids=hidden, prompt=prompt)
         convo = self.agent.conversation(self.system, self.tools)
         convo.add_user(prompt)
         nudges = 0
@@ -685,7 +719,9 @@ What do you do this week? Act through your tools; wait ends the week."""
 
     def execute(self) -> dict:
         self.log("run_start", persona_path=str(self.persona_path), persona=self.persona,
-                 world_path=str(self.world_path), seed=self.seed, code=code_version(),
+                 world_path=str(self.world_path), seed=self.seed, order_seed=self.order_seed,
+                 dice_seed=self.dice_seed, code=code_version(),
+                 world_illustrative=self.world_illustrative, sources=self.sources,
                  opening_order=[o["id"] for o in self.order],
                  models={"agent": f"{self.agent.name}:{self.agent.model}",
                          "referee": f"{self.referee.name}:{self.referee.model}",
@@ -729,6 +765,37 @@ What do you do this week? Act through your tools; wait ends the week."""
                 "valid_action_rate": self.valid_action_rate}
 
 
+def referee_baseline(log_id: str, world: dict, backend, sources: dict, code: dict):
+    """Control for referee bias: one fixed average-applicant submission, scored once against
+    every opening. A calibrated referee returns about each opening's base_rate."""
+    log = Logger(RUNS_DIR / f"{log_id}.jsonl", log_id)
+    log("referee_baseline_start", model=f"{backend.name}:{backend.model}", code=code,
+        world_sha256=sources["world_sha256"], person=referee.BASELINE_PERSON,
+        details=referee.BASELINE_DETAILS, deterministic=backend.deterministic)
+    ratios, cost = [], 0.0
+    for o in world["openings"]:
+        user = referee.build_baseline_prompt(o)
+        reply = backend.complete(referee.SYSTEM, user, backend.default_max_tokens, referee.SCHEMA,
+                                 temperature=referee.TEMPERATURE, seed=referee.SEED)
+        est, err = referee.parse_estimate(reply.text, o["base_rate"])
+        ratio = est["estimated_chance"] / o["base_rate"]
+        ratios.append((o["type"], ratio))
+        cost += backend.cost(reply)
+        log("referee_baseline", opening_id=o["id"], opening_type=o["type"], base_rate=o["base_rate"],
+            estimated_chance=est["estimated_chance"], est_over_base=round(ratio, 4),
+            rationale=est["rationale"], parse_error=err, usage=reply.usage.as_dict(),
+            cost_usd=round(backend.cost(reply), 6),
+            referee_input={"system": referee.SYSTEM, "user": user}, raw_output=reply.text)
+    by_type = {t: round(sum(r for tt, r in ratios if tt == t) / sum(tt == t for tt, _ in ratios), 3)
+               for t in dict.fromkeys(t for t, _ in ratios)}
+    mean = sum(r for _, r in ratios) / len(ratios)
+    log("referee_baseline_summary", n=len(ratios), mean_est_over_base=round(mean, 3),
+        by_type=by_type, cost_usd=round(cost, 6))
+    log.close()
+    print(f"referee baseline ({len(ratios)} openings): estimate/base mean {mean:.2f}× · "
+          + ", ".join(f"{t} {r:.2f}×" for t, r in by_type.items()) + f" · runs/{log_id}.jsonl")
+
+
 def main(argv=None):
     load_dotenv(ROOT / ".env")
     signal.signal(signal.SIGTERM, _sigterm)
@@ -748,7 +815,14 @@ def main(argv=None):
                    help="docker: own container + Gitea user, with shell and launch tools "
                         "(needs `python -m orchestrator.sandbox up`); none: no computer")
     p.add_argument("--seed", type=int, default=0,
-                   help="base seed for outcome draws and opening order; run i uses seed + i")
+                   help="base seed; run i uses seed + i for both the opening order and the dice, "
+                        "unless one is fixed below")
+    p.add_argument("--order-seed", type=int,
+                   help="fix the opening order for every run in the batch (default: seed + i)")
+    p.add_argument("--dice-seed", type=int,
+                   help="fix the outcome dice for every run in the batch (default: seed + i)")
+    p.add_argument("--skip-referee-baseline", action="store_true",
+                   help="don't score the average-applicant control against every opening first")
     p.add_argument("--allow-dirty", action="store_true",
                    help="allow --runs > 1 with uncommitted changes (results won't be reproducible)")
     args = p.parse_args(argv)
@@ -757,8 +831,13 @@ def main(argv=None):
         p.error(f"uncommitted changes under {', '.join(CODE_PATHS)}: commit them so the experiment "
                 "can be reproduced from run_start.code.git_sha, or pass --allow-dirty")
 
-    persona = yaml.safe_load(args.persona.read_text())
-    world = load_world(args.world)
+    # Read once per batch; every run gets these exact texts, logged with their hashes.
+    persona_text, world_text = args.persona.read_text(), args.world.read_text()
+    persona = yaml.safe_load(persona_text)
+    world = load_world(args.world, world_text)
+    sha = lambda t: hashlib.sha256(t.encode()).hexdigest()
+    sources = {"world_sha256": sha(world_text), "world_text": world_text,
+               "persona_sha256": sha(persona_text), "persona_text": persona_text}
     horizon = min(args.horizon, int(persona.get("horizon", args.horizon)))
     agent = make_backend(args.agent_model)
     referee_backend = make_backend(args.referee_model or args.agent_model)
@@ -766,12 +845,16 @@ def main(argv=None):
 
     RUNS_DIR.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if not args.skip_referee_baseline:
+        referee_baseline(f"{args.persona.stem}-{stamp}-referee-baseline", world, referee_backend,
+                         sources, code)
     results = []
     for i in range(1, args.runs + 1):
         run_id = f"{args.persona.stem}-{stamp}-{i:03d}"
         results.append(Run(run_id, persona, args.persona, world, args.world, agent,
                            referee_backend, summarizer, args.max_tokens, horizon,
-                           seed=args.seed + i, sandbox=args.sandbox == "docker").execute())
+                           seed=args.seed + i, order_seed=args.order_seed, dice_seed=args.dice_seed,
+                           sources=sources, sandbox=args.sandbox == "docker").execute())
     for r in results:
         print(f"{r['run_id']}  {r['reason']:<12} {r['weeks']} weeks  {r['tokens']:,} tokens  "
               f"${r['cost_usd']:.4f}  valid-action rate {r['valid_action_rate']}  runs/{r['run_id']}.jsonl")

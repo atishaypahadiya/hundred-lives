@@ -14,6 +14,7 @@ import stat
 from pathlib import Path
 
 ACTIONS_PER_WEEK = 8
+REAPPLY_AFTER_WEEKS = 26  # an opening can be applied to again this long after the last application
 MAX_INVALID_PER_WEEK = 3
 ACTION_COST = {"files": 1, "shell": 1, "apply": 1, "launch": 1, "leave": 1, "wait": 0}  # gig: world
 SANDBOX_TOOLS = ("shell", "launch")  # only offered when the run has a container
@@ -38,9 +39,11 @@ TOOLS = [
     {
         "name": "apply",
         "description": (
-            "Apply to one of the listed openings (a job, accelerator, grant, or angel introduction) "
-            "by its id. The world decides the outcome. Replies can take weeks, and some never come. "
-            "You can attach files from your workspace as evidence."
+            "Apply to one of this week's listed openings (a job, accelerator, grant, or angel "
+            "introduction) by its id. The world decides the outcome. Replies can take weeks, and some "
+            "never come. You can apply to the same opening again "
+            f"{REAPPLY_AFTER_WEEKS} weeks after you last applied to it; until then, and while you're "
+            "waiting to hear back, it isn't listed. You can attach files from your workspace as evidence."
         ),
         "input_schema": {
             "type": "object",
