@@ -1,9 +1,11 @@
 # Shared world infrastructure. Start with: uv run python -m orchestrator.sandbox up
 #
-# Networks:
-#   agents  internal: no route out. Agent containers join only this, so the only host they
-#           can reach is gitea.
-#   host    normal bridge, so the host (orchestrator, referee) can reach Gitea on 127.0.0.1:3000.
+# Every network is `internal: true`: no route out for anything, Gitea included. Gitea sits on
+# hl-agents; each run creates its own internal network hl-net-<run> with just its container
+# and Gitea (alias gitea), so agents reach Gitea as gitea:3000 but never each other. The host
+# reaches Gitea at its hl-agents IP (sandbox.gitea_host_url), because OrbStack routes the Mac
+# to containers on internal networks directly; no port is published. Plain Docker Desktop
+# can't do that; set HL_GITEA_URL to a route that works there.
 
 name: hundred-lives
 
@@ -18,25 +20,34 @@ services:
       GITEA__server__ROOT_URL: http://gitea:3000/
       GITEA__server__DOMAIN: gitea
       GITEA__server__DISABLE_SSH: "true"
+      GITEA__server__OFFLINE_MODE: "true"
       GITEA__service__DISABLE_REGISTRATION: "true"
-      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+      # Agents must not see each other's (or earlier runs') code: every repo is private,
+      # users are private, nothing is visible signed out. The referee reads with the admin
+      # account. Each run's user and repos are exported and deleted when the run ends.
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "true"
+      GITEA__service__DEFAULT_USER_VISIBILITY: private
+      GITEA__repository__FORCE_PRIVATE: "true"
       GITEA__repository__ENABLE_PUSH_CREATE_USER: "true"
-      GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE: "false"
-      GITEA__mailer__ENABLED: "false"
+      GITEA__repository__DEFAULT_PUSH_CREATE_PRIVATE: "true"
+      # Second layer behind the internal network: no feature that fetches or sends to a
+      # URL an agent chooses.
+      GITEA__repository__DISABLE_MIGRATIONS: "true"
+      GITEA__mirror__ENABLED: "false"
       GITEA__migrations__ALLOW_LOCALNETWORKS: "false"
-      GITEA__webhook__ALLOWED_HOST_LIST: "none"
+      GITEA__webhook__ALLOWED_HOST_LIST: "loopback"
+      GITEA__actions__ENABLED: "false"
+      GITEA__packages__ENABLED: "false"
+      GITEA__picture__DISABLE_GRAVATAR: "true"
+      GITEA__mailer__ENABLED: "false"
     volumes:
       - gitea-data:/data
-    networks: [agents, host]
-    ports:
-      - "127.0.0.1:3000:3000"
+    networks: [agents]
 
 networks:
   agents:
     name: hl-agents
     internal: true
-  host:
-    name: hl-host
 
 volumes:
   gitea-data:

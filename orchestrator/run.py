@@ -39,7 +39,6 @@ MAX_ATTACHMENTS = 3
 HIDDEN_FROM_AGENT = ("horizon",)  # the agent isn't told when its life ends
 LOG_OUTPUT_CHARS = 4000
 SHELL_SHOWN_CHARS = 3000         # shell output the agent sees (head + tail)
-SHELL_LOGGED_CHARS = 20000
 
 SYSTEM = """\
 You are {name}. You are living the next few years of your life one week at a time, in a \
@@ -425,14 +424,15 @@ class Run:
         return f"Your post got {upvotes} upvotes. Comments:\n{shown}"
 
     def _shell(self, week: int, command: str, wk: WeekState) -> str:
-        code, out, timed_out = self.box.exec(command)
-        self.log("shell", week, command=command, exit_code=code, timed_out=timed_out,
-                 output=out[:SHELL_LOGGED_CHARS], output_chars=len(out))
-        wk.note(f"ran `{short(command, 60)}` (exit {code}{', timed out' if timed_out else ''})")
+        r = self.box.exec(command)  # output is capped inside the container (sandbox.MAX_OUTPUT_BYTES)
+        self.log("shell", week, command=command, exit_code=r.code, timed_out=r.timed_out,
+                 stopped=r.stopped, output=r.output, output_chars=len(r.output))
+        wk.note(f"ran `{short(command, 60)}` (exit {r.code}{', timed out' if r.timed_out else ''})")
+        out = r.output
         if len(out) > SHELL_SHOWN_CHARS:
             half = SHELL_SHOWN_CHARS // 2
             out = out[:half] + f"\n… [{len(out) - SHELL_SHOWN_CHARS} characters cut] …\n" + out[-half:]
-        return (out.rstrip() or "(no output)") + f"\n[exit {code}{', timed out after 60s' if timed_out else ''}]"
+        return (out.rstrip() or "(no output)") + f"\n[exit {r.code}{', timed out after 60s' if r.timed_out else ''}]"
 
     def _take_gig(self, week: int, wk: WeekState, forced: bool) -> str:
         self.cash += self.gig["pay"]
@@ -611,7 +611,7 @@ What do you do this week? Act through your tools; wait ends the week."""
                 self.repos_seen.add(name)
                 wk.note(f"created repo {name}", key=True)
                 self.log("repo_created", week, repo=f"{self.username}/{name}")
-            self.workspace.sync()
+            self._sync(week)
         net = self.cash + self.income - self.expenses
         shortfall = max(0.0, -net)
         self.cash = max(0.0, net)
@@ -649,6 +649,14 @@ What do you do this week? Act through your tools; wait ends the week."""
         total = self.valid_actions + self.invalid_actions
         return round(self.valid_actions / total, 4) if total else None
 
+    def _sync(self, week: int | None):
+        """Copy the container's workspace to runs/<id>/workspace (a snapshot for analysis; the
+        container holds the real one). Caps and skips are in the log."""
+        try:
+            self.log("workspace_sync", week, **self.workspace.sync())
+        except Exception as e:
+            self.log("workspace_sync_failed", week, error=str(e))
+
     def _start_sandbox(self):
         from .sandbox import AgentBox, BoxWorkspace, Gitea
         self.gitea = Gitea()
@@ -656,12 +664,26 @@ What do you do this week? Act through your tools; wait ends the week."""
         self.box = AgentBox(self.run_id, self.username, token)
         self.box.start()
         self.workspace = BoxWorkspace(self.box, self.workspace.root)
-        self.log("sandbox_started", container=self.box.name, gitea_user=self.username,
-                 network="hl-agents")
+        self.log("sandbox_started", container=self.box.name, network=self.box.network,
+                 gitea_user=self.username)
+
+    def _stop_sandbox(self):
+        """Last workspace copy, export repos as bundles, then delete the container, its
+        network, and the Gitea user with its repos, so the next run starts clean."""
+        if self.box:
+            self._sync(None)
+            self.box.stop()
+            self.log("sandbox_stopped", container=self.box.name)
+        if self.gitea:
+            try:
+                exported = self.gitea.export(self.username, RUNS_DIR / self.run_id / "repos")
+                self.log("repos_exported", repos=exported, dir=f"runs/{self.run_id}/repos")
+            except Exception as e:
+                self.log("repos_export_failed", error=str(e))
+            self.gitea.delete_user(self.username)
+            self.log("gitea_user_deleted", gitea_user=self.username)
 
     def execute(self) -> dict:
-        if self.sandbox:
-            self._start_sandbox()
         self.log("run_start", persona_path=str(self.persona_path), persona=self.persona,
                  world_path=str(self.world_path), seed=self.seed, code=code_version(),
                  opening_order=[o["id"] for o in self.order],
@@ -673,6 +695,8 @@ What do you do this week? Act through your tools; wait ends the week."""
                  system_prompt=self.system, tools=self.tools)
         reason, detail = "horizon", None
         try:
+            if self.sandbox:
+                self._start_sandbox()
             for week in range(1, self.horizon + 1):
                 self.week(week)
         except BudgetExceeded as e:
@@ -683,13 +707,10 @@ What do you do this week? Act through your tools; wait ends the week."""
         except Exception:
             reason, detail = "error", traceback.format_exc()
         finally:
-            if self.box:
-                try:
-                    self.workspace.sync()
-                except Exception as e:  # keep the run_end even if the copy fails
-                    self.log("workspace_sync_failed", error=str(e))
-                self.box.stop()
-                self.log("sandbox_stopped", container=self.box.name)
+            try:
+                self._stop_sandbox()
+            except Exception as e:  # keep the run_end even if teardown fails
+                self.log("sandbox_teardown_failed", error=str(e))
             self.log("run_end", reason=reason, detail=detail, weeks_completed=self.weeks_completed,
                      models={"agent": f"{self.agent.name}:{self.agent.model}",
                              "referee": f"{self.referee.name}:{self.referee.model}"},
