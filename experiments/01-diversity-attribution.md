@@ -131,3 +131,93 @@ Estimate = 80 runs × the measured cost of a 52-week run, plus 4 baselines × 30
 - **Projected total: 80 × $0.11 + 4 × $0.007 ≈ $9.** Stop at $20 logged (guard above). Logged Anthropic spend before the experiment: $0.14. The account's remaining spend limit isn't readable with an API key, so it wasn't checked; the $20 guard and the `api_error` stop are the protection.
 
 Approved to run at this scale (2026-10-29).
+
+## Results
+
+Ran 2026-10-29, 09:54–13:15 UTC. All 80 runs record `eda3a9c` with `dirty: false`. The pre-registered files still match the hashes above. 80 of 80 runs reached week 52. None ended on the token budget, an API error or an interrupt, so nothing was excluded or rerun. Logged cost was $6.96: $6.93 for the runs and $0.03 for the four referee baselines. A run used 0.98M tokens at the median and 1.27M at most. Numbers below are from `analysis/diversity.py` unless marked exploratory.
+
+The world's odds are illustrative, so this describes the model in this world, not real careers.
+
+### Measures (20 of 20 runs kept per condition; 95% bootstrap CI)
+
+| measure | a: vary dice | b: vary order | c: vary both | d: vary neither |
+|---|---|---|---|---|
+| path edit distance / horizon | 0.617 [0.549, 0.672] | 0.372 [0.219, 0.492] | 0.623 [0.542, 0.692] | 0.280 [0.116, 0.398] |
+| application-set Jaccard distance | 0.304 [0.250, 0.347] | 0.264 [0.223, 0.300] | 0.308 [0.263, 0.345] | 0.247 [0.212, 0.277] |
+| first-applied entropy (bits), no CI | 1.369 | 1.619 | 1.858 | 1.739 |
+| first-applied distinct, no CI | 3 | 4 | 4 | 4 |
+| final cash sd | $27,521 [19,477, 33,301] | $12,483 [4,482, 17,188] | $24,431 [13,772, 32,271] | $25,598 [19,115, 31,241] |
+| final cash mean | $56,168 | $62,605 | $48,452 | $46,390 |
+| income at week 52, mean per week | $2,140 | $2,145 | $1,958 | $1,772 |
+| end state | job+raised 50%, job 40%, accelerator+raised 10% | job 70%, job+raised 30% | job+raised 55%, job 35%, part-time 5%, accelerator+raised 5% | job 75%, job+raised 15%, part-time 5%, accelerator 5% |
+| shell calls / repos / launches, mean | 11.5 / 1.2 / 0.3 | 12.8 / 1.2 / 0.5 | 13.6 / 1.1 / 0.3 | 11.7 / 1.6 / 0.6 |
+| messages / company spend, mean | 19.2 / 0.5 | 26.4 / 0.1 | 20.6 / 0.3 | 25.0 / 0.1 |
+
+The end-state bucket counts an accelerator ahead of a job. Counting full-time jobs held at week 52 directly, 77 of 80 runs had one, and 3 of those also had an accelerator. Two runs ended on part-time work only and one in an accelerator only.
+
+### Sources of diversity (difference of means; 95% CI from independent bootstrap draws)
+
+| | path edit distance / horizon | application-set Jaccard |
+|---|---|---|
+| floor (d) | 0.280 [0.116, 0.398] | 0.247 [0.212, 0.277] |
+| dice (a − d) | **0.338 [0.203, 0.505]** | 0.057 [−0.009, 0.113] |
+| order (b − d) | 0.093 [−0.095, 0.290] | 0.016 [−0.037, 0.068] |
+| interaction (c − a − b + d) | −0.087 [−0.306, 0.134] | −0.012 [−0.090, 0.079] |
+
+The floor is what's left with order and dice both fixed: the randomness of every model in the run. That covers the agent, the referee (Claude models take no temperature or seed, so its odds estimates vary), and the model that writes contacts' replies. Whether a contact replies is dice; what the reply says is the model. All three are Haiku, so this design can't split the floor between them.
+
+- **Paths:** the floor is 0.280 of c's 0.623 (45%) and the dice add 0.338 (54%). Roughly half the difference between paths comes from luck, and roughly half from the models. The order term's CI includes 0, as does the interaction's.
+- **Application sets:** which openings she applies to is mostly the floor (0.247 of 0.308). Neither the dice nor the order is distinguishable from 0 at n = 20.
+
+All shares are differences of means with wide CIs, so "roughly half" is as precise as they allow.
+
+### Referee baseline
+
+Each batch's referee scored a fixed average applicant against all 30 openings. The mean estimate was 0.86, 0.91, 0.91 and 0.90 × the base rate across the four batches.
+
+| opening type | estimate / base rate |
+|---|---|
+| job | 0.92–0.98 |
+| accelerator | 0.89–0.92 |
+| grant | 0.78–0.93 |
+| angel intro | 0.77–0.81 |
+
+The referee is a little harsh, most of all on angel intros. That holds in every condition, so it doesn't bias the comparison.
+
+### Vendi score (exploratory, not pre-registered)
+
+These numbers are from `analysis/vendi.py` (branch `viewer-restyle`, `60539d4`), written after this pre-registration. It reuses `diversity.py`'s paths and edit distance.
+
+- **Vendi:** the effective number of distinct lives among the 20, from the kernel K = 1 − d. Its 95% CI is by jackknife.
+- **Positive-semidefinite check:** K's smallest eigenvalue never went below −1e-9 (the lowest was −8.5e-16), so the exp(−d/τ) fallback wasn't needed.
+- **Commitment path:** sees only commitments, broke weeks and money raised, so read its Vendi as a lower bound on how different the lives are.
+- **Event path:** adds each week's events (applications by type, gigs, launches, posts, new repos, messages, spend).
+
+| | a | b | c | d |
+|---|---|---|---|---|
+| commitment-path types (repeats collapsed) | 11 | 6 | 14 | 7 |
+| commitment-path Vendi | 5.16 [3.49, 6.84] | 2.81 [1.61, 4.02] | 5.76 [3.87, 7.65] | 2.40 [1.49, 3.31] |
+| most common type | none → job → job+raised (5) | none → job (11) | 2-way tie at 3 | none → job (10) |
+| event-path Vendi | 13.62 [11.31, 15.93] | 11.38 [9.97, 12.79] | 14.96 [12.77, 17.15] | 11.98 [10.72, 13.25] |
+
+In c, two types tie at 3 runs each: none → job, and none → job → job+raised → none+raised → job+raised.
+
+On commitments, the conditions with varying dice have about twice the effective number of lives (5–6 of 20) as those with fixed dice (2.4–2.8). That agrees with the edit-distance split. Counted with their weekly events, the lives are far more varied, 11–15 of 20 in every condition: they differ more in what they did week to week than in what they held.
+
+### Predictions
+
+| # | prediction | result | |
+|---|---|---|---|
+| 1 | floor ≥ half of c's path distance | 0.280 / 0.623 = 0.45 | missed (narrowly) |
+| 2 | application sets: order share > dice share | order 0.016, dice 0.057; both CIs include 0 | missed |
+| 3 | paths: dice share > order share | dice 0.338, order 0.093 | held |
+| 4 | interaction CI includes 0 for both distances | [−0.306, 0.134] and [−0.090, 0.079] | held |
+| 5 | parents messaged 10+ times in ≥ 90% of runs | 66 of 80 (83%); median 16 | missed |
+| 6 | a paid pilot in 20–60% of runs | 40 of 80 (50%) | held |
+| 7 | contractor hired in ≤ 20%, launch ads bought in ≤ 10% | contractor 19 of 80 (24%); ads 0 of 80 | partly: ads held, contractor missed |
+| 8 | ≥ 80% end week 52 in a full-time job | 77 of 80 (96%) | held |
+| 9 | no token-cap runs; $0.08–0.14 per run; total < $12 | no cap; total $6.93; per run $0.052–0.106, 20 of 80 under $0.08 | partly: cap and total held, per-run range missed |
+
+That's 4 held, 2 partly held and 3 missed. Counting the partial ones as half, 5 of 9.
+
+The follow-up loop from the known issue persists. Parents got 1,268 of the 1,827 contact messages across the 80 runs, a median of 16 per run.

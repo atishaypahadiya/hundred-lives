@@ -37,6 +37,9 @@ code{font:14.5px var(--mono);background:var(--card);padding:1px 6px;border-radiu
 .top{display:flex;justify-content:space-between;align-items:center;padding:26px 40px;font:13px var(--mono);color:var(--grey-2)}
 .top .mark{display:flex;align-items:center;gap:10px;color:var(--ink);font:500 16px var(--sans);letter-spacing:-.01em}
 .top a{color:var(--grey-2);text-decoration:none} .top a:hover{color:var(--ink)}
+.top{gap:12px} .top .mark{white-space:nowrap}
+@media (max-width:480px){.top{font-size:12px} .top>span:last-child{letter-spacing:-.02em} .top .mark{gap:8px;font-size:15px}}
+@media (max-width:420px){.top .nav-about{display:none}}
 
 /* hero */
 .hero{position:relative;padding:72px 0 40px;overflow-x:clip}
@@ -52,7 +55,7 @@ code{font:14.5px var(--mono);background:var(--card);padding:1px 6px;border-radiu
 .c-persona{left:47%;top:47%;width:300px;padding:18px 18px 16px}
 .c-persona .t{font:500 16px var(--sans)}
 .c-persona .s{font:13px var(--mono);color:var(--grey-2);margin-top:4px}
-.c-persona .row{display:flex;justify-content:space-between;align-items:center;margin-top:44px}
+.c-persona .row{display:flex;justify-content:space-between;align-items:center;margin-top:28px}
 .plus{width:28px;height:28px;border-radius:50%;background:#dcdbd4;display:grid;place-items:center;font:15px var(--sans);color:var(--ink)}
 .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:99px;background:#dcdbd4;font:12px var(--mono);color:var(--ink)}
 .pill i{width:6px;height:6px;border-radius:50%;background:var(--green)}
@@ -133,7 +136,8 @@ table.grid td:last-child{color:var(--grey-2)}
 .timeline li.done::before{background:var(--ink);border-color:var(--ink)}
 .timeline li.now::before{background:var(--green);border-color:var(--green);box-shadow:0 0 0 5px rgba(47,191,58,.18)}
 .timeline .d{font:12.5px var(--mono);color:var(--grey-2);display:block}
-.results{font:500 30px/1.15 var(--sans);letter-spacing:-.03em;color:var(--grey);margin:6px 0 0}
+.results{font:500 30px/1.15 var(--sans);letter-spacing:-.03em;color:var(--grey-2);margin:6px 0 0}
+@media (max-width:480px){.results{font-size:22px;line-height:1.2}}
 
 .refs{list-style:none;padding:0;margin:14px 0}
 .refs li{display:grid;grid-template-columns:56px 1fr;gap:14px;padding:13px 0;border-top:1px solid var(--line);margin:0;font-size:16px}
@@ -186,7 +190,7 @@ footer .row a{color:var(--grey-2)}
 
 <div class="top">
   <span class="mark"><svg class="dots" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"></svg>hundred-lives</span>
-  <span><a href="#why">About</a> &nbsp;·&nbsp; <a href="#log">Log</a> &nbsp;·&nbsp; <a href="https://github.com/atishaypahadiya/hundred-lives">Source ↗</a></span>
+  <span><span class="nav-about"><a href="#why">About</a> &nbsp;·&nbsp; </span><a href="#log">Log</a> &nbsp;·&nbsp; <a href="replays/self/">Self</a> &nbsp;·&nbsp; <a href="https://github.com/atishaypahadiya/hundred-lives">Source ↗</a></span>
 </div>
 
 <header class="wrap hero">
@@ -197,7 +201,8 @@ footer .row a{color:var(--grey-2)}
 
   <div class="floats">
     <div class="float cardf c-persona">
-      <div class="t">persona.yaml</div>
+      <div class="t">personas/</div>
+      <div class="s">Self · b. 2005 · Indore → San José</div>
       <div class="s">Maya · b. 2004 · San Jose</div>
       <div class="row"><span class="plus">+</span><span class="pill"><i></i>draft</span></div>
     </div>
@@ -408,6 +413,7 @@ footer .row a{color:var(--grey-2)}
     <ol class="timeline" id="timeline"></ol>
     <p class="mono dim" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:36px 0 4px">Results</p>
     <p class="results" id="results">None yet.</p>
+    <p class="mono" id="results-more" style="font-size:13px;margin:16px 0 0" hidden><a id="results-link">full numbers →</a></p>
   </div>
 </section>
 
@@ -443,16 +449,21 @@ footer .row a{color:var(--grey-2)}
 
 <script id="data" type="application/json">
 {
-  "runs": 0,
-  "results": "",
+  "runs": 84,
+  "results_link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results",
+  "results": "In 80 one-year lives of Maya, the paths differed widely, yet 77 ended in the same place: a full-time job. Roughly half of the difference between paths came from luck (which applications came through) and roughly half from randomness in the models themselves; the order she saw openings in made no measurable difference. The world's odds are illustrative, so this describes the model, not real careers.",
   "log": [
-    { "date": "2026-10-28", "text": "Wrote down the questions, the sandbox design, and the predictions.", "status": "done" },
-    { "date": "2026-10-28", "text": "Seeded dice for the referee: it estimates odds and code draws the outcome, so a 6% chance stays 6% across runs.", "status": "done" },
-    { "date": "2026-10-29", "text": "Sandbox for agents with a shell: one container per agent, a separate internal network for each run, CPU, memory, disk and process limits, and a local Gitea with no route to the internet. Red-teamed it: found and fixed egress through Gitea's migrate and mirror, code leaking between runs, two ways to exhaust host memory, and agents reaching each other's containers.", "status": "done" },
-    { "date": "next", "text": "Pilot results (10 × 52 on qwen3:8b), then the first agents with a shell.", "status": "now" },
-    { "date": "later", "text": "Three agents in containers with the shared world and proxy.", "status": "" },
-    { "date": "later", "text": "100 runs per persona, then change one detail at a time.", "status": "" },
-    { "date": "later", "text": "Replace the LLM referee with real base rates.", "status": "" }
+    {"date": "2026-10-28", "text": "Wrote down the questions, the sandbox design, and the predictions.", "status": "done"},
+    {"date": "2026-10-28", "text": "Seeded dice for the referee: it estimates odds and code draws the outcome, so a 6% chance stays 6% across runs.", "status": "done"},
+    {"date": "2026-10-29", "text": "Sandbox for agents with a shell: one container per agent, a separate internal network for each run, CPU, memory, disk and process limits, and a local Gitea with no route to the internet. Red-teamed it: found and fixed egress through Gitea's migrate and mirror, code leaking between runs, two ways to exhaust host memory, and agents reaching each other's containers.", "status": "done"},
+    {"date": "2026-10-29", "text": "Showcase v1: Maya, 26 weeks on Haiku, the first life with a shell and a code host.", "status": "done"},
+    {"date": "2026-10-29", "text": "Pre-registered experiment 01: 4 conditions × 20 lives × 52 weeks, to split path diversity between the dice, the order openings are listed in, and the model's own sampling.", "status": "done"},
+    {"date": "2026-10-29", "text": "Viewer: every life as a page, with a week scrubber, money, thinking, terminal, ideas, referee decisions and repos. Finished lives export to a static replay.", "status": "done"},
+    {"date": "2026-10-29", "text": "Track A: Self, 104 weeks on Sonnet. Took the safe job (data analyst at a county transit agency), Conscious stayed a command-line tool, 2 followers. The replay is under Self, top right.", "status": "done"},
+    {"date": "next", "text": "Five more lives of Self, then the same with one line of the persona changed: no \"solo\", a social goal, or the goal alone.", "status": "now"},
+    {"date": "later", "text": "Three agents in containers with the shared world and proxy.", "status": ""},
+    {"date": "later", "text": "100 runs per persona, then change one detail at a time.", "status": ""},
+    {"date": "later", "text": "Replace the LLM referee with real base rates.", "status": ""}
   ]
 }
 </script>
@@ -462,6 +473,10 @@ footer .row a{color:var(--grey-2)}
   var d; try { d = JSON.parse(document.getElementById('data').textContent); } catch(e){ d = null; }
   if (d) {
     if (d.results) document.getElementById('results').textContent = d.results;
+    if (d.results && /^https:\/\/github\.com\//.test(d.results_link || '')) {
+      document.getElementById('results-link').href = d.results_link;
+      document.getElementById('results-more').hidden = false;
+    }
     var runs = Math.max(0, Math.min(100, +d.runs || 0));
     document.getElementById('ringN').textContent = runs;
     document.getElementById('ringArc').setAttribute('stroke-dasharray', (2.64*runs).toFixed(1)+' 264');
