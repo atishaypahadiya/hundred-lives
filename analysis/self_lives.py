@@ -1,6 +1,7 @@
 """Per-life social and building profile: is a pattern a trait of the persona or one life's path?
 
-    uv run python analysis/self_lives.py 'runs/self-exp02-*.jsonl'
+    uv run python analysis/self_lives.py 'runs/self-base-*.jsonl'
+    uv run python analysis/self_lives.py base='runs/self-base-*.jsonl' nosolo='runs/self-nosolo-*.jsonl' ...
 
 One row per run, then the spread across runs:
   - messages sent / replied per contact (every contact in the persona, zeros included), offers taken;
@@ -9,7 +10,10 @@ One row per run, then the spread across runs:
   - big bets: applications to accelerators, angels, grants, student programs and hackathons
     (with successes), launches, hackathon placings, company spend;
   - training: weeks with a session, streak at the end; final cash and commitments.
-Runs that didn't reach the horizon are marked and kept out of the spread.
+Runs that didn't reach the horizon are marked and kept out of the spread. With name=glob
+arguments (conditions), each condition gets the report, then one comparison table: per life,
+messages sent, distinct contacts messaged, posts, followers, big bets (and wins), commits,
+as mean [min–max] over the lives that reached the horizon.
 """
 
 import glob
@@ -58,10 +62,36 @@ def profile(path: str) -> dict:
     }
 
 
-def main(patterns: list[str]):
-    paths = sorted({p for pat in patterns for p in glob.glob(pat) if not p.endswith("-referee-baseline.jsonl")})
+COMPARE = [("messages / life", lambda r: sum(s for s, _ in r["messages"].values())),
+           ("distinct contacts", lambda r: sum(s > 0 for s, _ in r["messages"].values())),
+           ("posts", lambda r: r["posts"]), ("followers", lambda r: r["followers"]),
+           ("big bets", lambda r: r["bets"]), ("big bets won", lambda r: r["bet_wins"]),
+           ("commits", lambda r: r["commits"])]
+
+
+def main(args: list[str]):
+    conds = [a.split("=", 1) if "=" in a else ["runs", a] for a in args]
+    done = {}
+    for name, pat in conds:
+        if len(conds) > 1:
+            print(f"\n===== {name}: {pat}")
+        done[name] = report(pat)
+    if len(conds) > 1:
+        names = list(done)
+        print("\ncomparison: mean [min–max] per life, over lives that reached the horizon")
+        print(f"{'':<20}" + "".join(f"{n} (n={len(done[n])})".ljust(22) for n in names))
+        for label, f in COMPARE:
+            cells = []
+            for n in names:
+                xs = [f(r) for r in done[n]]
+                cells.append(f"{statistics.mean(xs):.1f} [{min(xs)}–{max(xs)}]" if xs else "–")
+            print(f"{label:<20}" + "".join(c.ljust(22) for c in cells))
+
+
+def report(pattern: str) -> list[dict]:
+    paths = sorted(p for p in glob.glob(pattern) if not p.endswith("-referee-baseline.jsonl"))
     if not paths:
-        sys.exit("no run logs match")
+        sys.exit(f"no run logs match {pattern}")
     runs = [profile(p) for p in paths]
     for r in runs:
         print(f"\n{r['run']}  dice {r['dice_seed']} order {r['order_seed']}  {r['reason']} after {r['weeks']} weeks")
@@ -75,7 +105,7 @@ def main(patterns: list[str]):
               f"holding: {', '.join(r['commitments']) or 'nothing'}")
     done = [r for r in runs if r["reason"] == "horizon"]
     if len(done) < 2:
-        return
+        return done
     contacts = done[-1]["contacts"]  # one batch, one persona
     print(f"\nacross {len(done)} lives that reached the horizon (min / median / max):")
     stat = lambda xs: f"{min(xs)} / {statistics.median(xs):g} / {max(xs)}"
@@ -87,6 +117,7 @@ def main(patterns: list[str]):
     print(f"  distinct contacts written to: {stat([sum(s > 0 for s, _ in r['messages'].values()) for r in done])}")
     for k in ("posts", "followers", "commits", "shell", "bets", "bet_wins", "launches", "spend", "trained_weeks"):
         print(f"  {k:<16} {stat([r[k] or 0 for r in done])}")
+    return done
 
 
 if __name__ == "__main__":

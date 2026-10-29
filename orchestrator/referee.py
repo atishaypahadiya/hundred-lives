@@ -77,8 +77,11 @@ SCHEMA = {
 
 def _person(persona: dict, week: int, commitments: list[dict], track_record: list[str],
             company_funding: float, week1: str = DEFAULT_WEEK1, status: str | None = None) -> str:
-    public = {k: persona[k] for k in PUBLIC_FIELDS if k in persona}
-    network = (persona.get("starting_state") or {}).get("network")
+    # A sensitivity variant carries the base persona's public facts in `referee_view` (hidden from the
+    # agent), so a changed trait reaches outcomes only through what the agent does.
+    view = persona.get("referee_view") or persona
+    public = {k: view[k] for k in PUBLIC_FIELDS if k in view}
+    network = view["network"] if "referee_view" in persona else (persona.get("starting_state") or {}).get("network")
     if network:
         public["network"] = network
     current = "\n".join(f"- {c['label']} (since week {c['since_week']})" for c in commitments) or "none"
