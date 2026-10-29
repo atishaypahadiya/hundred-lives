@@ -4,11 +4,15 @@
 
 Writes <out>/index.html (the viewer page with the run's normalized events, grid summary, and
 repo summaries embedded as JSON: no server, no fetches, no external fonts) and
-<out>/scrub-report.json. It reads only runs/; it never writes there.
+a scrub report to exports/<run_id>-scrub-report.json (gitignored, outside the published
+directory, since it lists the contacts for review). It reads only runs/; it never writes there.
 
 The scrub runs on the exported data, after normalizing, so what's checked is what's published:
 - local paths: the home directory becomes "~";
-- email addresses become "[email removed]" (example.* and noreply domains kept);
+- email addresses become "[email removed]" (example.* and noreply domains kept); the match is
+  loose and Unicode-aware, and an address still visible after NFKC normalization (fullwidth ＠)
+  fails the export;
+- dict keys get the same checks as values, and a key that would change fails the export;
 - secrets: anything matching the key/token patterns, or any field named like a secret, fails
   the export: nothing is written, since a redacted key may still be a leaked key;
 - contacts: the persona's contact names are listed for a person to confirm they're fictional;
@@ -23,6 +27,7 @@ import html
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 import yaml
@@ -34,7 +39,8 @@ from .normalize import normalize
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = Path(__file__).resolve().parent / "index.html"
-EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+REPORTS = ROOT / "exports"  # gitignored: scrub reports stay out of the published directory
+EMAIL = re.compile(r"[^\s@<>\"'()\[\]{},;:]+@[^\s@<>\"'()\[\]{},;:]+\.[^\s@<>\"'()\[\]{},;:.]{2,}")
 SECRET_KEY = re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)$")
 FONT_LINKS = re.compile(r'\s*<link rel="(preconnect|stylesheet)" href="https://fonts\.(googleapis|gstatic)\.com[^>]*>')
 
@@ -50,6 +56,8 @@ def scrub(obj, report: dict, deny: list[str], home: str, path: str = ""):
         for k, v in obj.items():
             if SECRET_KEY.search(str(k)) and v not in (None, "", 0, False) and not isinstance(v, (int, float, bool)):
                 raise ScrubError(f"field named like a secret at {path}.{k}")
+            if isinstance(k, str) and scrub(k, {"paths": 0, "emails": []}, deny, home, f"{path} key") != k:
+                raise ScrubError(f"a key would need scrubbing at {path}: refusing rather than renaming it")
             out[k] = scrub(v, report, deny, home, f"{path}.{k}")
         return out
     if isinstance(obj, list):
@@ -73,6 +81,9 @@ def scrub(obj, report: dict, deny: list[str], home: str, path: str = ""):
         if not allowed_email(m.encode()):
             report["emails"].append(hashlib.sha256(m.lower().encode()).hexdigest()[:8])
             s = s.replace(m, "[email removed]")
+    for m in EMAIL.findall(unicodedata.normalize("NFKC", s)):
+        if not allowed_email(m.encode()):
+            raise ScrubError(f"an email address in a lookalike form at {path}")
     return s
 
 
@@ -111,11 +122,13 @@ def export(run_id: str, out: Path, deny: list[str]) -> dict:
                         f'<main id="app"></main>\n<script type="application/json" id="hl-replay">{blob}</script>', 1)
     if "https://" in FONT_LINKS.pattern and re.search(r'<link[^>]+href="https?://', page):
         raise ScrubError("the page still loads something external")
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "index.html").write_text(page)
     report["bytes"] = len(page.encode())
     report["emails"] = sorted(set(report["emails"]))
-    (out / "scrub-report.json").write_text(json.dumps(report, indent=1) + "\n")
+    report = scrub(report, {"paths": 0, "emails": []}, deny, home)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "index.html").write_text(page)
+    REPORTS.mkdir(exist_ok=True)
+    (REPORTS / f"{run_id}-scrub-report.json").write_text(json.dumps(report, indent=1) + "\n")
     return report
 
 
@@ -139,7 +152,7 @@ def main(argv=None):
     print("contacts (confirm these are fictional):")
     for c in report["contacts"]:
         print(f"  {c['id']}: {c['name']} ({c['known_as']})")
-    print(f"wrote {out / 'index.html'}")
+    print(f"wrote {out / 'index.html'}; report in {REPORTS / (a.run_id + '-scrub-report.json')}")
 
 
 if __name__ == "__main__":
