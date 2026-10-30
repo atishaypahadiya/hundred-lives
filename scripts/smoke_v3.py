@@ -54,7 +54,7 @@ SCRIPT = {
         [call("go_fulltime_on_venture", venture="Conscious")],  # ends oc-01; classes stay
         [call("leave", commitment_id="c1")]],  # refused: classes
     3: [[call("spend", item="contractor", weeks=1)],  # refused: $1,500 > $500 in the company
-        [call("shell", command="mkdir -p api && cd api && echo 'print(1)' > app.py && echo 'x' > requirements.txt && cd .. && "
+        [call("shell", command="mkdir -p api && cd api && echo 'from flask import Flask' > app.py && echo 'x' > requirements.txt && cd .. && "
                                 + PUSH.format(d="api"))],
         [call("deploy", repo="api")],  # refused: no index.html, server code
         [call("apply", opening_id="in-03", details="Data intern")],  # accepted, starts week 21
@@ -176,7 +176,8 @@ def main():
     dec = ev("offer_declined")
     check("declined the upcoming internship", dec and dec[0]["opening_id"] == "in-03" and dec[0]["stage"] == "upcoming")
     kinds = sorted({r["kind"] for r in ev("blocked_by_world")})
-    want = ["company_funds", "external_hosting", "internet", "outside_contacts", "private_link", "server_hosting", "visa_status"]
+    want = ["backend_needed", "company_funds", "external_hosting", "internet", "outside_contacts", "private_link", "server_hosting",
+            "visa_status"]
     check("blocked_by_world kinds", kinds == want, kinds)
     check("week prompt shows websites and savings", any("Your websites:" in p for p in PROMPTS)
           and any("your savings $500" in p for p in PROMPTS))

@@ -1013,6 +1013,8 @@ class Run:
         not_served = len(got["paths"]) - len(served)
         self.log("deploy", week, site=name, url=url, repo=snap["repo"], root=root, sha=got["sha"],
                  version=site["version"], served=served, not_served=not_served, unread=got["skipped"], view=view)
+        if server := limits.backend(view):
+            self._blocked(week, "backend_needed", "deploy", f"{name}: {server}")
         if not prev:
             self.track_record.append(f"week {week}: put a website online at {url}")
         wk.note(f"deployed {repo} to {url} (version {site['version']})", key=True)
@@ -1111,6 +1113,8 @@ class Run:
         for kind, evidence in limits.from_shell(command, r.output):
             self._blocked(week, kind, "shell", evidence,
                           alternative="deploy" if kind == "external_hosting" and self.mockweb else None)
+        if self.mockweb and (server := limits.backend(command)):
+            self._blocked(week, "backend_needed", "shell", server)
         wk.note(f"ran `{short(command, 60)}` (exit {r.code}{', timed out' if r.timed_out else ''})")
         out = r.output
         if len(out) > SHELL_SHOWN_CHARS:
@@ -1144,6 +1148,9 @@ class Run:
                                    f"{' and '.join(CODING_TOOLS)} only)" if wk.coding_left else ""))
             if call.name == "files":
                 out = self.workspace.run(a.get("action"), a.get("path"), a.get("content"))
+                if self.mockweb and a.get("action") in ("write", "append") and \
+                        (server := limits.backend(f"{a.get('path')}\n{a.get('content')}")):
+                    self._blocked(week, "backend_needed", "files", f"{a.get('path')}: {server}")
                 wk.note({"list": "listed files", "read": f"read {a.get('path')}"}.get(
                     a["action"], f"{a['action']} {a.get('path')} ({len(a.get('content') or '')} chars)"))
             elif call.name == "apply":

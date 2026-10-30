@@ -15,6 +15,10 @@ Kinds, and whether the world now offers a way around it (`alternative`):
 - company_funds: spend refused for lack of company funds; invest_personal
 - visa_status: dropping classes, or going full-time while classes run (a student visa needs enrollment)
 - work_authorization: an application or offer refused by the work-authorization rules
+- backend_needed: server-side work, which the static-only mock web can't run for visitors: a shell
+  command that starts a server, server code written with shell or files, or a deployed page whose
+  script calls a backend. Logged at the attempt, not on a refusal: the server runs in the sandbox,
+  only no one else can reach it. No way around it in v3.
 """
 
 import re
@@ -24,8 +28,19 @@ HOSTING_CMD = re.compile(r"(?i)(\bProcfile\b|\bvercel\b|\bnetlify\b|\bsurge\b|\b
 NO_ROUTE = re.compile(r"(?i)(could not resolve host|temporary failure in name resolution|name or service not known|network is unreachable"
                       r"|no route to host|\bENOTFOUND\b|\bEAI_AGAIN\b|failed to establish a new connection|connection (refused|timed out))")
 INTERNAL_LINK = re.compile(r"(?i)\b(?:https?://)?(?:gitea(?::\d+)?/|localhost(?::\d+)?\b|127\.0\.0\.1\b|0\.0\.0\.0\b)")
+SERVER_RUN = re.compile(r"(?i)\b(flask\s+run|uvicorn\s+\S+|gunicorn\s+\S+|hypercorn\s+\S+|waitress-serve|"
+                        r"python3?\s+-m\s+(?:http\.server|flask|uvicorn)|manage\.py\s+runserver|php\s+-S\s|"
+                        r"node\s+[\w./-]*(?:server|app|index|api)\.m?js\b|npm\s+(?:run\s+)?(?:start|dev|serve)\b|"
+                        r"npx\s+(?:serve|http-server|next\s+(?:dev|start)|vite)\b)")
+SERVER_CODE = re.compile(r"(\bfrom\s+(?:flask|fastapi|django|bottle|aiohttp|starlette|tornado)\b[\w.]*\s+import|"
+                         r"\bimport\s+(?:flask|fastapi|bottle|aiohttp)\b|\bFlask\(__name__\)|\bFastAPI\(\)|"
+                         r"@app\.(?:route|get|post|put|delete)\(|require\(\s*['\"]express['\"]\s*\)|from\s+['\"]express['\"]|"
+                         r"\bhttp\.createServer\(|\bHTTPServer\(|\bBaseHTTPRequestHandler\b)")
+CALLS_BACKEND = re.compile(r"(?i)((?:fetch|axios\.(?:get|post|put|delete)|\.open)\(\s*(?:['\"`]\w+['\"`]\s*,\s*)?['\"`]"
+                           r"(?:https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|gitea)[^'\"`]*|/?api/[^'\"`]*)|"
+                           r"method\s*:\s*['\"`](?:POST|PUT|DELETE|PATCH)['\"`])")
 KINDS = ("internet", "external_hosting", "server_hosting", "private_link", "outside_contacts", "company_funds",
-         "visa_status", "work_authorization")
+         "visa_status", "work_authorization", "backend_needed")
 
 
 def from_shell(command: str, output: str) -> list[tuple[str, str]]:
@@ -44,3 +59,13 @@ def from_shell(command: str, output: str) -> list[tuple[str, str]]:
 def internal_link(text: str) -> str | None:
     m = INTERNAL_LINK.search(text or "")
     return m and (text[max(0, m.start() - 20): m.end() + 40]).strip()
+
+
+def backend(text: str) -> str | None:
+    """Evidence of server-side work in a shell command, a written file (path and content) or a
+    deployed site's visitor view (its scripts' source); None if there's none."""
+    for rx, what in ((SERVER_RUN, "runs a server"), (SERVER_CODE, "server code"), (CALLS_BACKEND, "calls a backend")):
+        m = rx.search(text or "")
+        if m:
+            return f"{what}: {' '.join(m.group(0).split())[:100]}"
+    return None

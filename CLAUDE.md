@@ -30,7 +30,7 @@ orchestrator/referee.py  world model v0: LLM estimates the odds, `draw` samples 
 orchestrator/world.py    loads and validates openings.yaml; per-run shuffle; renders the agent-facing catalog
 orchestrator/memory.py   code-kept week records (condensed per quarter) + the LLM's quarterly reflection
 orchestrator/mockweb.py  world v3: a deployed site's visitor view (static files, nothing runs) and finding links in text
-orchestrator/limits.py   world v3: `blocked_by_world` detectors (shell hosting attempts and no-route output, private links)
+orchestrator/limits.py   world v3: `blocked_by_world` detectors (shell hosting attempts and no-route output, private links, server-side work)
 orchestrator/sandbox.py  per-agent container (AgentBox), in-container workspace (BoxWorkspace), Gitea admin client; `up`/`check`/`down` CLI
 sandbox/                 compose.yaml (Gitea + the internal hl-agents network), agent.Dockerfile, init.py (the container's PID 1)
 viewer/normalize.py      raw log records -> standard viewer events (thought, tool_call, shell_output, git_commit, git_push, idea, referee, life, money, week_end, usage, summary); shared by live, replay and export
@@ -39,7 +39,7 @@ viewer/index.html        the page: grid of lives, one life with week scrubber, m
 analysis/summarize.py    per-run paths and metrics; first-applied opening vs position; valid-action rate; calibration
 analysis/self_lives.py   experiment 02: per-life social/building profile and the cross-condition table
 analysis/self_blame.py   self-blame check: LLM-coded reflections vs world-limit evidence from the log
-analysis/exp03.py        experiment 03: v3 measures (deploys, testers, costly bets, blocked_by_world) and its three predictions
+analysis/exp03.py        experiment 03: v3 measures (deploys, testers, costly bets, blocked_by_world), its four predictions, and stall reasons after the first deploy (`stall_reasons_rubric.md`)
 scripts/render_prompts.py  every agent/referee/contact prompt for a persona + world, as hashes: proves a change leaves a world's prompts byte-identical
 scripts/smoke_v3.py      world v3 end to end with a scripted agent and canned referee in the real sandbox (no model calls)
 viewer/publish.yaml      which finished batches the Runs site publishes, grouped by experiment
@@ -113,7 +113,7 @@ A second world for the "Self" persona: two years of a CS degree as an internatio
 - `mockweb` (needs the sandbox): `deploy(repo)` snapshots the repo's main branch through the Gitea admin API (host side; nothing new is reachable from a container) and serves it at `https://<repo>.<domain>` from an `index.html` at the root or in `docs/`, `public/`, `dist/`, `site/`, `build/`. Static only: pages are shown as visible text, links, forms, buttons and script source (`mockweb.visitor_view`, ≤ 9,000 chars), never run. A mock-web link in a message, application, post, launch pitch or hackathon pitch puts the site's view in that reader's prompt ("What you can see" for contacts, "Linked websites" for the referee, feed, forum and judges); a private code-host link is shown as not opening. Logged: `deploy` (served files, view, sha, version); `sites_seen` / `sites_missing` / `private_link` on `message`, `referee_decision`, `post`, `launch`, `hackathon_result`. Up to `max_sites` sites.
 - `venture`: `invest_personal(amount)` (savings → company funds, `company_invested`; this week's expenses must stay covered; the referee sees it), `go_fulltime_on_venture(venture)` (ends commitments of `paid_work_types`, adds a 0-action `kind: venture` commitment the referee sees; classes stay while enrolled; paid work ends it, `commitment_ended.reason = took_paid_work`), `decline_offer(opening_id)` (free; a held or upcoming offer, or a commitment started within `tools.DECLINE_WINDOW_WEEKS`). Logged: `invest_personal`, `go_fulltime`, `offer_declined`.
 - `contacts_no_promises`: `referee.NO_PROMISES` appended to the contact system prompt: words and listed offers only, never files, introductions or anything for later.
-- `log_blocked_by_world`: `blocked_by_world` (kind, via, evidence, alternative) when an attempt meets a limit; kinds in `limits.py`. A measurement, never shown to the agent.
+- `log_blocked_by_world`: `blocked_by_world` (kind, via, evidence, alternative) when an attempt meets a limit; kinds in `limits.py`. A measurement, never shown to the agent. `backend_needed` (server-side work: a server started, server code written, a deployed page calling a backend) was added after experiment 03 launched; `analysis/exp03.py` derives it from older logs with the same detector.
 
 ## The live gateway (`gateway/`, Track B)
 
