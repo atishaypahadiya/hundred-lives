@@ -505,6 +505,16 @@ function cashChart(weeks, horizon, opts = {}) {
     svg.append(s("path", { d: d + ` L${x(weeks[weeks.length - 1].week).toFixed(1)} ${y(0)} L${x(weeks[0].week).toFixed(1)} ${y(0)} Z`, fill: `url(#${id})` }));
     svg.append(s("path", { d, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round" }));
     if (opts.sel) { const w = weeks.find(w => w.week === opts.sel); if (w) svg.append(s("circle", { cx: x(w.week), cy: y(w.cash ?? 0), r: 4.5, fill: "var(--base)", stroke: "var(--ink)", "stroke-width": 1.5 })); }
+    // World v3: a teal dot with a dark ring where the agent deployed a site, a dark diamond where it made a costly bet.
+    // Above the line, or below it when there's no room above.
+    for (const w of weeks) {
+      const cx = x(w.week), cy = y(w.cash ?? 0), dir = cy - 26 < pad.t ? 1 : -1;
+      if (w.deployed?.length) { const m = s("circle", { cx, cy: cy + dir * 10, r: 4.5, fill: "var(--teal)", stroke: "var(--ink)", "stroke-width": 1.25, "pointer-events": "none" });
+        const t = s("title"); t.textContent = `Week ${w.week}: deployed ${w.deployed.join(", ")}`; m.append(t); svg.append(m); }
+      if (w.bets?.length) { const r = 4.5, by = cy + dir * (w.deployed?.length ? 22 : 10);
+        const m = s("path", { d: `M${cx} ${by - r} L${cx + r} ${by} L${cx} ${by + r} L${cx - r} ${by} Z`, fill: "var(--ink)", "pointer-events": "none" });
+        const t = s("title"); t.textContent = `Week ${w.week}: ${w.bets.join("; ")}`; m.append(t); svg.append(m); }
+    }
   }
   const hair = s("line", { y1: pad.t, y2: H - pad.b, stroke: "var(--ink-2)", "stroke-width": 1, visibility: "hidden" });
   const dot = s("circle", { r: 4, fill: "var(--ink)", visibility: "hidden" });
@@ -519,7 +529,10 @@ function cashChart(weeks, horizon, opts = {}) {
     dot.setAttribute("cx", x(w.week)); dot.setAttribute("cy", y(w.cash ?? 0)); dot.setAttribute("visibility", "visible");
     tip.replaceChildren(h("div", { class: "t" }, "Week " + w.week), h("div", {}, h("b", { class: "num" }, money(w.cash)), " cash"),
       h("div", {}, h("b", { class: "num" }, money(w.income)), " income/wk"), w.funding ? h("div", {}, h("b", { class: "num" }, money(w.funding)), " company funds") : null,
-      h("div", { class: "muted" }, KIND[weekKind(w)][0], w.broke ? " · broke" : ""), opts.onpick ? h("div", { class: "muted" }, "click to go to this week") : null);
+      h("div", { class: "muted" }, KIND[weekKind(w)][0], w.broke ? " · broke" : ""),
+      w.deployed?.length ? h("div", {}, "deployed ", w.deployed.join(", ")) : null,
+      (w.bets || []).map(b => h("div", {}, b)),
+      opts.onpick ? h("div", { class: "muted" }, "click to go to this week") : null);
     const r = wrap.getBoundingClientRect(), left = ev.clientX - r.left;
     tip.style.display = "block"; tip.style.top = "8px";
     tip.style.left = Math.max(0, Math.min(left + 12, r.width - tip.offsetWidth - 4)) + "px";
@@ -530,6 +543,24 @@ function cashChart(weeks, horizon, opts = {}) {
   return wrap;
 }
 const CHART_PAD = { l: 64, r: 8 };
+// World v3 events, in words: the cash chart's tooltip and the venture panel.
+// `week` is that week's events, to name the commitments going full-time ended (the log has their ids).
+function betText(e, week = []) {
+  if (e.event === "invest_personal") return `put ${money(e.amount)} of savings into the company`;
+  if (e.event === "go_fulltime") {
+    const left = week.filter(x => x.kind === "life" && x.event === "commitment_ended" && x.reason === "go_fulltime").map(x => x.label || x.opening_id);
+    return `went full-time on ${e.venture}${e.enrolled ? " (classes stay)" : ""}${left.length ? ", left " + left.join(", ") : e.left?.length ? `, left ${e.left.length} commitment${e.left.length === 1 ? "" : "s"}` : ""}`;
+  }
+  if (e.event === "decline_offer") return `declined ${e.opening_id} (${e.stage === "started" ? "just started" : e.stage === "upcoming" ? "starts later" : "held offer"}${e.weekly_pay ? ", " + money(e.weekly_pay) + "/wk" : ""})`;
+  return e.event;
+}
+function chartMarks(weeks) {
+  const dep = weeks.some(w => w.deployed?.length), bet = weeks.some(w => w.bets?.length);
+  if (!dep && !bet) return null;
+  const mk = (svgKids, label) => { const v = s("svg", { width: 12, height: 12, viewBox: "0 0 12 12", "aria-hidden": "true", style: "vertical-align:-1px;margin-right:6px" }); v.append(...svgKids); return h("span", {}, v, label); };
+  return [dep ? mk([s("circle", { cx: 6, cy: 6, r: 4.5, fill: "var(--teal)", stroke: "var(--ink)", "stroke-width": 1.25 })], "Deployed a site") : null,
+          bet ? mk([s("path", { d: "M6 1.5 L10.5 6 L6 10.5 L1.5 6 Z", fill: "var(--ink)" })], "Costly bet") : null];
+}
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); return [1, 2, 2.5, 5, 10].map(m => m * p).find(v => v >= raw) || p * 10; }
 function ticks(n) { const st = n <= 13 ? 1 : n <= 30 ? 5 : n <= 60 ? 10 : 26, out = [1]; for (let i = st; i <= n; i += st) if (i !== 1) out.push(i); return out; }
 
@@ -697,7 +728,10 @@ function showRun(runId, wantWeek) {
         labels: ev.commitments, detail: ev.commitment_detail, followers: ev.followers, streak: ev.train_streak,
         trained: wk.some(e => e.kind === "life" && e.event === "train"),
         school: (ev.commitment_detail || []).some(c => c.kind === "academics"),
-        gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke) };
+        gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke),
+        invested: ev.company_invested,
+        deployed: wk.filter(e => e.kind === "venture" && e.event === "deploy").map(e => e.url),
+        bets: wk.filter(e => e.kind === "venture" && e.event !== "deploy").map(e => betText(e, wk)) };
     }
     if (ev.week) R.maxWeek = Math.max(R.maxWeek, ev.week);
   }
@@ -752,7 +786,8 @@ function showRun(runId, wantWeek) {
             thinkingPanel(thisWeek)),
           h("div", { class: "panels" },
             weekPanel(thisWeek, sel, doneWeeks),
-            messagePanel(upTo, sel),
+            messagePanel(upTo, sel, m.persona),
+            R.events.some(e => e.kind === "venture" || e.kind === "blocked") ? venturePanel(upTo, sel, go) : null,
             weeks.some(w => w.followers != null) || upTo.some(e => e.kind === "post") ? feedPanel(upTo, weeks, sel, horizon) : null,
             terminalPanel(upTo, sel),
             toolsPanel(thisWeek),
@@ -844,7 +879,7 @@ function cashTile(weeks, state, sel, horizon, chartW, go) {
       h("div", { class: "sm", style: "min-width:0" }, h("div", { style: "font-size:14px" }, (state.labels || []).join(", ") || "none"), h("div", { class: "lab" }, "commitments"))),
     cashChart(weeks, horizon, { sel, onpick: go, width: chartW, height: chartW < 600 ? 160 : 200 }),
     lifeStrip(weeks, horizon, { width: chartW, height: 12, sel, onpick: go, pad: CHART_PAD }),
-    legend(null, weeks.some(w => w.school)),
+    legend(chartMarks(weeks), weeks.some(w => w.school)),
     h("details", {}, h("summary", {}, "Table view"), h("div", { class: "tbl" }, weekTable(weeks, sel, go))));
 }
 
@@ -939,7 +974,7 @@ function ideaPanel(upTo, sel) {
       h("div", { class: "text", style: "margin-top:4px" }, e.text)))) : h("div", { class: "empty" }, "No ideas recorded yet."));
 }
 
-function messagePanel(upTo, sel) {
+function messagePanel(upTo, sel, persona) {
   const ms = upTo.filter(e => e.kind === "message");
   if (!ms.length) return GlassCard({ title: "Messages" }, h("div", { class: "empty" }, "No messages yet."));
   const by = new Map(); for (const m of ms) { if (!by.has(m.contact_id)) by.set(m.contact_id, []); by.get(m.contact_id).push(m); }
@@ -947,11 +982,40 @@ function messagePanel(upTo, sel) {
   return GlassCard({ title: "Messages", sub: `${ms.length} sent through week ${sel} · ${ms.filter(m => m.replied).length} replied` },
     h("div", { class: "feed" }, [...by].map(([cid, thread]) => h("div", { class: "thread" }, h("div", { class: "t" }, cid),
       h("div", { class: "tools" }, thread.map(m => h("div", { class: "item" + (m.week === sel ? " now" : "") },
-        h("div", { class: "meta" }, `week ${m.week} · Maya`), h("div", { class: "text", style: "margin-top:4px" }, m.text),
+        h("div", { class: "meta" }, `week ${m.week} · ${persona || "the agent"}`), h("div", { class: "text", style: "margin-top:4px" }, m.text),
         h("div", { class: "meta", style: "margin-top:8px" }, m.replied ? `${cid} replied` : `no reply (draw ${m.draw?.toFixed(3)} ≥ reply rate ${m.reply_rate})`),
         m.replied ? h("div", { class: "text ink2", style: "margin-top:4px" }, m.reply) : null,
         m.offer ? h("div", { style: "margin-top:8px" }, Pill(offer(m.offer), { tone: "lime" })) : null,
-        m.offer_problem ? h("div", { style: "margin-top:8px" }, Pill(m.offer_problem, { tone: "amber" })) : null)))))));
+        m.offer_problem ? h("div", { style: "margin-top:8px" }, Pill(m.offer_problem, { tone: "amber" })) : null,
+        m.sites_seen?.length || m.sites_missing?.length || m.private_link ? h("div", { class: "tile-head", style: "margin-top:8px" },
+          (m.sites_seen || []).map(n => Pill(m.replied ? `opened ${n}` : `linked ${n}`, { tone: "teal" })),
+          (m.sites_missing || []).map(n => Pill(`${n}: no site there`, { tone: "amber" })),
+          m.private_link ? Pill("private code-host link: didn't open", { tone: "amber" }) : null) : null)))))));
+}
+
+// World v3: sites the agent deployed (with what a visitor saw), its costly bets, and the world limits it ran into.
+function venturePanel(upTo, sel, go) {
+  const vs = upTo.filter(e => e.kind === "venture"), bl = upTo.filter(e => e.kind === "blocked");
+  const deploys = vs.filter(e => e.event === "deploy"), bets = vs.filter(e => e.event !== "deploy");
+  const byLimit = {}; for (const b of bl) byLimit[b.limit] = (byLimit[b.limit] || 0) + 1;
+  return GlassCard({ title: "Website, bets and world limits", cls: "wide",
+      sub: `${deploys.length} deploy${deploys.length === 1 ? "" : "s"} · ${bets.length} costly bet${bets.length === 1 ? "" : "s"} · ${bl.length} world limit${bl.length === 1 ? "" : "s"} hit, through week ${sel}` },
+    h("div", { class: "meta" }, "Deploys"),
+    deploys.length ? h("div", { class: "feed", style: "margin-top:4px" }, [...deploys].reverse().map(d => h("div", { class: "item" + (d.week === sel ? " now" : "") },
+      h("div", { class: "meta" }, `week ${d.week} · version ${d.version} · ${d.served} file${d.served === 1 ? "" : "s"} served from ${d.root || "the repo root"}${d.not_served ? ` · ${d.not_served} not served` : ""}${d.sha ? " · " + d.sha.slice(0, 7) : ""}`),
+      h("div", { class: "tile-head", style: "margin-top:4px" }, h("i", { class: "dot teal" }), h("code", {}, d.url), Pill((d.repo || "").split("/").pop(), { k: "repo" })),
+      h("details", { style: "margin-top:8px" }, h("summary", {}, "what visitors saw"), h("div", { class: "pre" }, d.view || "–"))))) :
+      h("div", { class: "empty" }, "No site deployed yet."),
+    h("div", { class: "meta", style: "margin-top:16px" }, "Costly bets"),
+    bets.length ? h("div", { class: "tools", style: "margin-top:4px" }, bets.map(b => h("div", { class: "commit click", onclick: () => go(b.week), title: "Go to week " + b.week },
+      h("span", { class: "muted num" }, "w" + b.week), h("span", { class: "text" }, betText(b, upTo.filter(x => x.week === b.week)))))) : h("div", { class: "empty" }, "None yet."),
+    h("div", { class: "meta", style: "margin-top:16px" }, "World limits hit (blocked_by_world)"),
+    bl.length ? [h("div", { class: "tile-head", style: "margin-top:4px" }, Object.entries(byLimit).map(([k, n]) => Pill(String(n), { k: k.replace(/_/g, " ") }))),
+      h("div", { class: "tools", style: "margin-top:8px" }, bl.map(b => h("div", { class: "commit click", onclick: () => go(b.week), title: "Go to week " + b.week },
+        h("span", { class: "muted num" }, "w" + b.week), h("span", {}, b.limit.replace(/_/g, " ")), h("span", { class: "muted" }, `via ${b.via}`),
+        h("span", { class: "text" }, b.evidence), b.alternative ? Pill(`the world offered: ${b.alternative}`, { tone: "teal" }) : null)))] :
+      h("div", { class: "empty" }, "None yet."),
+    h("div", { class: "notice" }, "A world limit is logged when an attempt runs into something the world can't do; plans never attempted don't appear here."));
 }
 
 // The feed: follower curve, likes per week, and every post with the replies the author saw.

@@ -15,6 +15,9 @@ export, so every view of a life is built from the same events. Kinds:
     post          a post on the feed: text, reach, likes, replies, new followers, the replies shown
     referee       applications (estimate, base rate, draw, outcome), replies, launches, hackathon judging
     life          commitments, offers, gigs, broke weeks, company spending, graduation, hackathon weeks
+    venture       world v3: deploy (URL, version, what visitors saw), invest_personal, go_fulltime_on_venture,
+                  decline_offer
+    blocked       world v3: blocked_by_world (limit, via, evidence, the alternative the world offers)
     money         cash, income, expenses, company funding (from week_start/week_end)
     week_end      digest, reason, actions used
     usage         tokens and cost after each model call
@@ -47,7 +50,8 @@ def _money(state: dict | None) -> dict:
             "commitments": [c.get("label") for c in s.get("commitments") or []],
             "commitment_detail": [{"label": c.get("label"), "opening_id": c.get("opening_id"), "time_cost": c.get("time_cost"),
                                    "kind": c.get("kind")} for c in s.get("commitments") or []],
-            "followers": s.get("followers"), "train_streak": s.get("train_streak")}
+            "followers": s.get("followers"), "train_streak": s.get("train_streak"),
+            "company_invested": s.get("company_invested")}
 
 
 CMD_COMMIT = re.compile(r"\bgit\b(?:\s+-c\s+\S+)*\s+commit\b[^\n;&|]*?\s-[a-zA-Z]*m\s*(?P<q>[\"'])(?P<msg>.*?)(?P=q)")
@@ -107,7 +111,9 @@ def normalize(rec: dict, seq: int) -> list[dict]:
         return [ev("message", contact_id=rec.get("contact_id"), text=_t(rec.get("text"), 4000),
                    replied=rec.get("replied"), reply=_t(rec.get("reply"), 4000), offer=rec.get("offer"),
                    offer_problem=rec.get("offer_problem"), draw=rec.get("reply_draw"),
-                   reply_rate=rec.get("reply_rate"), key=rec.get("reply_key"))]
+                   reply_rate=rec.get("reply_rate"), key=rec.get("reply_key"),
+                   sites_seen=rec.get("sites_seen") or [], sites_missing=rec.get("sites_missing") or [],
+                   private_link=rec.get("private_link"))]
     if t == "post":
         return [ev("post", n=rec.get("n"), text=_t(rec.get("text"), 2000), repo=rec.get("repo"), reach=rec.get("reach"),
                    likes=rec.get("likes"), replies=rec.get("replies"), new_followers=rec.get("new_followers"),
@@ -128,6 +134,22 @@ def normalize(rec: dict, seq: int) -> list[dict]:
     if t == "spend":
         return [ev("life", event="spend", item=rec.get("item"), price=rec.get("price"), weeks=rec.get("weeks"),
                    repo=rec.get("repo"), company_balance=rec.get("company_balance"))]
+    if t == "deploy":
+        return [ev("venture", event="deploy", site=rec.get("site"), url=rec.get("url"), repo=rec.get("repo"),
+                   version=rec.get("version"), root=rec.get("root"), sha=rec.get("sha"),
+                   served=len(rec.get("served") or []), not_served=rec.get("not_served"), view=_t(rec.get("view"), 10_000))]
+    if t == "invest_personal":
+        return [ev("venture", event="invest_personal", amount=rec.get("amount"), cash=rec.get("cash"),
+                   company_invested=rec.get("company_invested"), company_balance=rec.get("company_balance"))]
+    if t == "go_fulltime":
+        return [ev("venture", event="go_fulltime", venture=_t(rec.get("venture"), 200), enrolled=rec.get("enrolled"),
+                   left=rec.get("left") or [], income=rec.get("income"))]
+    if t == "offer_declined":
+        return [ev("venture", event="decline_offer", opening_id=rec.get("opening_id"), stage=rec.get("stage"),
+                   opening_type=rec.get("opening_type"), weekly_pay=rec.get("weekly_pay"))]
+    if t == "blocked_by_world":
+        return [ev("blocked", limit=rec.get("kind"), via=rec.get("via"), evidence=_t(rec.get("evidence"), 400),
+                   alternative=rec.get("alternative"))]
     if t == "nudge":
         return [ev("thought", text=_t(rec.get("text") or "(nudged to act)"), nudge=True)]
     if t == "tool_call":
