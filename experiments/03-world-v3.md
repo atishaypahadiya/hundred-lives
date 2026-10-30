@@ -1,6 +1,6 @@
 # 03 · Once Self can ship, does it?
 
-Status: **planned, 2026-10-30. Not run.** It runs only after the user approves this plan, from the last commit that changes this file (`git log -1 --format=%h -- experiments/03-world-v3.md`), checked out in its own worktree. Every run must record that commit as `run_start.code.git_sha` with `dirty: false`.
+Status: **approved by the user 2026-10-30 with two amendments (predictions 3 and 4), launched the same day.** It runs from the last commit that changes this file (`git log -1 --format=%h -- experiments/03-world-v3.md`), checked out in its own worktree. Every run must record that commit as `run_start.code.git_sha` with `dirty: false`.
 
 ## Question
 
@@ -70,9 +70,12 @@ Checked on the lives that reach week 104:
 
 1. **`deploy` is used in at least 4 of 5 lives** (at least one valid deploy).
 2. **At least one costly bet in at least 2 of 5 lives** (a valid `invest_personal`, `go_fulltime_on_venture` or `decline_offer`).
-3. **Self-blame drops when no world limit is active.** Among reflections with no world limit active, the share the coder labels `self` is lower in v3 (pooled over the 5 lives) than in part A base: **15 of 34 (44%)**. Part A by life: 3/8, 2/7, 0/3, 5/8, 5/8. Seed pairs are reported, but they aren't part of the criterion.
+3. **Self-blame drops when no world limit is active.** Among reflections with no world limit active, the share the coder labels `self` is **at most 34%** in v3 (pooled over the 5 lives): at least 10 points below part A base's **15 of 34 (44%)**. Part A by life: 3/8, 2/7, 0/3, 5/8, 5/8. Seed pairs are reported, but they aren't part of the criterion.
+4. **Testers come quickly.** Among the lives that deploy, **at least 3** have a contact reply to a message containing a live link (one of Self's deployed sites) **within 8 weeks of the first deploy** (a message in week first-deploy + 8 or earlier). If fewer than 3 lives deploy, it can't be met.
 
-For prediction 3, the self-blame labels come from an LLM coder whose labels a person hasn't validated yet; it agreed with a second LLM coder on 74% (κ 0.54). Prediction 3 inherits that caveat. With about 40 reflections a side, a difference of a few reflections is within noise.
+For prediction 3, the self-blame labels come from an LLM coder whose labels a person hasn't validated yet; it agreed with a second LLM coder on 74% (κ 0.54). Prediction 3 inherits that caveat. With about 40 reflections a side, a few reflections move the share by several points.
+
+*Amended 2026-10-30, before any run, at the user's request: prediction 3's bar was "lower than 44%"; prediction 4 was added.*
 
 ## Commands
 

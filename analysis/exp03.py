@@ -29,7 +29,8 @@ def life_v3(path: str) -> dict | None:
     """v3 measures from one log; None unless the life reached the horizon."""
     L = {"run_id": None, "deploys": [], "testers": set(), "contacts_saw_site": Counter(), "linked": Counter(),
          "costly": Counter(), "blocked": Counter(), "blocked_first": {}, "reflections": [], "ended": None,
-         "pilot": None, "fulltime_week": None, "invested": 0.0, "declined": [], "missing_links": 0}
+         "pilot": None, "fulltime_week": None, "invested": 0.0, "declined": [], "missing_links": 0,
+         "tester_weeks": []}
     for r in sb.records(path):
         t, w = r.get("type"), r.get("week")
         L["run_id"] = L["run_id"] or r.get("run_id")
@@ -40,6 +41,7 @@ def life_v3(path: str) -> dict | None:
                 L["linked"]["message"] += 1
                 if r.get("replied"):
                     L["testers"].add(r["contact_id"])
+                    L["tester_weeks"].append(w)
                     L["contacts_saw_site"][r["contact_id"]] += 1
             L["missing_links"] += len(r.get("sites_missing") or [])
         elif t in ("post", "launch", "referee_decision", "hackathon_result") and r.get("sites_seen"):
@@ -142,12 +144,23 @@ def main(argv=None):
     vs, vn = map(sum, zip(*(free_self(r) for r in v3rows.values()))) if v3rows else (0, 0)
     bs, bn = map(sum, zip(*(free_self(r) for r in base.values()))) if base else (0, 0)
     uncoded = sum(1 for rows in v3rows.values() for r in rows if not r["label"])
-    print(f"Prediction 3, self-blame lower when no world limit is active: v3 {vs}/{vn} ({sb.pct(vs, vn)}) vs base "
-          f"{bs}/{bn} ({sb.pct(bs, bn)}) → " + ("met" if vn and bn and vs / vn < bs / bn else "not met")
+    print(f"Prediction 3, self-blame at most 34% when no world limit is active (base {bs}/{bn}, {sb.pct(bs, bn)}): "
+          f"v3 {vs}/{vn} ({sb.pct(vs, vn)}) → " + ("met" if vn and vs / vn <= 0.34 else "not met")
           + (f"  ({uncoded} v3 reflections uncoded: run with --code)" if uncoded else ""))
     print("  per seed pair (v3 / base, self among reflections with no limit active): "
           + ", ".join(f"{k}: {'/'.join(map(str, free_self(v3rows[k])))} vs {'/'.join(map(str, free_self(base[k])))}"
                       for k in sorted(set(v3rows) & set(base))))
+    quick = []
+    for L in lives:
+        if L["deploys"]:
+            first = L["deploys"][0][0]
+            hit = [w for w in L["tester_weeks"] if w <= first + 8]
+            quick.append((run_no(L["run_id"]), first, hit[0] if hit else None))
+    met4 = sum(1 for *_, h in quick if h is not None)
+    print(f"Prediction 4, a contact replies to a live link within 8 weeks of the first deploy, in at least 3 of the "
+          f"{len(quick)} lives that deploy: {met4} → " + ("met" if met4 >= 3 else "not met")
+          + "".join(f"\n    {k}: first deploy w{f}, " + (f"first reply to a live link w{h}" if h else "none within 8 weeks")
+                    for k, f, h in quick))
     active = [(k, r) for k, rows in v3rows.items() for r in rows if r["blocked_by"]]
     print(f"  v3 reflections with a world limit active: {len(active)}"
           + "".join(f"\n    {k} w{r['week']} {r['blocked_by']}: {r['label']['attribution']}" for k, r in active))
