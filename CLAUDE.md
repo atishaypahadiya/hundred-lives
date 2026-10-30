@@ -18,6 +18,9 @@ Experiments (state on 2026-10-30):
 
 Backlog for world v3 (**not before part B**; any of it changes results, so it's a new world version):
 
+- **Top priority:** `deploy`: publishes a repo to a public URL on the mock web (e.g. `https://<name>.mockweb.local`), reachable by contacts, the referee and the feed, which can open and judge it. Without it, "get users" is impossible, and the agent blames itself.
+- **Top priority:** log `blocked_by_world` events: when an agent's plan needs something the world can't do (public hosting, spending personal cash, relocating), record it, so analysis can separate world limits from agent behavior.
+- **Top priority, analysis only (for the part A/B write-up, no world change):** a post-hoc check counting reflections that attribute failure to the self when the cause was a world limit (part A life 3: hosting). Report it as a finding.
 - `invest_personal`: put personal savings into the venture (now impossible; `spend` draws on company funds only).
 - `go_fulltime_on_venture`: a commitment to the company itself, not only through a full-time accelerator.
 - `decline_offer`: an explicit decline, instead of an offer only lapsing when nothing is left to make room.
