@@ -4,7 +4,25 @@ Run one LLM persona many times through a simulated life and compare the paths. D
 
 ## Status
 
-Phase 1 of "watchable lives": each run gets its own container (OrbStack/Docker) and a user on a local Gitea. Tools: `files`, `shell`, `apply`, `launch`, `message`, `spend`, `gig`, `leave`, `wait`. No browse yet. Showcase v1 is run 1 (`maya-20261029-012642-001`), from before `message`/`spend`; runs from v2 on aren't comparable with it. Phase 2: the read-only `viewer/`, plus logged thinking summaries and a weekly `idea`. Phase 3 (exported replays) is next.
+Phase 1 of "watchable lives": each run gets its own container (OrbStack/Docker) and a user on a local Gitea. Tools: `files`, `shell`, `apply`, `launch`, `message`, `spend`, `gig`, `leave`, `wait`. No browse yet. Showcase v1 is run 1 (`maya-20261029-012642-001`), from before `message`/`spend`; runs from v2 on aren't comparable with it. Phase 2: the read-only `viewer/`, plus logged thinking summaries and a weekly `idea`. Phase 3: exported replays (`viewer.export`), published under `docs/replays/`.
+
+Experiments (state on 2026-10-30):
+
+- **01** (Maya, diversity attribution) is done: results in `experiments/01-diversity-attribution.md#results`, summarized on the project page.
+- **02** (Self, `experiments/02-self-lives.md`). Part A (base × 5) is done at `9ba72b4`: results in `experiments/02-results-partA.md`; its logs, and Track A's, are in `../hundred-lives-viewer/runs/` (the viewer reads both runs dirs with `--runs-dir`).
+- **02 part B is frozen at `b3d9817`.** It has 4 conditions: nosolo, socialgoal, goalonly (reported as goal+world), hiddenstreak. Run it from a detached worktree at that commit (`git worktree add --detach ../hundred-lives-exp02b b3d9817`, then `uv sync`). Don't edit `02-self-lives.md`, since its last commit is the one part B must record.
+- Part B launches **on or after 2026-11-01 UTC, only after a Console check of month-to-date spend against the $50 monthly limit and the user's go-ahead.** Launch it from a script file, not a one-line shell: `budget_guard.py --procs` matches its own pattern in a shell's command line.
+- Report part B with master's `analysis/self_lives.py`: it has the cheap/costly bet split and the `post+message %` row the hidden-streak predictions use; `b3d9817`'s copy has neither.
+- **Track B gateway** (`gateway/`): built and tested offline; **untested live, nothing posted**.
+- Loose ends: Console cost isn't reconciled with logged `cost_usd` (Haiku cache prices are assumed); a Gitea user from the stopped `self-tracka3` run was never purged.
+
+Backlog for world v3 (**not before part B**; any of it changes results, so it's a new world version):
+
+- `invest_personal`: put personal savings into the venture (now impossible; `spend` draws on company funds only).
+- `go_fulltime_on_venture`: a commitment to the company itself, not only through a full-time accelerator.
+- `decline_offer`: an explicit decline, instead of an offer only lapsing when nothing is left to make room.
+
+All three need real consequences in the world: cash, time, and what the referee and contacts see. Also from experiment 01: contacts promise deliverables the world can't produce (Maya chases them for weeks); either the reply carries anything shareable, or deliverables become world objects.
 
 ## Layout
 

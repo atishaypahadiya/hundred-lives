@@ -31,6 +31,8 @@ The plan's "big bets" are split in two. Part B reports both the same way.
 
   The log doesn't record why an agent quit or let an offer lapse, so "for the venture" isn't checked; any quit or decline counts. Two kinds of costly bet have no mechanic in this world and are 0 by construction: spending ≥25% of savings on the venture (personal cash can't be spent; `spend` draws on company funds only), and relocating.
 
+Costly bets are measured only over the forms the world allows (quit/decline paid work, full-time accelerator); spending savings and relocating were impossible in this world.
+
 A test that injects each event kind into a copy of a real log, plus look-alikes that shouldn't count (leaving a student program, a term ending, a forced lapse, the part-time accelerator), counts exactly the 3 real ones.
 
 ## Per life
