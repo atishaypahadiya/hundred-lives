@@ -11,19 +11,12 @@ Experiments (state on 2026-10-30):
 - **01** (Maya, diversity attribution) is done: results in `experiments/01-diversity-attribution.md#results`, summarized on the project page.
 - **02** (Self, `experiments/02-self-lives.md`) is done. Part A (base × 5, `9ba72b4`): `experiments/02-results-partA.md`. Part B (nosolo, socialgoal, goal+world, hiddenstreak × 5, `b3d9817`, launched 2026-10-30 after the user raised the spend limit): `experiments/02-results-partB.md`. The hidden-streak prediction was not met (3 of 5 pairs each, 4 needed). Logs: part A and Track A in `../hundred-lives-viewer/runs/`, part B in `../hundred-lives-exp02b/runs/` (a detached worktree at `b3d9817`); the viewer reads several with `--runs-dir`. Don't edit `02-self-lives.md`.
 - **Self-blame check** (`analysis/self_blame.py`, rubric `analysis/self_blame_rubric.md`, Haiku labels cached and committed in `analysis/labels/self_blame/`): 12 of 19 reflections written while a world limit was active blame the self (63%; 58% under a second coder). The blind labels of those 19 came from a second LLM coder, Claude Opus (`analysis/labels/self_blame_blind/`; 74% agreement with Haiku, kappa 0.54, 0.45 for self vs not), **not a person**: call it agreement between two LLM coders, never human validation. **Provisional** until a person labels them (`--blind-sheet`, then `--score-blind`); say "provisional" wherever it appears until then.
+- **03** (Self on world v3 vs part A base, `experiments/03-world-v3.md`): **planned, not run**; it waits for the user's approval of the plan. Launch with `experiments/03-launch.sh` from a worktree at the plan's commit; analysis `analysis/exp03.py`.
 - Launch paid batches from a script file, not a one-line shell: `budget_guard.py --procs` matches its own pattern in a shell's command line.
 - **Track B gateway** (`gateway/`): built and tested offline; **untested live, nothing posted**.
 - Cost: October's logged `cost_usd` is about 4% over the Console ($19.46 vs $18.66 before part B), so the assumed Haiku cache prices are close enough. Loose end: a Gitea user from the stopped `self-tracka3` run was never purged.
 
-Backlog for world v3 (any of it changes results, so it's a new world version):
-
-- **Top priority:** `deploy`: publishes a repo to a public URL on the mock web (e.g. `https://<name>.mockweb.local`), reachable by contacts, the referee and the feed, which can open and judge it. Without it, "get users" is impossible, and the agent blames itself.
-- **Top priority:** log `blocked_by_world` events: when an agent's plan needs something the world can't do (public hosting, spending personal cash, relocating), record it, so analysis can separate world limits from agent behavior.
-- `invest_personal`: put personal savings into the venture (now impossible; `spend` draws on company funds only).
-- `go_fulltime_on_venture`: a commitment to the company itself, not only through a full-time accelerator.
-- `decline_offer`: an explicit decline, instead of an offer only lapsing when nothing is left to make room.
-
-The last three need real consequences in the world: cash, time, and what the referee and contacts see. Also from experiment 01: contacts promise deliverables the world can't produce (Maya chases them for weeks); either the reply carries anything shareable, or deliverables become world objects.
+World v3 (`world/student-v3.yaml`, built 2026-10-30) has the former backlog: `deploy` to a mock web, `blocked_by_world` events, `invest_personal`, `go_fulltime_on_venture`, `decline_offer`, and contacts that can't promise deliverables. See "World v3" below. Maya's world (`openings.yaml`) has none of it.
 
 ## Layout
 
@@ -36,6 +29,8 @@ orchestrator/tools.py    tool schemas (Anthropic shape), argument validation, sa
 orchestrator/referee.py  world model v0: LLM estimates the odds, `draw` samples the outcome; also voices contacts
 orchestrator/world.py    loads and validates openings.yaml; per-run shuffle; renders the agent-facing catalog
 orchestrator/memory.py   code-kept week records (condensed per quarter) + the LLM's quarterly reflection
+orchestrator/mockweb.py  world v3: a deployed site's visitor view (static files, nothing runs) and finding links in text
+orchestrator/limits.py   world v3: `blocked_by_world` detectors (shell hosting attempts and no-route output, private links)
 orchestrator/sandbox.py  per-agent container (AgentBox), in-container workspace (BoxWorkspace), Gitea admin client; `up`/`check`/`down` CLI
 sandbox/                 compose.yaml (Gitea + the internal hl-agents network), agent.Dockerfile, init.py (the container's PID 1)
 viewer/normalize.py      raw log records -> standard viewer events (thought, tool_call, shell_output, git_commit, git_push, idea, referee, life, money, week_end, usage, summary); shared by live, replay and export
@@ -44,6 +39,9 @@ viewer/index.html        the page: grid of lives, one life with week scrubber, m
 analysis/summarize.py    per-run paths and metrics; first-applied opening vs position; valid-action rate; calibration
 analysis/self_lives.py   experiment 02: per-life social/building profile and the cross-condition table
 analysis/self_blame.py   self-blame check: LLM-coded reflections vs world-limit evidence from the log
+analysis/exp03.py        experiment 03: v3 measures (deploys, testers, costly bets, blocked_by_world) and its three predictions
+scripts/render_prompts.py  every agent/referee/contact prompt for a persona + world, as hashes: proves a change leaves a world's prompts byte-identical
+scripts/smoke_v3.py      world v3 end to end with a scripted agent and canned referee in the real sandbox (no model calls)
 viewer/publish.yaml      which finished batches the Runs site publishes, grouped by experiment
 scripts/publish_runs.sh  rebuild docs/runs/; --deploy publishes the site to gh-pages
 experiments/             experiment plans (question, conditions, commands, measures, cost), one file each
@@ -107,6 +105,15 @@ A second world for the "Self" persona: two years of a CS degree as an internatio
 - `training` (world key) enables `train(activity)` (1 action, no effect on the world): logged as `train`; `train_streak` (weeks in a row with a session) is in the snapshot and the week prompt, and the viewer shows a streak tile. A week with no free actions holds the streak instead of resetting it (`train_streak_held`). `training.show_streak: false` (`world/student-hiddenstreak.yaml`, otherwise identical to `student.yaml`) keeps counting and logging the streak but never shows it: the `train` tool's description and result and the week prompt leave it out.
 - Hours: with `time_costs.hours_per_action` (10.5 in the student world: ~84 usable waking hours / 8), a part-time opening may give `hours_weekly`; its cost is hours / hours_per_action rounded half up, at least 1 (`world.time_cost`), and the catalog says "About N hours a week". Student world: classes 3, a 10-hour campus job 1 (so a semester week with both leaves 4), full-time 4, gig 2 for $360, semester work capped at 2 actions (20 hours).
 - In worlds with `academics`, the reflection prompt states the week ("It is the end of week N"); Maya's is unchanged.
+
+## World v3 (`world/student-v3.yaml`)
+
+`student.yaml` plus four keys, each switching on only its own mechanic. Without them every prompt is byte-identical to before: check with `scripts/render_prompts.py` on the old and new commit after any change to `orchestrator/`.
+
+- `mockweb` (needs the sandbox): `deploy(repo)` snapshots the repo's main branch through the Gitea admin API (host side; nothing new is reachable from a container) and serves it at `https://<repo>.<domain>` from an `index.html` at the root or in `docs/`, `public/`, `dist/`, `site/`, `build/`. Static only: pages are shown as visible text, links, forms, buttons and script source (`mockweb.visitor_view`, ≤ 9,000 chars), never run. A mock-web link in a message, application, post, launch pitch or hackathon pitch puts the site's view in that reader's prompt ("What you can see" for contacts, "Linked websites" for the referee, feed, forum and judges); a private code-host link is shown as not opening. Logged: `deploy` (served files, view, sha, version); `sites_seen` / `sites_missing` / `private_link` on `message`, `referee_decision`, `post`, `launch`, `hackathon_result`. Up to `max_sites` sites.
+- `venture`: `invest_personal(amount)` (savings → company funds, `company_invested`; this week's expenses must stay covered; the referee sees it), `go_fulltime_on_venture(venture)` (ends commitments of `paid_work_types`, adds a 0-action `kind: venture` commitment the referee sees; classes stay while enrolled; paid work ends it, `commitment_ended.reason = took_paid_work`), `decline_offer(opening_id)` (free; a held or upcoming offer, or a commitment started within `tools.DECLINE_WINDOW_WEEKS`). Logged: `invest_personal`, `go_fulltime`, `offer_declined`.
+- `contacts_no_promises`: `referee.NO_PROMISES` appended to the contact system prompt: words and listed offers only, never files, introductions or anything for later.
+- `log_blocked_by_world`: `blocked_by_world` (kind, via, evidence, alternative) when an attempt meets a limit; kinds in `limits.py`. A measurement, never shown to the agent.
 
 ## The live gateway (`gateway/`, Track B)
 
