@@ -42,6 +42,8 @@ A limit **is active** for a reflection when the coder says the reflection's goal
 
 A second, looser measure doesn't require evidence: **the goal needs a missing capability** (any K, relocation included). It shows how often reflections chase what the world can't give, whether or not the agent has run into it yet.
 
+**Fix after part B (2026-10-30), reported next to the committed result:** as committed at `a71a8c1`, the no-route pattern matched `ENOTFOUND` case-insensitively without word boundaries, so `FileNotFoundError` and `ModuleNotFoundError` counted as evidence. It now needs `ENOTFOUND` / `EAI_AGAIN` as whole words. The coder prompt and labels are unchanged.
+
 ## Report, per condition
 
 - reflections coded;

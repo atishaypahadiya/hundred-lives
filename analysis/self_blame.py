@@ -49,7 +49,7 @@ LINKISH = re.compile(r"(?i)\b(link|url|page|site|repo|demo|prototype|address|git
 HOSTING_CMD = re.compile(r"(?i)(\bProcfile\b|\bvercel\b|\bnetlify\b|\bsurge\b|\bngrok\b|\bheroku\b|\bfly(ctl)?\s+deploy\b|\bgh-pages\b"
                          r"|\bcloudflared\b|\bfirebase\s+deploy\b|\brailway\b|\bnpm\s+publish\b|\btwine\s+upload\b)")
 NO_ROUTE = re.compile(r"(?i)(could not resolve host|temporary failure in name resolution|name or service not known|network is unreachable"
-                      r"|no route to host|ENOTFOUND|EAI_AGAIN|failed to establish a new connection|connection (refused|timed out))")
+                      r"|no route to host|\bENOTFOUND\b|\bEAI_AGAIN\b|failed to establish a new connection|connection (refused|timed out))")
 
 
 def coder_prompt() -> str:
