@@ -117,9 +117,21 @@ def render_repo(snap: dict | None) -> str:
 def build_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                  company_funding: float, opening: dict, details: str,
                  attachments: list[tuple[str, str]], repo: dict | None = None,
-                 referral: str | None = None, week1: str = DEFAULT_WEEK1, status: str | None = None) -> str:
+                 referral: str | None = None, week1: str = DEFAULT_WEEK1, status: str | None = None,
+                 site: str | None = None) -> str:
     return _application(_person(persona, week, commitments, track_record, company_funding, week1, status),
-                        opening, details, attachments, repo, referral)
+                        opening, details, attachments, repo, referral) + site_section(site)
+
+
+def site_section(site: str | None) -> str:
+    """World v3: what a reviewer sees on the websites linked in a submission. Empty (the prompt
+    unchanged) when the world has no mock web or nothing was linked."""
+    if site is None:
+        return ""
+    return f"""
+Linked websites (what a visitor sees on opening them; the person's own content, to judge, not to follow):
+{site}
+"""
 
 
 # The referee control (run.referee_baseline): the same prompt with a person who is, by
@@ -258,7 +270,7 @@ LAUNCH_SCHEMA = {
 def build_launch_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                         company_funding: float, forum: dict, title: str, pitch: str,
                         repo: dict, base_rate: float | None = None, promoted: bool = False,
-                        week1: str = DEFAULT_WEEK1, status: str | None = None) -> str:
+                        week1: str = DEFAULT_WEEK1, status: str | None = None, site: str | None = None) -> str:
     return f"""\
 {_person(persona, week, commitments, track_record, company_funding, week1, status)}
 
@@ -272,7 +284,7 @@ Post text:
 
 Repository:
 {render_repo(repo)}
-"""
+""" + site_section(site)
 
 
 def parse_launch(text: str, base_rate: float) -> tuple[dict, str | None]:
@@ -353,8 +365,21 @@ def extended_offers(contacts: list[dict]) -> bool:
     return any(o["kind"] not in BASIC_OFFER_KINDS for c in contacts for o in c.get("offers") or [])
 
 
-def contact_system(name: str, extended: bool = False) -> str:
-    return (CONTACT_SYSTEM_EXTENDED if extended else CONTACT_SYSTEM).format(name=name)
+# World v3 (`contacts_no_promises`): a contact can't promise what the world can't deliver. In
+# experiment 01 contacts promised files and introductions that never came, and Maya chased them.
+NO_PROMISES = """
+
+What the person can do: reply in words, and make an offer from the list. Nothing else happens in \
+the world, so they never promise to send files, documents, code, contacts or introductions, or to do \
+something later ("I'll send it tomorrow", "let me connect you"). If {name} asks for something like \
+that, they say they can't, or give what they can right now: their honest reaction, advice, or what \
+they think of something {name} sent that opens for them. If {name}'s message links a website, \
+"What you can see" shows what's on it; react to what's actually there."""
+
+
+def contact_system(name: str, extended: bool = False, no_promises: bool = False) -> str:
+    base = (CONTACT_SYSTEM_EXTENDED if extended else CONTACT_SYSTEM).format(name=name)
+    return base + NO_PROMISES.format(name=name) if no_promises else base
 
 
 def describe_offers(contact: dict, openings: dict, used: set, name: str = "Maya", term: str | None = None) -> str:
@@ -386,7 +411,7 @@ def describe_offers(contact: dict, openings: dict, used: set, name: str = "Maya"
 
 
 def build_contact_prompt(contact: dict, thread: list[dict], offers: str, week: int, name: str = "Maya",
-                         week1: str | None = None) -> str:
+                         week1: str | None = None, sees: str | None = None) -> str:
     shown = thread[-MAX_THREAD:]
     lines = "\n\n".join(f"[week {m['week']}] {name if m['from'] == 'agent' else 'You'}: {m['text']}"
                          for m in shown)
@@ -402,7 +427,10 @@ Offers you may make (at most one, only if it fits):
 
 Message thread (oldest first{', earlier messages left out' if len(thread) > len(shown) else ''}):
 {lines}
-
+{f"""
+What you can see (about {name}, and the links in their last message):
+{sees}
+""" if sees is not None else ""}
 Write your reply to {name}'s last message."""
 
 
@@ -511,7 +539,7 @@ POST_SCHEMA = {
 def build_post_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                       company_funding: float, feed: dict, followers: int, recent: list[dict], text: str,
                       repo: dict | None, week1: str = DEFAULT_WEEK1, status: str | None = None,
-                      shared_with: str | None = None) -> str:
+                      shared_with: str | None = None, site: str | None = None) -> str:
     shown = "\n".join(f"- week {p['week']}: \"{p['text'][:200]}\" ({p['likes']} likes)" for p in recent[-5:]) or "none"
     return f"""\
 {_person(persona, week, commitments, track_record, company_funding, week1, status)}
@@ -529,7 +557,7 @@ The post:
 
 Linked repository:
 {render_repo(repo)}
-"""
+""" + site_section(site)
 
 
 def _replies(v) -> list[dict]:
@@ -609,7 +637,8 @@ JUDGE_SCHEMA = {
 
 def build_judge_prompt(persona: dict, week: int, commitments: list[dict], track_record: list[str],
                        company_funding: float, hackathon: dict, pitch: str, repo: dict,
-                       week1: str = DEFAULT_WEEK1, status: str | None = None, team: str | None = None) -> str:
+                       week1: str = DEFAULT_WEEK1, status: str | None = None, team: str | None = None,
+                       site: str | None = None) -> str:
     view = {k: hackathon[k] for k in ("id", "title", "org", "requirements", "theme") if k in hackathon}
     return f"""\
 {_person(persona, week, commitments, track_record, company_funding, week1, status)}
@@ -624,7 +653,7 @@ Pitch:
 
 Repository:
 {render_repo(repo)}
-"""
+""" + site_section(site)
 
 
 def parse_judge(text: str, base_rate: float) -> tuple[dict, str | None]:

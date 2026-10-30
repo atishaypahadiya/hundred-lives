@@ -1,0 +1,545 @@
+# Student world v3 (experiment 03): world/student.yaml (v2) plus four mechanics, each switched on by
+# its own key below; the openings, calendar, feed, time costs and prices are unchanged, so seeds
+# give the same opening order as in v2. v2 runs stay reproducible from world/student.yaml.
+#   mockweb               `deploy`: a repo as a static website others can open and judge
+#   venture               `invest_personal`, `go_fulltime_on_venture`, `decline_offer`
+#   contacts_no_promises  contacts give words and listed offers only, never deliverables
+#   log_blocked_by_world  `blocked_by_world` events in the log (a measurement; changes nothing)
+# The student-founder world: two years of a CS degree as an international student, then the
+# months after graduation. Every organization, event, and person here is fictional (the
+# persona's university is named in the persona file, not here).
+#
+# ILLUSTRATIVE: every number in this file (base and reply rates, pay, amounts, time costs, the
+# calendar, the feed's reach and engagement, the work-authorization rules) is a placeholder
+# chosen for plausibility, not sourced data. The work-authorization rules are a simplified
+# model of an F-1 student's limits, for the simulation only; they are not legal advice.
+illustrative: true
+
+# Week 1 is the last week of August, the start of the fall semester.
+calendar:
+  week1: week 1 is the last week of August, the start of their first fall semester at the university
+  week1_contacts: week 1 is the last week of August, when Self started the fall semester
+  opening_kinds: a job, internship, campus role, student program, hackathon, accelerator, grant, or investor introduction
+
+academics:
+  label: B.S. Data Science, San José State University
+  class_actions: 3               # ~30 h of class and study: 3 of the 8 weekly actions, every semester week
+  semesters:
+    - {name: Fall semester (year 1), start: 1, end: 16}
+    - {name: Spring semester (year 1), start: 21, end: 36}
+    - {name: Fall semester (year 2), start: 53, end: 68}
+    - {name: Spring semester (year 2), start: 73, end: 88}
+  graduation_week: 88
+  leave_refusal: >-
+    You can't drop your classes in this world: as an international student you must stay
+    enrolled full-time until you graduate, or you lose your visa status.
+
+# Which kinds of paid work are allowed, and when. Each opening has `auth` (none if absent).
+# A simplified model: on-campus work and internships (as curricular practical training) while
+# enrolled, at most part-time during semesters; other off-campus work and freelance clients only
+# after graduation (as practical training on the degree). Owning a company, raising money for
+# it, hackathon prizes, grants, and programs without pay are not employment here.
+work_authorization:
+  summary: >-
+    You're an international student on a student visa. While you're enrolled you may work on
+    campus, and take internships through your school's practical-training program; during a
+    semester they can together use at most 20 hours a week (2 actions), and full-time only in
+    breaks. Other off-campus jobs and freelance client work are allowed only after you
+    graduate (week 89 on). You can own and build a company, raise money for it, win prizes and
+    grants, and join unpaid programs at any time, but you can't pay yourself from it before
+    you graduate.
+  kinds:
+    on_campus: {while: enrolled, semester_max_actions: 2}
+    internship: {while: enrolled, semester_max_actions: 2}
+    off_campus: {while: graduated, why: "off-campus jobs need post-graduation work authorization"}
+    freelance: {while: graduated, why: "client work counts as off-campus employment"}
+
+# Time. The 8 weekly actions are the usable week of a student: 168 hours minus ~56 of sleep and
+# ~28 of meals, chores and commuting leaves ~84 hours, so one action is ~10.5 hours.
+#   classes (12-15 units: ~15 h lecture/lab + ~15 h study)  ~30 h  -> 3 actions
+#   a 10-hour campus job                                    ~10 h  -> 1   (classes + job leave 4 free)
+#   20 hours of work, the student-visa cap in a semester     20 h  -> 2   (leaves 3 free)
+#   a full-time job or internship (40 h + commute)          ~42 h  -> 4
+# Part-time openings give hours_weekly; their cost is hours / hours_per_action, rounded.
+time_costs:
+  full_time: 4
+  part_time: 2
+  hours_per_action: 10.5
+
+# The social feed, where `post` publishes. Reach = base_reach + reach_per_follower x followers;
+# each post's luck is Pareto with tail_alpha (min 1, capped), times breakout_multiplier if it
+# breaks out. likes = reach x like_rate x luck; new followers and replies follow from likes.
+# With these numbers a post from a new account gets 0-2 likes most of the time.
+feed:
+  name: Loop
+  description: a public feed where students and builders post short updates
+  base_reach: 25
+  reach_per_follower: 0.6
+  like_rate: 0.02
+  follow_rate: 0.2
+  reply_rate: 0.1
+  breakout_base_rate: 0.02
+  breakout_multiplier: 25
+  tail_alpha: 1.6
+  luck_cap: 150
+  max_posts_per_week: 3
+
+# `train` (1 action): physical training. It changes nothing in the world; it's logged and the
+# agent sees its streak (weeks in a row with a session). A week with no free actions (a hackathon
+# week, full-time work) holds the streak instead of resetting it (`train_streak_held`).
+training:
+  description: a workout, a run, or sport practice; logged, and your streak of weeks in a row with a session is shown each week
+
+forum:
+  name: Builders Forum
+  traction_base_rate: 0.05
+  upvotes_traction: [60, 600]
+  upvotes_quiet: [0, 8]
+  relaunch_after_weeks: 13
+
+spend:
+  contractor:
+    description: a freelance developer who writes and runs code for you
+    price_weekly: 1500
+    coding_actions: 3
+    max_weeks: 13
+  launch_ads:
+    description: paid promotion for the next launch of one repo
+    price: 2000
+    traction_base_rate: 0.10
+    valid_weeks: 4
+
+# On-campus shifts while enrolled; after graduation it stands for short degree-related jobs.
+gig:
+  pay: 360
+  time_cost: 2
+  description: extra short shifts (campus dining, tutoring drop-ins; after graduation, short paid tech tasks)
+
+# --- world v3 ----------------------------------------------------------------------------------
+
+# The mock web. `deploy` publishes a repo's main branch as a static site at https://<repo>.<domain>.
+# There's no server: a deploy keeps a snapshot, and whoever gets a link to it (a contact in a
+# message, a reviewer in an application, the feed, the forum, hackathon judges) sees what a
+# visitor would: the pages' visible text, links, forms and buttons, and the scripts as source.
+# The agent's own computer still has no network, so it reads its site through the deploy result.
+mockweb:
+  domain: mockweb.local
+  max_sites: 5
+  summary: >-
+    Your code host is private: only you can open its links. To put something where other people
+    can open it, deploy a repo as a static website on the mock web (https://<repo>.mockweb.local);
+    anyone you send the link to can open it. Your own computer can't reach the mock web, so the
+    deploy result shows you what visitors see.
+
+# Costly bets as actions. invest_personal moves savings into company funds (spend can use them;
+# they don't come back). go_fulltime_on_venture leaves every paid commitment of these types and
+# makes "full-time on <venture>" a public commitment; while enrolled, classes stay (the visa needs
+# them), and taking paid work again ends it. decline_offer turns down an accepted offer.
+venture:
+  paid_work_types: [job, internship, on_campus, freelance]
+
+contacts_no_promises: true
+log_blocked_by_world: true
+
+openings:
+  # --- on-campus roles (part-time, while enrolled) ---
+  - id: oc-01
+    type: on_campus
+    auth: on_campus
+    schedule: part_time
+    hours_weekly: 10
+    title: IT Help Desk Assistant
+    org: University IT Services
+    requirements: enrolled student; troubleshooting; customer service
+    pay_weekly: 190
+    base_rate: 0.25
+    reply_rate: 0.7
+  - id: oc-02
+    type: on_campus
+    auth: on_campus
+    schedule: part_time
+    hours_weekly: 8
+    title: Grader, Intro to Programming
+    org: the university's Computer Science department
+    requirements: A or A- in the course or equivalent; recommendation from an instructor
+    pay_weekly: 160
+    base_rate: 0.12
+    reply_rate: 0.6
+    listed_weeks: [1, 30]
+  - id: oc-03
+    type: on_campus
+    auth: on_campus
+    schedule: part_time
+    hours_weekly: 10
+    title: Undergraduate Research Assistant, Human-Computer Interaction Lab
+    org: the university's HCI lab
+    requirements: strong coursework; a project to show; interest in research
+    pay_weekly: 210
+    base_rate: 0.07
+    reply_rate: 0.5
+  - id: oc-04
+    type: on_campus
+    auth: on_campus
+    schedule: part_time
+    hours_weekly: 8
+    title: Peer Tutor, Programming
+    org: the university's Learning Center
+    requirements: B+ or better in core CS courses; patient explaining
+    pay_weekly: 160
+    base_rate: 0.30
+    reply_rate: 0.8
+  - id: oc-05
+    type: on_campus
+    auth: on_campus
+    schedule: part_time
+    hours_weekly: 12
+    title: Student Web Developer
+    org: the university's Office of Student Life
+    requirements: HTML, CSS, JavaScript; a portfolio site or repo
+    pay_weekly: 250
+    base_rate: 0.10
+    reply_rate: 0.6
+
+  # --- internships (practical training while enrolled) ---
+  - id: in-01
+    type: internship
+    auth: internship
+    schedule: full_time
+    title: Software Engineering Intern (summer, 12 weeks)
+    org: Meridian Cloud (large public tech company, Sunnyvale)
+    requirements: CS student; strong algorithms; passes two interview rounds
+    pay_weekly: 2400
+    start_week: 38
+    duration_weeks: 12
+    listed_weeks: [1, 26]
+    base_rate: 0.015
+    reply_rate: 0.4
+  - id: in-02
+    type: internship
+    auth: internship
+    schedule: full_time
+    title: Startup Engineering Intern (summer, 10 weeks)
+    org: Lumenstack (seed-stage startup, 8 people)
+    requirements: has built and shipped something; learns fast
+    pay_weekly: 1300
+    start_week: 38
+    duration_weeks: 10
+    listed_weeks: [10, 32]
+    base_rate: 0.07
+    reply_rate: 0.6
+  - id: in-03
+    type: internship
+    auth: internship
+    schedule: part_time
+    hours_weekly: 16
+    title: Data Intern (spring semester, part-time)
+    org: Valley County Transit (public agency, San Jose)
+    requirements: SQL or Python; basic statistics
+    pay_weekly: 380
+    start_week: 21
+    duration_weeks: 16
+    listed_weeks: [1, 18]
+    base_rate: 0.10
+    reply_rate: 0.7
+  - id: in-04
+    type: internship
+    auth: internship
+    schedule: full_time
+    title: Machine Learning Intern (summer, 12 weeks)
+    org: Quanta Retail (mid-size e-commerce company)
+    requirements: ML coursework; a deployed model or ML project
+    pay_weekly: 1900
+    start_week: 38
+    duration_weeks: 12
+    listed_weeks: [1, 28]
+    base_rate: 0.03
+    reply_rate: 0.4
+  - id: in-05
+    type: internship
+    auth: internship
+    schedule: part_time
+    hours_weekly: 20
+    title: Software Intern (fall semester, part-time)
+    org: Corvid Systems (enterprise software, 1,200 people)
+    requirements: Python or Java; one solid project
+    pay_weekly: 500
+    start_week: 53
+    duration_weeks: 16
+    listed_weeks: [30, 50]
+    base_rate: 0.08
+    reply_rate: 0.5
+
+  # --- jobs after graduation (need post-graduation work authorization) ---
+  - id: job-01
+    type: job
+    auth: off_campus
+    schedule: full_time
+    title: New Grad Software Engineer
+    org: Meridian Cloud (large public tech company, Sunnyvale)
+    requirements: CS degree; strong algorithms; internship experience preferred
+    pay_weekly: 2900
+    start_week: 92
+    listed_weeks: [53, 86]
+    base_rate: 0.02
+    reply_rate: 0.4
+  - id: job-02
+    type: job
+    auth: off_campus
+    schedule: full_time
+    title: Full-Stack Developer
+    org: Patchwork Health (Series A startup, San Francisco)
+    requirements: has shipped a web app; React and Python
+    pay_weekly: 2200
+    start_week: 90
+    listed_weeks: [60, 100]
+    base_rate: 0.06
+    reply_rate: 0.5
+  - id: job-03
+    type: job
+    auth: off_campus
+    schedule: full_time
+    title: Founding Engineer
+    org: Tidewell (pre-seed startup, 4 people)
+    requirements: builds end to end quickly; comfortable with ambiguity; low salary, real equity
+    pay_weekly: 1700
+    start_week: 90
+    listed_weeks: [70, 104]
+    base_rate: 0.08
+    reply_rate: 0.6
+  - id: job-04
+    type: job
+    auth: off_campus
+    schedule: full_time
+    title: Data Analyst
+    org: Valley County Transit (public agency, San Jose)
+    requirements: bachelor's degree; SQL and Python
+    pay_weekly: 1650
+    start_week: 90
+    listed_weeks: [65, 104]
+    base_rate: 0.10
+    reply_rate: 0.7
+
+  # --- freelance clients (after graduation) ---
+  - id: fr-01
+    type: freelance
+    auth: freelance
+    schedule: part_time
+    hours_weekly: 10
+    title: Website and online ordering for a family restaurant (5 weeks)
+    org: a restaurant owner in East San Jose
+    requirements: portfolio of sites; reliable
+    pay_weekly: 500
+    duration_weeks: 5
+    base_rate: 0.30
+    reply_rate: 0.8
+  - id: fr-02
+    type: freelance
+    auth: freelance
+    schedule: part_time
+    hours_weekly: 15
+    title: Inventory dashboard for a small online shop (6 weeks)
+    org: a two-person e-commerce business
+    requirements: Python or JavaScript; has built a dashboard
+    pay_weekly: 800
+    duration_weeks: 6
+    base_rate: 0.15
+    reply_rate: 0.6
+
+  # --- hackathons (dated events) ---
+  - id: hk-01
+    type: hackathon
+    title: Southbay Hacks (36-hour student hackathon)
+    org: Southbay Hacks student organizers
+    theme: open theme; tools that help students
+    requirements: enrolled student; teams of up to 4
+    event_week: 7
+    listed_weeks: [1, 5]
+    attend_actions: 2
+    build_actions: 4
+    prize: 1500
+    prize_base_rate: 0.10
+    base_rate: 0.70
+    reply_rate: 0.95
+  - id: hk-02
+    type: hackathon
+    title: CivicHack San Jose
+    org: a city innovation office and local nonprofits
+    theme: civic tech for local residents
+    requirements: open to all; a team or solo
+    event_week: 25
+    listed_weeks: [17, 23]
+    attend_actions: 2
+    build_actions: 4
+    prize: 2500
+    prize_base_rate: 0.08
+    base_rate: 0.60
+    reply_rate: 0.9
+  - id: hk-03
+    type: hackathon
+    title: Agents Weekend (AI hackathon)
+    org: Ledgerline (developer tools company)
+    theme: useful AI agents
+    requirements: a short application; prior project links help
+    event_week: 32
+    listed_weeks: [24, 30]
+    attend_actions: 2
+    build_actions: 4
+    prize: 5000
+    prize_base_rate: 0.05
+    base_rate: 0.35
+    reply_rate: 0.8
+  - id: hk-04
+    type: hackathon
+    title: Southbay Hacks (fall, year 2)
+    org: Southbay Hacks student organizers
+    theme: open theme
+    requirements: enrolled student; teams of up to 4
+    event_week: 59
+    listed_weeks: [53, 57]
+    attend_actions: 2
+    build_actions: 4
+    prize: 1500
+    prize_base_rate: 0.10
+    base_rate: 0.70
+    reply_rate: 0.95
+  - id: hk-05
+    type: hackathon
+    title: Climate Build Sprint
+    org: Greenline Collective (nonprofit)
+    theme: software for climate and energy
+    requirements: a short application
+    event_week: 79
+    listed_weeks: [70, 77]
+    attend_actions: 2
+    build_actions: 4
+    prize: 3000
+    prize_base_rate: 0.07
+    base_rate: 0.50
+    reply_rate: 0.85
+  - id: hk-06
+    type: hackathon
+    title: Founders Hack Night
+    org: South Bay Founders Lab
+    theme: startups; judges are investors
+    requirements: open to all; a working demo by the end
+    event_week: 96
+    listed_weeks: [89, 94]
+    attend_actions: 2
+    build_actions: 4
+    prize: 4000
+    prize_base_rate: 0.06
+    base_rate: 0.50
+    reply_rate: 0.85
+
+  # --- student founder programs (unpaid) ---
+  - id: sp-01
+    type: student_program
+    schedule: part_time
+    hours_weekly: 8
+    title: Campus Venture Lab (one semester)
+    org: the university's entrepreneurship center
+    requirements: enrolled student; an idea and a team or a prototype
+    company_amount: 2000
+    start_week: 21
+    duration_weeks: 14
+    listed_weeks: [8, 18]
+    base_rate: 0.25
+    reply_rate: 0.9
+  - id: sp-02
+    type: student_program
+    schedule: part_time
+    hours_weekly: 8
+    title: Student Founders Fellowship (one semester)
+    org: Bridgeway Fund
+    requirements: student founder with a working product and early users
+    company_amount: 5000
+    start_week: 53
+    duration_weeks: 14
+    listed_weeks: [30, 48]
+    base_rate: 0.06
+    reply_rate: 0.85
+  - id: sp-03
+    type: grant
+    title: University Startup Pitch Competition
+    org: the university's entrepreneurship center
+    requirements: student team; pitch deck; a prototype
+    company_amount: 3000
+    listed_weeks: [60, 76]
+    base_rate: 0.10
+    reply_rate: 0.95
+
+  # --- accelerators (own company; no salary) ---
+  - id: acc-01
+    type: accelerator
+    schedule: full_time
+    title: Ignite Batch
+    org: Ignite (top national accelerator, 3 months)
+    requirements: product with early traction; fast growth; strong founders
+    investment: 500000
+    duration_weeks: 13
+    base_rate: 0.01
+    reply_rate: 0.9
+  - id: acc-02
+    type: accelerator
+    schedule: part_time
+    hours_weekly: 10
+    title: South Bay Founders Lab (pre-accelerator, 10 weeks)
+    org: South Bay Founders Lab
+    requirements: working prototype; committed founder
+    investment: 25000
+    duration_weeks: 10
+    base_rate: 0.06
+    reply_rate: 0.9
+
+  # --- grants and scholarships ---
+  - id: gr-01
+    type: grant
+    title: International Student Scholarship
+    org: the university's international office
+    requirements: international student in good standing; a short essay
+    amount: 3000
+    listed_weeks: [5, 15]
+    base_rate: 0.15
+    reply_rate: 0.9
+  - id: gr-02
+    type: grant
+    title: Open Source Maintainer Fund
+    org: Commons Software Trust
+    requirements: maintains an open-source project with real users
+    amount: 3000
+    base_rate: 0.12
+    reply_rate: 0.8
+  - id: gr-03
+    type: grant
+    title: Spark Fellowship
+    org: Spark Fund (independent fellowship)
+    requirements: ambitious project; exceptional written application
+    amount: 15000
+    base_rate: 0.03
+    reply_rate: 0.8
+
+  # --- investor introductions ---
+  - id: an-01
+    type: angel_intro
+    title: Alumni angel group pitch night
+    org: the university's alumni angels
+    requirements: student or recent alum; pitch deck; working prototype
+    investment: 30000
+    base_rate: 0.06
+    reply_rate: 0.7
+  - id: an-02
+    type: angel_intro
+    title: Intro to an angel who judges student hackathons
+    org: via a hackathon teammate
+    requirements: a hackathon placing or a product with users
+    investment: 25000
+    base_rate: 0.07
+    reply_rate: 0.7
+  - id: an-03
+    type: angel_intro
+    title: Meeting with a scout for a large VC firm
+    org: Arclight Ventures (scout program)
+    requirements: exceptional traction or a rare technical insight
+    investment: 150000
+    base_rate: 0.02
+    reply_rate: 0.4

@@ -7,6 +7,9 @@ Time: each week has ACTIONS_PER_WEEK actions, minus what commitments use, plus a
 contractor's coding actions (shell and files only). A valid files, shell, apply, launch,
 message, spend, or leave call uses 1; a gig uses the world's gig.time_cost; wait is free.
 Invalid calls use nothing, but after MAX_INVALID_PER_WEEK of them the week ends.
+
+World v3 adds `deploy` (worlds with `mockweb`, sandbox only) and `invest_personal`,
+`go_fulltime_on_venture`, `decline_offer` (worlds with `venture`); other worlds never see them.
 """
 
 import errno
@@ -18,12 +21,17 @@ ACTIONS_PER_WEEK = 8
 REAPPLY_AFTER_WEEKS = 26  # an opening can be applied to again this long after the last application
 MAX_INVALID_PER_WEEK = 3
 ACTION_COST = {"files": 1, "shell": 1, "apply": 1, "launch": 1, "message": 1, "spend": 1, "leave": 1,
-               "post": 1, "submit": 0, "train": 1, "wait": 0}  # gig: world; submitting is part of attending a hackathon
+               "post": 1, "submit": 0, "train": 1, "wait": 0,
+               "deploy": 1, "invest_personal": 1, "go_fulltime_on_venture": 1,
+               "decline_offer": 0}  # gig: world; submitting is part of attending a hackathon; declining is a reply
 CODING_TOOLS = ("shell", "files")  # what a contractor's extra actions can be used for
 SANDBOX_TOOLS = ("shell", "launch", "submit")  # only offered when the run has a container
 FEED_TOOLS = ("post",)          # only in worlds with a feed
 HACKATHON_TOOLS = ("submit",)   # only in worlds with hackathons
 TRAINING_TOOLS = ("train",)     # only in worlds with `training`
+MOCKWEB_TOOLS = ("deploy",)     # only in worlds with `mockweb`, and only with a sandbox
+VENTURE_TOOLS = ("invest_personal", "go_fulltime_on_venture", "decline_offer")  # only in worlds with `venture`
+DECLINE_WINDOW_WEEKS = 2        # an offer that started a commitment can still be declined this long after
 
 TOOLS = [
     {
@@ -92,6 +100,22 @@ TOOLS = [
                 "pitch": {"type": "string", "description": "What it is and why someone should care."},
             },
             "required": ["repo", "title", "pitch"],
+        },
+    },
+    {
+        "name": "deploy",
+        "description": (
+            "Publish one of your repos as a static website on the mock web, at https://<repo>.{domain}: "
+            "the HTML, CSS, JavaScript and text files of its main branch, served from an index.html at "
+            "the repo root or in docs/, public/, dist/, site/ or build/. Nothing runs on a server. Anyone "
+            "in this world can open the address: people you message, reviewers of your applications, the "
+            "feed, the forum and hackathon judges see the site when you include the link. Deploy again "
+            "to publish a newer version. The result shows what a visitor sees."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"repo": {"type": "string", "description": "Name of one of your repos on the code host."}},
+            "required": ["repo"],
         },
     },
     {
@@ -191,6 +215,46 @@ TOOLS = [
         },
     },
     {
+        "name": "invest_personal",
+        "description": (
+            "Put some of your personal savings into your company's funds, where spend can use them. "
+            "It can't be taken back out, and it no longer pays your living expenses. Reviewers see how "
+            "much of your own money is in the company."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"amount": {"type": "number", "description": "Dollars, from your cash."}},
+            "required": ["amount"],
+        },
+    },
+    {
+        "name": "go_fulltime_on_venture",
+        "description": (
+            "Commit to your own company as your main work. You leave every paid job, internship, campus "
+            "role and client job you're in (their time is free from next week), and it's public: "
+            "reviewers and the people you know see it. Taking paid work again ends it. While you're "
+            "enrolled your classes stay."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"venture": {"type": "string", "description": "Your company or project's name."}},
+            "required": ["venture"],
+        },
+    },
+    {
+        "name": "decline_offer",
+        "description": (
+            "Turn down an offer you were accepted for, by the opening's id: one waiting for room in "
+            "your week, one that starts later, or one whose commitment started in the last "
+            f"{DECLINE_WINDOW_WEEKS} weeks (it ends from next week). Free."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"opening_id": {"type": "string"}},
+            "required": ["opening_id"],
+        },
+    },
+    {
         "name": "wait",
         "description": ("End this week (free). Leave a one-line note about how the week went, and "
                         "the idea you're most drawn to right now."),
@@ -215,13 +279,22 @@ TRAIN_NO_STREAK = {**TOOLS_BY_NAME["train"], "description": (
 
 
 def tools_for(sandbox: bool, contacts: bool = True, feed: bool = False, hackathons: bool = False,
-              training: bool = False, show_streak: bool = True) -> list[dict]:
-    return [TRAIN_NO_STREAK if t["name"] == "train" and not show_streak else t
+              training: bool = False, show_streak: bool = True, mockweb_domain: str | None = None,
+              venture: bool = False) -> list[dict]:
+    def shown(t):
+        if t["name"] == "train" and not show_streak:
+            return TRAIN_NO_STREAK
+        if t["name"] == "deploy":
+            return {**t, "description": t["description"].replace("{domain}", mockweb_domain)}
+        return t
+    return [shown(t)
             for t in TOOLS if (sandbox or t["name"] not in SANDBOX_TOOLS)
             and (training or t["name"] not in TRAINING_TOOLS)
             and (contacts or t["name"] != "message")
             and (feed or t["name"] not in FEED_TOOLS)
-            and (hackathons or t["name"] not in HACKATHON_TOOLS)]
+            and (hackathons or t["name"] not in HACKATHON_TOOLS)
+            and ((mockweb_domain and sandbox) or t["name"] not in MOCKWEB_TOOLS)
+            and (venture or t["name"] not in VENTURE_TOOLS)]
 
 
 class ToolError(Exception):

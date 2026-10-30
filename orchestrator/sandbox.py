@@ -42,6 +42,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx2 as httpx
 
@@ -203,6 +204,35 @@ class Gitea:
         if commits.status_code == 200:
             snap["commits"] = int(commits.headers.get("X-Total-Count", len(commits.json())))
         return snap
+
+    def site_files(self, owner: str, repo: str, exts: tuple, readable: tuple, max_file: int,
+                   max_total: int) -> dict | None:
+        """The main branch's files for a static site (mockweb): every path with an extension in
+        `exts`, plus the text of the `readable` ones up to the caps, by size from the tree, so
+        nothing larger is ever downloaded. None if the repo doesn't exist or is empty."""
+        r = self.http.get(f"/repos/{owner}/{repo}")
+        if r.status_code != 200 or r.json().get("empty"):
+            return None
+        branch = r.json().get("default_branch") or "main"
+        b = self.http.get(f"/repos/{owner}/{repo}/branches/{branch}")
+        sha = b.json().get("commit", {}).get("id") if b.status_code == 200 else None
+        tree = self.http.get(f"/repos/{owner}/{repo}/git/trees/{sha or branch}", params={"recursive": "true", "per_page": 1000})
+        entries = [e for e in (tree.json().get("tree", []) if tree.status_code == 200 else []) if e.get("type") == "blob"]
+        out = {"sha": sha, "branch": branch, "paths": [e["path"] for e in entries],
+               "sizes": {e["path"]: int(e.get("size") or 0) for e in entries}, "read": {}, "skipped": []}
+        total = 0
+        for e in entries:
+            path, size = e["path"], int(e.get("size") or 0)
+            if not path.lower().endswith(readable):
+                continue
+            if size > max_file or total + size > max_total:
+                out["skipped"].append(path)
+                continue
+            raw = self.http.get(f"/repos/{owner}/{repo}/raw/{quote(path)}", params={"ref": sha or branch})
+            if raw.status_code == 200:
+                out["read"][path] = raw.content[:max_file].decode(errors="replace")
+                total += size
+        return out
 
     def export(self, owner: str, dest: Path) -> list[dict]:
         """Write each of owner's repos to dest/<repo>.bundle (all refs). Bundles are made

@@ -3,9 +3,18 @@
 A world file can also have a calendar, academics (classes as a commitment during semesters,
 graduation at a fixed week), work_authorization (which kinds of work are allowed when), and a
 feed (the `post` tool). Each is optional; a world without them (openings.yaml) works as before.
+
+World v3 keys, each optional and each switching on only its own mechanic:
+- mockweb: `deploy` publishes a repo as a static site that contacts, reviewers, the feed, the
+  forum and judges can open (orchestrator/mockweb.py);
+- venture: `invest_personal`, `go_fulltime_on_venture` and `decline_offer`;
+- contacts_no_promises: contacts can give only words and the offers on their list, never promise
+  files, introductions or anything for later;
+- log_blocked_by_world: log `blocked_by_world` events (orchestrator/limits.py); a measurement only.
 """
 
 import random
+import re
 from pathlib import Path
 
 import yaml
@@ -85,6 +94,7 @@ def load_world(path: Path = DEFAULT_PATH, text: str | None = None) -> dict:
             raise ValueError(f"{path}: opening {o.get('id')} hours_weekly needs time_costs.hours_per_action, "
                              f"schedule part_time, and 0 < hours <= 40")
     _check_calendar(world, path)
+    _check_v3(world, path)
     seen = set()
     for o in world.get("openings") or []:
         missing = [k for k in ("id", "type", "title", "org", "requirements", "base_rate") if k not in o]
@@ -142,6 +152,33 @@ def _check_calendar(world: dict, path: Path):
         missing = [k for k in FEED_KEYS if k not in feed]
         if missing:
             raise ValueError(f"{path}: feed is missing {missing}")
+
+
+MOCKWEB_KEYS = ("domain", "max_sites", "summary")
+VENTURE_KEYS = ("paid_work_types",)
+
+
+def _check_v3(world: dict, path: Path):
+    mw = world.get("mockweb")
+    if mw is not None:
+        missing = [k for k in MOCKWEB_KEYS if k not in mw]
+        if missing:
+            raise ValueError(f"{path}: mockweb is missing {missing}")
+        if not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", str(mw["domain"])):
+            raise ValueError(f"{path}: mockweb.domain must be a host name like mockweb.local")
+        if not int(mw["max_sites"]) > 0:
+            raise ValueError(f"{path}: mockweb.max_sites must be > 0")
+    v = world.get("venture")
+    if v is not None:
+        missing = [k for k in VENTURE_KEYS if k not in v]
+        if missing:
+            raise ValueError(f"{path}: venture is missing {missing}")
+        bad = set(v["paid_work_types"]) - set(COMMITMENT_TYPES)
+        if bad:
+            raise ValueError(f"{path}: venture.paid_work_types has unknown types {sorted(bad)}")
+    for k in ("contacts_no_promises", "log_blocked_by_world"):
+        if k in world and not isinstance(world[k], bool):
+            raise ValueError(f"{path}: {k} must be true or false")
 
 
 def semester(world: dict, week: int) -> dict | None:
