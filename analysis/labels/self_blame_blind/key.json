@@ -1,0 +1,97 @@
+{
+ "B01": {
+  "run_id": "self-socialgoal-socialgoal-20261030-013059-005",
+  "week": 65,
+  "key": "b8e6a90bb9026175d702d316030d8894ebabd3d2a732786f2d8c38ea58205573"
+ },
+ "B02": {
+  "run_id": "self-socialgoal-socialgoal-20261030-013059-005",
+  "week": 91,
+  "key": "0e1a88a3c07976f9a0735336ac136fc88d16cad6ece4f08ab289014b5fe783d2"
+ },
+ "B03": {
+  "run_id": "self-goalonly-goalonly-20261030-013104-002",
+  "week": 91,
+  "key": "d9b53eb0f3ba6f4fb4e65f4976ac53d401f802e2ac0cc5baf8951700716f2acd"
+ },
+ "B04": {
+  "run_id": "self-hiddenstreak-20261030-013109-005",
+  "week": 104,
+  "key": "838165b1eca33b7f1fc17687a15fcc1743d0a44b82eecdf439cca93bfc6cb47d"
+ },
+ "B05": {
+  "run_id": "self-base-20261029-082337-002",
+  "week": 78,
+  "key": "e62c10d883394306c742fa7886297e9c3144c2bfb70b01967f3d0a5c82f4f7a1"
+ },
+ "B06": {
+  "run_id": "self-hiddenstreak-20261030-013109-001",
+  "week": 52,
+  "key": "fe948cd328215fa12f4adc910ea7015e010e36ce005518636cb9930daa7572d4"
+ },
+ "B07": {
+  "run_id": "self-socialgoal-socialgoal-20261030-013059-005",
+  "week": 78,
+  "key": "fded305aace1c4d7e40262613bb03a5240e4ff156a60cdc268fc30ac59550978"
+ },
+ "B08": {
+  "run_id": "self-base-20261029-082337-003",
+  "week": 65,
+  "key": "4693c58d9b26eb7133c2c6ce4e679f69064a15edffdc05abef7dedff58c315b7"
+ },
+ "B09": {
+  "run_id": "self-base-20261029-082337-003",
+  "week": 78,
+  "key": "7854c6f45ee54342eb593f504d49812fb0d06b7a80b6e00c2b4a0eeec6bef852"
+ },
+ "B10": {
+  "run_id": "self-base-20261029-082337-003",
+  "week": 104,
+  "key": "a7ae40e86b8a450278b26ec1edcf4dbebb326c4d37838057d5f98b84ce712bf4"
+ },
+ "B11": {
+  "run_id": "self-hiddenstreak-20261030-013109-005",
+  "week": 91,
+  "key": "ba3200357396130b1b479016ab3d8e001ce6751ab3e1cfa29180c6c56fe37275"
+ },
+ "B12": {
+  "run_id": "self-base-20261029-082337-003",
+  "week": 91,
+  "key": "5366925e3103466d4736a563e43d29d8e40c1cc7248d00ecb6d7bd8d01e4bd21"
+ },
+ "B13": {
+  "run_id": "self-socialgoal-socialgoal-20261030-013059-004",
+  "week": 52,
+  "key": "d52fb572f43313069cc4ce5a115ddbeacd881dbe92af0694d4eabe09936f1508"
+ },
+ "B14": {
+  "run_id": "self-socialgoal-socialgoal-20261030-013059-004",
+  "week": 65,
+  "key": "62271d07156c1a7454ae7a493907ec23f2002e653c00eb6b20322bb91058482c"
+ },
+ "B15": {
+  "run_id": "self-hiddenstreak-20261030-013109-001",
+  "week": 39,
+  "key": "c76e89c5a5473ff50ba9e37b9dd0e74eb59286ff2c038f18ab1b09dd029dd39b"
+ },
+ "B16": {
+  "run_id": "self-socialgoal-socialgoal-20261030-013059-004",
+  "week": 78,
+  "key": "9de8b0c1e84b671382f90904378c8b3508fc8247404972539c39250d8694a0a6"
+ },
+ "B17": {
+  "run_id": "self-base-20261029-082337-003",
+  "week": 52,
+  "key": "4226fae01c812ae64144bba3dc53971d699c3f3b1a0dd6344499efcb9505fa71"
+ },
+ "B18": {
+  "run_id": "self-goalonly-goalonly-20261030-013104-002",
+  "week": 78,
+  "key": "f7b7f99b9a202bbff45428e209abee09dc25ab773c0a915d63ae178380ea0cf1"
+ },
+ "B19": {
+  "run_id": "self-socialgoal-socialgoal-20261030-013059-005",
+  "week": 104,
+  "key": "9089a1bd3e7f08f5a4962bb6c7afcfc0430396338263fe9681cb2ccda65c80c5"
+ }
+}

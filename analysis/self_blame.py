@@ -164,6 +164,9 @@ def main(argv=None):
     ap.add_argument("--blind-sheet", action="store_true",
                     help="write every limit-active reflection, shuffled, text only, plus a CSV to label (coder labels left out)")
     ap.add_argument("--score-blind", action="store_true", help="score the filled-in CSV against the coder: agreement, Cohen's kappa")
+    ap.add_argument("--blind-coder", default="a person", help="who filled in the blind CSV, as reported (e.g. 'Claude Opus, an LLM')")
+    ap.add_argument("--blind-csv", type=Path, default=BLIND_CSV, help="the filled-in labels (default: the exports/ copy)")
+    ap.add_argument("--blind-key", type=Path, default=BLIND_KEY, help="sheet id -> reflection (default: the exports/ copy)")
     a = ap.parse_args(argv)
     prompt = coder_prompt()
     backend = None
@@ -240,7 +243,7 @@ def main(argv=None):
     if a.blind_sheet:
         write_blind(blocked, prompt, a.seed)
     if a.score_blind:
-        score_blind(blocked)
+        score_blind(blocked, a.blind_coder, a.blind_csv, a.blind_key)
 
 
 def attribution_rubric(prompt: str) -> str:
@@ -281,11 +284,11 @@ def kappa(pairs: list[tuple[str, str]]) -> tuple[float, float | None]:
     return po, (None if pe == 1 else (po - pe) / (1 - pe))
 
 
-def score_blind(blocked: list):
+def score_blind(blocked: list, who: str = "a person", labels_csv: Path = BLIND_CSV, key_json: Path = BLIND_KEY):
     import csv
-    key = json.loads(BLIND_KEY.read_text())
+    key = json.loads(key_json.read_text())
     by_key = {r["label"]["key"]: r for _, r in blocked}
-    person = {row["id"]: row for row in csv.DictReader(BLIND_CSV.open())}
+    person = {row["id"]: row for row in csv.DictReader(labels_csv.open())}
     pairs, pa, missing = [], [], []
     for i, k in key.items():
         h = (person.get(i, {}).get("attribution") or "").strip().lower()
@@ -305,20 +308,20 @@ def score_blind(blocked: list):
     po, k4 = kappa([(h, m) for _, h, m in pairs])
     pb, k2 = kappa([(h == "self", m == "self") for _, h, m in pairs])
     fmt = lambda k: "undefined (one side used a single label)" if k is None else f"{k:.2f}"
-    print(f"\nBlind check: {n} limit-active reflections labelled by a person, against {MODEL}")
+    print(f"\nBlind check: {n} limit-active reflections labelled by {who}, against {MODEL}")
     print(f"  attribution, 4 labels: agreement {po:.0%} ({round(po * n)}/{n}), Cohen's kappa {fmt(k4)}")
     print(f"  self vs not self:      agreement {pb:.0%} ({round(pb * n)}/{n}), Cohen's kappa {fmt(k2)}")
     if pa:
         pp, kp = kappa(pa)
         print(f"  needs public access:   agreement {pp:.0%} ({round(pp * len(pa))}/{len(pa)}), Cohen's kappa {fmt(kp)}")
-    print("\n  confusion (rows: person, columns: coder)")
+    print("\n  confusion (rows: blind labels, columns: coder)")
     print("  " + " " * 8 + "".join(f"{c:>7}" for c in ATTRIBUTIONS))
     for hc in ATTRIBUTIONS:
         print(f"  {hc:>8}" + "".join(f"{sum(1 for _, h, m in pairs if h == hc and m == mc):>7}" for mc in ATTRIBUTIONS))
     hs = sum(1 for _, h, _ in pairs if h == "self")
     ms = sum(1 for _, _, m in pairs if m == "self")
-    print(f"\n  self while a world limit was active: person {hs}/{n} ({hs / n:.0%}), coder {ms}/{n} ({ms / n:.0%})")
-    print("  disagreements: " + (", ".join(f"{i} person {h} / coder {m}" for i, h, m in pairs if h != m) or "none"))
+    print(f"\n  self while a world limit was active: blind labels {hs}/{n} ({hs / n:.0%}), coder {ms}/{n} ({ms / n:.0%})")
+    print("  disagreements: " + (", ".join(f"{i} blind {h} / coder {m}" for i, h, m in pairs if h != m) or "none"))
 
 
 if __name__ == "__main__":

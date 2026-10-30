@@ -147,7 +147,7 @@ Definitions, the coder prompt and the evidence rules: [`analysis/self_blame_rubr
 
 The unit is one quarterly reflection, 8 per life. A world limit is **active** when the coder says the reflection's goal needs a capability the world lacks, and the log shows the agent has already run into that limit. In practice every active case here is public access: the world has no public hosting, so a link to the agent's work opens for no one outside its sandbox.
 
-**The numbers are provisional** until two checks by the user are in: 10 random reflections (`exports/self-blame-handcheck.md`, seed 0, `--handcheck 10`), and a blind labelling of all 19 limit-active reflections (`--blind-sheet`: shuffled, text only, the coder's labels withheld; then `--score-blind` reports agreement and Cohen's kappa). Those results go here.
+**The numbers are provisional: no person has validated the labels.** The blind labelling of all 19 limit-active reflections was done by a second LLM coder, not a person (see *Second coder* below), so it measures agreement between two LLM coders. The hand-check of 10 random reflections by a person (`exports/self-blame-handcheck.md`, seed 0, `--handcheck 10`) is still open.
 
 **As committed (`a71a8c1`):**
 
@@ -189,7 +189,30 @@ The comparison across conditions is too thin to read: 0–7 limit-active reflect
 - The coder says 70–88% of reflections have a goal that needs a capability the world lacks.
 - 45–62% of all reflections blame the self.
 
+**Second coder (2026-10-30): Claude Opus, an LLM, not a person.** The user had Claude Opus label the 19 limit-active reflections from the blind sheet (`--blind-sheet`: shuffled, text only, the same attribution rules, Haiku's labels withheld). The labels and the sheet's key are committed in `analysis/labels/self_blame_blind/` (`opus-labels.csv`, with Opus's one-line reason for each, and `key.json`). How the Opus labels were produced (prompt, settings) wasn't logged here. Scored with `--score-blind --blind-coder 'Claude Opus …' --blind-csv analysis/labels/self_blame_blind/opus-labels.csv --blind-key analysis/labels/self_blame_blind/key.json` and the five condition arguments:
+
+| measure | agreement | Cohen's kappa |
+|---|---|---|
+| attribution, 4 labels | 74% (14/19) | 0.54 |
+| self vs not self | 74% (14/19) | 0.45 |
+| needs public access | 100% (19/19) | 1.00 |
+
+Confusion (rows: Opus, columns: Haiku):
+
+| | self | world | mixed | none |
+|---|---|---|---|---|
+| **self** | 9 | 1 | 0 | 1 |
+| **world** | 0 | 1 | 0 | 0 |
+| **mixed** | 3 | 0 | 3 | 0 |
+| **none** | 0 | 0 | 0 | 1 |
+
+- **Headline under each coder:** self while a world limit was active is 12/19 (63%) for Haiku and 11/19 (58%) for Opus; self + mixed is 15/19 (79%) and 17/19 (89%). Opus puts 1 reflection on the world alone; Haiku puts 2.
+- **Where they differ:** 3 of the 5 disagreements are Haiku *self* vs Opus *mixed* (B01, B06, B18): Opus counts the other people's silence or blocking that the reflection also names. The other two go the other way: B04 (Haiku none, Opus self) and B16 (Haiku world, Opus self).
+- **Per condition** (self, Haiku / Opus): base 5/5 of 6, socialgoal 3/3 of 7, goal+world 2/1 of 2, hiddenstreak 2/2 of 4.
+- **Reading:** the two coders agree moderately on the exact label (kappa 0.54) and less on the self/not-self split the headline uses (0.45). Both find that most limit-active reflections blame the self, alone or in part, and almost none put it on the world. The exact share depends on the coder: 58–63% self alone.
+- **This isn't human validation.** Both coders are Claude models given the same rubric, so they may share blind spots, and their agreement can overstate how reliable the labels are. A person labelling the same 19 would test that.
+
 **Caveats:**
 - Evidence comes from the log only. A reflection about a goal the world can't serve, by an agent that never tried and failed, doesn't count as blocked. So this undercounts. The `blocked_by_world` events in the world v3 backlog would measure it directly.
-- The hand-check sample is random over all 200 reflections, so only 1 of its 10 is limit-active. A second check of the 19 limit-active reflections would test the headline number directly.
+- The hand-check sample is random over all 200 reflections, so only 1 of its 10 is limit-active. The blind check of all 19 tests the headline directly, but so far only with a second LLM coder.
 - The coder's `outside_contacts` labels look generous: applications sometimes get coded as needing outside contacts, which the rubric says they don't. That affects only the looser "goal needs" measure. Under the fixed detector no limit-active case is outside_contacts except base life 2, which is a real attempt to message a non-contact.

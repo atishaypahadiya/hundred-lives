@@ -18,7 +18,7 @@ The coder sees the reflection text only: no run id, condition, week number, or l
 
 The coder isn't told which capabilities this world lacks. It judges what the reflection says and what its goal depends on. Whether the world was blocking that goal comes from the log (below), never from the coder.
 
-**Determinism.** Current Claude models reject sampling parameters, so labels can't be reproduced by re-running. Each label is cached (`analysis/labels/self_blame/<run_id>.jsonl`, keyed by sha256 of the model, this prompt, and the reflection) and reused. The cache records the raw output, served model, and usage, and is committed with the results. A label is never redrawn to get a different answer. The user hand-checks 10 random reflections (fixed seed) against the labels before the numbers are trusted.
+**Determinism.** Current Claude models reject sampling parameters, so labels can't be reproduced by re-running. Each label is cached (`analysis/labels/self_blame/<run_id>.jsonl`, keyed by sha256 of the model, this prompt, and the reflection) and reused. The cache records the raw output, served model, and usage, and is committed with the results. A label is never redrawn to get a different answer. The user hand-checks 10 random reflections (fixed seed) against the labels before the numbers are trusted. A blind second labelling of the limit-active reflections (`--blind-sheet`, `--score-blind`) was done on 2026-10-30 by Claude Opus, an LLM, not a person (`analysis/labels/self_blame_blind/`); it measures agreement between two LLM coders.
 
 ## Ground truth: was a world limit blocking the goal?
 
