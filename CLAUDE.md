@@ -4,28 +4,26 @@ Run one LLM persona many times through a simulated life and compare the paths. D
 
 ## Status
 
-Phase 1 of "watchable lives": each run gets its own container (OrbStack/Docker) and a user on a local Gitea. Tools: `files`, `shell`, `apply`, `launch`, `message`, `spend`, `gig`, `leave`, `wait`. No browse yet. Showcase v1 is run 1 (`maya-20261029-012642-001`), from before `message`/`spend`; runs from v2 on aren't comparable with it. Phase 2: the read-only `viewer/`, plus logged thinking summaries and a weekly `idea`. Phase 3: exported replays (`viewer.export`), published under `docs/replays/`.
+Phase 1 of "watchable lives": each run gets its own container (OrbStack/Docker) and a user on a local Gitea. Tools: `files`, `shell`, `apply`, `launch`, `message`, `spend`, `gig`, `leave`, `wait`. No browse yet. Showcase v1 is run 1 (`maya-20261029-012642-001`), from before `message`/`spend`; runs from v2 on aren't comparable with it. Phase 2: the read-only `viewer/`, plus logged thinking summaries and a weekly `idea`. Phase 3: exported replays (`viewer.export`), published under `docs/replays/`, and the Runs site: `viewer.export --all` builds `docs/runs/` (gitignored on master) from the finished batches `viewer/publish.yaml` selects, and `scripts/publish_runs.sh --deploy` publishes master's `docs/` plus `docs/runs/` as a single orphan commit on `gh-pages`, which GitHub Pages serves. Run data never enters any branch's history. The deploy pushes only what changed and makes the orphan commit through GitHub's API, because full pushes of the site failed GitHub's index-pack about 40% of the time on any transport. It needs `gh` logged in.
 
 Experiments (state on 2026-10-30):
 
 - **01** (Maya, diversity attribution) is done: results in `experiments/01-diversity-attribution.md#results`, summarized on the project page.
-- **02** (Self, `experiments/02-self-lives.md`). Part A (base × 5) is done at `9ba72b4`: results in `experiments/02-results-partA.md`; its logs, and Track A's, are in `../hundred-lives-viewer/runs/` (the viewer reads both runs dirs with `--runs-dir`).
-- **02 part B is frozen at `b3d9817`.** It has 4 conditions: nosolo, socialgoal, goalonly (reported as goal+world), hiddenstreak. Run it from a detached worktree at that commit (`git worktree add --detach ../hundred-lives-exp02b b3d9817`, then `uv sync`). Don't edit `02-self-lives.md`, since its last commit is the one part B must record.
-- Part B launches **on or after 2026-11-01 UTC, only after a Console check of month-to-date spend against the $50 monthly limit and the user's go-ahead.** Launch it from a script file, not a one-line shell: `budget_guard.py --procs` matches its own pattern in a shell's command line.
-- Report part B with master's `analysis/self_lives.py`: it has the cheap/costly bet split and the `post+message %` row the hidden-streak predictions use; `b3d9817`'s copy has neither.
+- **02** (Self, `experiments/02-self-lives.md`) is done. Part A (base × 5, `9ba72b4`): `experiments/02-results-partA.md`. Part B (nosolo, socialgoal, goal+world, hiddenstreak × 5, `b3d9817`, launched 2026-10-30 after the user raised the spend limit): `experiments/02-results-partB.md`. The hidden-streak prediction was not met (3 of 5 pairs each, 4 needed). Logs: part A and Track A in `../hundred-lives-viewer/runs/`, part B in `../hundred-lives-exp02b/runs/` (a detached worktree at `b3d9817`); the viewer reads several with `--runs-dir`. Don't edit `02-self-lives.md`.
+- **Self-blame check** (`analysis/self_blame.py`, rubric `analysis/self_blame_rubric.md`, Haiku labels cached and committed in `analysis/labels/self_blame/`): 12 of 19 reflections written while a world limit was active blame the self (63%). **Provisional** until the user's blind labels of those 19 (`--blind-sheet`, then `--score-blind`: agreement and Cohen's kappa) are in; say "provisional" wherever it appears until then.
+- Launch paid batches from a script file, not a one-line shell: `budget_guard.py --procs` matches its own pattern in a shell's command line.
 - **Track B gateway** (`gateway/`): built and tested offline; **untested live, nothing posted**.
-- Loose ends: Console cost isn't reconciled with logged `cost_usd` (Haiku cache prices are assumed); a Gitea user from the stopped `self-tracka3` run was never purged.
+- Cost: October's logged `cost_usd` is about 4% over the Console ($19.46 vs $18.66 before part B), so the assumed Haiku cache prices are close enough. Loose end: a Gitea user from the stopped `self-tracka3` run was never purged.
 
-Backlog for world v3 (**not before part B**; any of it changes results, so it's a new world version):
+Backlog for world v3 (any of it changes results, so it's a new world version):
 
 - **Top priority:** `deploy`: publishes a repo to a public URL on the mock web (e.g. `https://<name>.mockweb.local`), reachable by contacts, the referee and the feed, which can open and judge it. Without it, "get users" is impossible, and the agent blames itself.
 - **Top priority:** log `blocked_by_world` events: when an agent's plan needs something the world can't do (public hosting, spending personal cash, relocating), record it, so analysis can separate world limits from agent behavior.
-- **Top priority, analysis only (for the part A/B write-up, no world change):** a post-hoc check counting reflections that attribute failure to the self when the cause was a world limit (part A life 3: hosting). Report it as a finding.
 - `invest_personal`: put personal savings into the venture (now impossible; `spend` draws on company funds only).
 - `go_fulltime_on_venture`: a commitment to the company itself, not only through a full-time accelerator.
 - `decline_offer`: an explicit decline, instead of an offer only lapsing when nothing is left to make room.
 
-All three need real consequences in the world: cash, time, and what the referee and contacts see. Also from experiment 01: contacts promise deliverables the world can't produce (Maya chases them for weeks); either the reply carries anything shareable, or deliverables become world objects.
+The last three need real consequences in the world: cash, time, and what the referee and contacts see. Also from experiment 01: contacts promise deliverables the world can't produce (Maya chases them for weeks); either the reply carries anything shareable, or deliverables become world objects.
 
 ## Layout
 
@@ -44,6 +42,10 @@ viewer/normalize.py      raw log records -> standard viewer events (thought, too
 viewer/server.py         Starlette: run grid summaries, SSE tail of a run log (live and finished runs take one path), repo bundles via a bare clone in a temp dir
 viewer/index.html        the page: grid of lives, one life with week scrubber, money, thinking, terminal, tools, idea log, referee, feed, repos
 analysis/summarize.py    per-run paths and metrics; first-applied opening vs position; valid-action rate; calibration
+analysis/self_lives.py   experiment 02: per-life social/building profile and the cross-condition table
+analysis/self_blame.py   self-blame check: LLM-coded reflections vs world-limit evidence from the log
+viewer/publish.yaml      which finished batches the Runs site publishes, grouped by experiment
+scripts/publish_runs.sh  rebuild docs/runs/; --deploy publishes the site to gh-pages
 experiments/             experiment plans (question, conditions, commands, measures, cost), one file each
 runs/                    <run_id>.jsonl, <run_id>/workspace/, <run_id>/repos/*.bundle, <batch>-referee-baseline.jsonl (gitignored)
 ```

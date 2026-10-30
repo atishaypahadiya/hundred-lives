@@ -147,7 +147,7 @@ Definitions, the coder prompt and the evidence rules: [`analysis/self_blame_rubr
 
 The unit is one quarterly reflection, 8 per life. A world limit is **active** when the coder says the reflection's goal needs a capability the world lacks, and the log shows the agent has already run into that limit. In practice every active case here is public access: the world has no public hosting, so a link to the agent's work opens for no one outside its sandbox.
 
-**The numbers are provisional until the user hand-checks 10 random reflections** (`exports/self-blame-handcheck.md`, seed 0; written by `--handcheck 10`).
+**The numbers are provisional** until two checks by the user are in: 10 random reflections (`exports/self-blame-handcheck.md`, seed 0, `--handcheck 10`), and a blind labelling of all 19 limit-active reflections (`--blind-sheet`: shuffled, text only, the coder's labels withheld; then `--score-blind` reports agreement and Cohen's kappa). Those results go here.
 
 **As committed (`a71a8c1`):**
 
