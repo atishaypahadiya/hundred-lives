@@ -268,8 +268,31 @@ def main(argv=None):
                 print(f"  {run_no(L['run_id'])} w{r['week']} {r['label']['attribution']}: {r['label']['quote'][:160]}")
 
 
-    print("\nStall reasons after the first deploy (descriptive; reasons by the stall-reasons coder, attribution by the "
-          "self-blame coder, limits from the category)")
+    # Stall reasons. "New" after the first deploy: a category this life's reflections didn't name
+    # before the deploy, and its seed pair in part A base (a world without deploy) never named.
+    def cats(run_id, reflections):
+        labels = stalls(run_id, reflections)
+        out = []
+        for ref in reflections:
+            lab = labels.get(sb.label_key(sprompt, ref["text"]))
+            out.append((ref["week"], lab["reasons"] if lab else None))
+        return out
+
+    base_cats = {}
+    for p in sorted(g for g in glob.glob(a.base) if not g.endswith("-referee-baseline.jsonl")):
+        life = sb.read_life(p)
+        if life:
+            base_cats[run_no(life["run_id"])] = cats(life["run_id"], life["reflections"])
+    share = {"base": Counter(), "v3": Counter()}
+    nref = {"base": 0, "v3": 0}
+    for rows in base_cats.values():
+        for _, reasons in rows:
+            if reasons is not None:
+                nref["base"] += 1
+                share["base"].update({r["category"] for r in reasons})
+
+    print("\nStall reasons after the first deploy (descriptive, added after launch; reasons by the stall-reasons coder, "
+          "attribution by the self-blame coder, limit from the category, \"ran into it\" from blocked_by_world)")
     for L in lives:
         k = run_no(L["run_id"])
         b = L["backend"]
@@ -279,37 +302,41 @@ def main(argv=None):
             print("    no deploy")
             continue
         first = L["deploys"][0][0]
-        slabels = stalls(L["run_id"], L["reflections"])
+        rows = cats(L["run_id"], L["reflections"])
         attr = {r["week"]: r["label"] for r in v3rows[k]}
-        before, after, uncoded = set(), [], 0
-        for ref in L["reflections"]:
-            lab = slabels.get(sb.label_key(sprompt, ref["text"]))
-            if not lab:
-                uncoded += 1
+        before = {r["category"] for w, rs in rows if w < first and rs for r in rs}
+        paired = {r["category"] for _, rs in base_cats.get(k, []) if rs for r in rs}
+        after = [(w, rs) for w, rs in rows if w >= first]
+        uncoded = sum(1 for _, rs in rows if rs is None)
+        firsts, count = {}, Counter()
+        for w, rs in after:
+            if rs is None:
                 continue
-            for reason in lab["reasons"]:
-                if ref["week"] < first:
-                    before.add(reason["category"])
-                else:
-                    after.append((ref["week"], reason))
-        new = [(w, r) for w, r in after if r["category"] not in before]
-        print(f"    first deploy w{first}; categories before it: {', '.join(sorted(before)) or 'none'}"
+            nref["v3"] += 1
+            share["v3"].update({r["category"] for r in rs})
+            for r in rs:
+                firsts.setdefault(r["category"], (w, r))
+            count.update({r["category"] for r in rs})
+        print(f"    first deploy w{first}; {len(after)} reflections after it; named before it: {', '.join(sorted(before)) or 'nothing (no reflection yet)'}; "
+              f"named by part A base {k}: {', '.join(sorted(paired)) or 'nothing'}"
               + (f"; {uncoded} reflections uncoded (run with --code)" if uncoded else ""))
-        if not new:
-            print("    no new stall reasons after the first deploy"
-                  + (f" (repeated: {', '.join(sorted({r['category'] for _, r in after}))})" if after else ""))
-        for w, r in new:
-            limit, kinds = STALL_LIMITS[r["category"]]
+        for cat in sorted(firsts, key=lambda c: (c in before or c in paired, firsts[c][0])):
+            w, r = firsts[cat]
+            limit, kinds = STALL_LIMITS[cat]
             hit = [(kind, L["blocked_first"][kind]) for kind in kinds if L["blocked_first"].get(kind, 10**9) <= w]
+            weeks = [ww for ww, rs in after if rs and any(x["category"] == cat for x in rs)]
             lab = attr.get(w)
-            print(f"    w{w} [{r['category']}] {r['reason']}\n"
-                  f"        limit: {limit}\n"
-                  f"        ran into it: " + (", ".join(f"{kind} from w{fw}" for kind, fw in hit) if hit else
-                                               "no" if kinds else "–") + "\n"
-                  f"        reflection attributes: {lab['attribution'] if lab else 'uncoded'}"
-                  + (f" (\"{lab['quote'][:140]}\")" if lab and lab["quote"] else "") + "\n"
-                  f"        reason quote: \"{r['quote'][:160]}\"")
+            print(f"    {'NEW ' if cat not in before and cat not in paired else '    '}[{cat}] in {count[cat]} of {len(after)} "
+                  f"(w{', w'.join(map(str, weeks))}); first: \"{r['quote'][:150]}\"\n"
+                  f"        limit: {limit}; ran into it: "
+                  + (", ".join(f"{kind} from w{fw}" for kind, fw in hit) if hit else "no" if kinds else "–")
+                  + f"; that reflection attributes: {lab['attribution'] if lab else 'uncoded'}")
 
+    print(f"\n  Share of reflections naming each category: v3 after the first deploy ({nref['v3']}) vs part A base, all ({nref['base']})")
+    for cat in STALL_CATEGORIES:
+        v, bb = share["v3"][cat], share["base"][cat]
+        if v or bb:
+            print(f"    {cat:15} {v:3} ({sb.pct(v, nref['v3']):>4})   {bb:3} ({sb.pct(bb, nref['base']):>4})   {STALL_LIMITS[cat][0]}")
 
 if __name__ == "__main__":
     main()
