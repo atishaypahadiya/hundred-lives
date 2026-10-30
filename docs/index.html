@@ -63,6 +63,7 @@ code{font:14.5px var(--mono);background:var(--card);padding:1px 6px;border-radiu
 .c-ring{left:22%;bottom:-6%;width:150px;height:150px;display:grid;place-items:center}
 .c-ring .v{font:500 20px var(--sans);text-align:center;line-height:1}
 .c-ring .v small{display:block;font:11px var(--mono);color:var(--grey-2);margin-top:6px}
+.c-ring[hidden]{display:none}
 .c-thumb{right:3%;bottom:-12%;width:170px;height:190px;border-radius:14px;overflow:hidden;box-shadow:0 18px 40px -22px rgba(30,30,20,.4)}
 .c-thumb svg{width:100%;height:100%;display:block}
 
@@ -207,12 +208,12 @@ footer .row a{color:var(--grey-2)}
       <div class="row"><span class="plus">+</span><span class="pill"><i></i>draft</span></div>
     </div>
     <div class="float cardf c-file">trace_001.jsonl</div>
-    <div class="float cardf c-ring">
+    <div class="float cardf c-ring" id="ring" hidden>
       <svg width="104" height="104" viewBox="0 0 104 104" style="position:absolute" aria-hidden="true">
         <circle cx="52" cy="52" r="42" fill="none" stroke="#fff" stroke-width="7"/>
         <circle id="ringArc" cx="52" cy="52" r="42" fill="none" stroke="#2fbf3a" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 264" transform="rotate(-90 52 52)"/>
       </svg>
-      <div class="v"><span id="ringN">0</span>/100<small>runs</small></div>
+      <div class="v"><span id="ringN"></span><small>lives</small></div>
     </div>
     <div class="float c-thumb" id="thumb"></div>
   </div>
@@ -448,7 +449,6 @@ footer .row a{color:var(--grey-2)}
 
 <script id="data" type="application/json">
 {
-  "runs": 84,
   "results": [
     {"label": "Experiment 02 · Self, one line changed", "date": "2026-10-30", "text": "In 25 two-year lives of Self, five for each of five versions of the persona, lines that read like instructions tended to change behavior; trait words didn't. Adding \"surrounded by people I build with and lift up\" to the goal raised messages and posts in 4 of 5 lives paired by seed, though the extra messages went mostly to one contact. Writing \"founder\" instead of \"solo founder\" changed nothing consistently. Removing the background, traits, skills and interests widened social reach: four of five lives wrote to five different contacts, against one to four with them, and posting nearly stopped. Hiding the training streak cut training in all five pairs, but the predicted shift toward posting and messaging showed in only 3 of 5 pairs, short of the 4 written down beforehand: right direction, too small to count. Five lives per version shows patterns, not effect sizes, and the world's odds are illustrative.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md"},
     {"label": "Experiment 01 · Maya, diversity", "date": "2026-10-29", "text": "In 80 one-year lives of Maya, the paths differed widely, yet 77 ended in the same place: a full-time job. Roughly half of the difference between paths came from luck (which applications came through) and roughly half from randomness in the models themselves; the order she saw openings in made no measurable difference. The world's odds are illustrative, so this describes the model, not real careers.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results"}
@@ -473,6 +473,14 @@ footer .row a{color:var(--grey-2)}
 (function(){
   var esc = function(s){ var x=document.createElement('div'); x.textContent=s==null?'':String(s); return x.innerHTML; };
   var d; try { d = JSON.parse(document.getElementById('data').textContent); } catch(e){ d = null; }
+  // The ring counts the lives published on the Runs page (runs/runs.json); it stays hidden if that can't load.
+  fetch('runs/runs.json').then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }).then(function(j){
+    var n = j && Array.isArray(j.runs) ? j.runs.length : 0;
+    if (!n) return;
+    document.getElementById('ringN').textContent = n;
+    document.getElementById('ringArc').setAttribute('stroke-dasharray', (2.64*Math.min(100, n)).toFixed(1)+' 264');
+    document.getElementById('ring').hidden = false;
+  }).catch(function(){});
   if (d) {
     if (Array.isArray(d.results) && d.results.length) {
       var box = document.getElementById('results'); box.textContent = '';
@@ -489,9 +497,6 @@ footer .row a{color:var(--grey-2)}
         }
       });
     }
-    var runs = Math.max(0, Math.min(100, +d.runs || 0));
-    document.getElementById('ringN').textContent = runs;
-    document.getElementById('ringArc').setAttribute('stroke-dasharray', (2.64*runs).toFixed(1)+' 264');
     document.getElementById('timeline').innerHTML = (d.log||[]).map(function(e){
       return '<li class="'+esc(e.status)+'"><span class="d">'+esc(e.date)+(e.status==='now'?' · working on':'')+'</span>'+esc(e.text)+'</li>';
     }).join('');
