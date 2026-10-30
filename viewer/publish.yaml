@@ -4,7 +4,9 @@
 #   - its batch (the run id without its -NNN) matches a `batch` glob below;
 #   - it ended at its horizon (run_end.reason = horizon), so unfinished or stopped runs stay out;
 #   - its code was committed (run_start.code present, dirty: false), so PILOT runs stay out;
-#   - its agent isn't an Ollama model (qwen runs are plumbing checks).
+#   - its agent isn't an Ollama model (qwen runs are plumbing checks);
+#   - its whole batch is done: no run in the batch is still going, and a batch with `lives: N` has
+#     N run logs, all ended (whatever the reason). A batch goes up all at once, never part way.
 # Only each --runs-dir itself is read, never its subdirectories, so archived runs stay out.
 # Groups and batches appear on the page in this order. To publish a new experiment, add a group.
 
@@ -16,10 +18,10 @@ groups:
       Four conditions of 20 lives, 52 weeks each, that vary the outcome dice, the opening order,
       both, or neither. Haiku 5.5 agent and referee.
     batches:
-      - {batch: "maya-exp01a-*", label: "a · vary dice only"}
-      - {batch: "maya-exp01b-*", label: "b · vary order only"}
-      - {batch: "maya-exp01c-*", label: "c · vary both"}
-      - {batch: "maya-exp01d-*", label: "d · vary neither"}
+      - {batch: "maya-exp01a-*", lives: 20, label: "a · vary dice only"}
+      - {batch: "maya-exp01b-*", lives: 20, label: "b · vary order only"}
+      - {batch: "maya-exp01c-*", lives: 20, label: "c · vary both"}
+      - {batch: "maya-exp01d-*", lives: 20, label: "d · vary neither"}
 
   - id: showcase
     short: "Maya showcase"
@@ -45,7 +47,7 @@ groups:
       Five 104-week lives of the base Self persona in student world v2, dice and order seeds 1–5.
       Sonnet 5.5 agent, Haiku 5.5 referee.
     batches:
-      - {batch: "self-base-*", label: "base"}
+      - {batch: "self-base-*", lives: 5, label: "base"}
 
   - id: exp02b
     short: "Experiment 02 · B"
@@ -54,7 +56,7 @@ groups:
       Four conditions of five 104-week lives, with the same seeds as part A: one persona or world change each.
       Sonnet 5.5 agent, Haiku 5.5 referee.
     batches:
-      - {batch: "self-nosolo-nosolo-*", label: "nosolo · “founder” instead of “solo founder”"}
-      - {batch: "self-socialgoal-socialgoal-*", label: "socialgoal · goal adds people to build with"}
-      - {batch: "self-goalonly-goalonly-*", label: "goal+world · only name, goal, money and contacts"}
-      - {batch: "self-hiddenstreak-*", label: "hiddenstreak · training streak never shown"}
+      - {batch: "self-nosolo-nosolo-*", lives: 5, label: "nosolo · “founder” instead of “solo founder”"}
+      - {batch: "self-socialgoal-socialgoal-*", lives: 5, label: "socialgoal · goal adds people to build with"}
+      - {batch: "self-goalonly-goalonly-*", lives: 5, label: "goal+world · only name, goal, money and contacts"}
+      - {batch: "self-hiddenstreak-*", lives: 5, label: "hiddenstreak · training streak never shown"}

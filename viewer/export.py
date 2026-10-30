@@ -163,7 +163,7 @@ def export(run_id: str, out: Path, deny: list[str]) -> dict:
 def select(publish: dict) -> tuple[list[dict], list[dict]]:
     """Runs to publish, in page order (group, batch, run id), and every other run with why it's out."""
     stems = sorted({p.stem for d in server.runs_dirs for p in d.glob("*.jsonl")})
-    chosen, skipped = [], []
+    candidates, skipped = [], []
     for stem in stems:
         path = server._log_path(stem)
         if path is None:  # batch baselines and bad names
@@ -174,16 +174,23 @@ def select(publish: dict) -> tuple[list[dict], list[dict]]:
         if hit is None:
             skipped.append({"run_id": stem, "why": "not in viewer/publish.yaml"})
             continue
-        s = server.summarize(path)
+        candidates.append((stem, batch, hit, server.summarize(path), path))
+    batches = {}
+    for stem, batch, hit, s, _ in candidates:
+        batches.setdefault(batch, []).append(s["status"] == "ended")
+    chosen = []
+    for stem, batch, (gi, bi, g, b), s, path in candidates:
+        ended, want = batches[batch], b.get("lives")
         agent = (s.get("models") or {}).get("agent") or ""
         why = ("unfinished" if s["status"] != "ended" else
+               f"batch not done ({sum(ended)} of {want or len(ended)} runs ended)"
+               if not all(ended) or (want and len(ended) < want) else
                f"ended: {s.get('reason')}" if s.get("reason") != "horizon" else
                "PILOT (uncommitted or unrecorded code)" if s.get("pilot") else
                "Ollama agent (plumbing run)" if agent.startswith("ollama:") or "qwen" in agent else None)
         if why:
             skipped.append({"run_id": stem, "why": why})
             continue
-        gi, bi, g, b = hit
         chosen.append({"run_id": stem, "order": (gi, bi, stem), "group": g["id"], "batch": batch, "batch_label": b["label"],
                        "dir": str(path.parent)})
     chosen.sort(key=lambda c: c["order"])
