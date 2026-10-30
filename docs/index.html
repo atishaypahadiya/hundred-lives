@@ -412,8 +412,7 @@ footer .row a{color:var(--grey-2)}
     <h2>Log</h2>
     <ol class="timeline" id="timeline"></ol>
     <p class="mono dim" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:36px 0 4px">Results</p>
-    <p class="results" id="results">None yet.</p>
-    <p class="mono" id="results-more" style="font-size:13px;margin:16px 0 0" hidden><a id="results-link">full numbers →</a></p>
+    <div id="results"><p class="results">None yet.</p></div>
   </div>
 </section>
 
@@ -450,8 +449,10 @@ footer .row a{color:var(--grey-2)}
 <script id="data" type="application/json">
 {
   "runs": 84,
-  "results_link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results",
-  "results": "In 80 one-year lives of Maya, the paths differed widely, yet 77 ended in the same place: a full-time job. Roughly half of the difference between paths came from luck (which applications came through) and roughly half from randomness in the models themselves; the order she saw openings in made no measurable difference. The world's odds are illustrative, so this describes the model, not real careers.",
+  "results": [
+    {"label": "Experiment 02 · Self, one line changed", "date": "2026-10-30", "text": "In 25 two-year lives of Self, five for each of five versions of the persona, lines that read like instructions tended to change behavior; trait words didn't. Adding \"surrounded by people I build with and lift up\" to the goal raised messages and posts in 4 of 5 lives paired by seed, though the extra messages went mostly to one contact. Writing \"founder\" instead of \"solo founder\" changed nothing consistently. Removing the background, traits, skills and interests widened social reach: four of five lives wrote to five different contacts, against one to four with them, and posting nearly stopped. Hiding the training streak cut training in all five pairs, but the predicted shift toward posting and messaging showed in only 3 of 5 pairs, short of the 4 written down beforehand: right direction, too small to count. Five lives per version shows patterns, not effect sizes, and the world's odds are illustrative.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md"},
+    {"label": "Experiment 01 · Maya, diversity", "date": "2026-10-29", "text": "In 80 one-year lives of Maya, the paths differed widely, yet 77 ended in the same place: a full-time job. Roughly half of the difference between paths came from luck (which applications came through) and roughly half from randomness in the models themselves; the order she saw openings in made no measurable difference. The world's odds are illustrative, so this describes the model, not real careers.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results"}
+  ],
   "log": [
     {"date": "2026-10-28", "text": "Wrote down the questions, the sandbox design, and the predictions.", "status": "done"},
     {"date": "2026-10-28", "text": "Seeded dice for the referee: it estimates odds and code draws the outcome, so a 6% chance stays 6% across runs.", "status": "done"},
@@ -460,7 +461,8 @@ footer .row a{color:var(--grey-2)}
     {"date": "2026-10-29", "text": "Pre-registered experiment 01: 4 conditions × 20 lives × 52 weeks, to split path diversity between the dice, the order openings are listed in, and the model's own sampling.", "status": "done"},
     {"date": "2026-10-29", "text": "Viewer: every life as a page, with a week scrubber, money, thinking, terminal, ideas, referee decisions and repos. Finished lives export to a static replay.", "status": "done"},
     {"date": "2026-10-29", "text": "Track A: Self, 104 weeks on Sonnet. Took the safe job (data analyst at a county transit agency), Conscious stayed a command-line tool, 2 followers. The replay is under Self, top right.", "status": "done"},
-    {"date": "next", "text": "Five more lives of Self, then the same with one line of the persona changed: no \"solo\", a social goal, or the goal alone.", "status": "now"},
+    {"date": "2026-10-30", "text": "Five more lives of Self, then the same with one line of the persona changed: no \"solo\", a social goal, or the goal alone.", "status": "done"},
+    {"date": "2026-10-30", "text": "Experiment 02: 25 two-year lives of Self, five for each of five versions of the persona (as written, no \"solo\", a social goal, the goal alone, and the training streak hidden). Results below; every life is on the Runs page.", "status": "done"},
     {"date": "later", "text": "Three agents in containers with the shared world and proxy.", "status": ""},
     {"date": "later", "text": "100 runs per persona, then change one detail at a time.", "status": ""},
     {"date": "later", "text": "Replace the LLM referee with real base rates.", "status": ""}
@@ -472,10 +474,20 @@ footer .row a{color:var(--grey-2)}
   var esc = function(s){ var x=document.createElement('div'); x.textContent=s==null?'':String(s); return x.innerHTML; };
   var d; try { d = JSON.parse(document.getElementById('data').textContent); } catch(e){ d = null; }
   if (d) {
-    if (d.results) document.getElementById('results').textContent = d.results;
-    if (d.results && /^https:\/\/github\.com\//.test(d.results_link || '')) {
-      document.getElementById('results-link').href = d.results_link;
-      document.getElementById('results-more').hidden = false;
+    if (Array.isArray(d.results) && d.results.length) {
+      var box = document.getElementById('results'); box.textContent = '';
+      d.results.forEach(function(r, i){
+        var lab = document.createElement('p'); lab.className = 'mono dim';
+        lab.style.cssText = 'font-size:12px;margin:' + (i ? '40px' : '0') + ' 0 4px';
+        lab.textContent = [r.label, r.date].filter(Boolean).join(' · ');
+        var t = document.createElement('p'); t.className = 'results'; t.textContent = r.text || '';
+        box.appendChild(lab); box.appendChild(t);
+        if (/^https:\/\/github\.com\//.test(r.link || '')) {
+          var more = document.createElement('p'); more.className = 'mono'; more.style.cssText = 'font-size:13px;margin:16px 0 0';
+          var a = document.createElement('a'); a.href = r.link; a.textContent = 'full numbers →';
+          more.appendChild(a); box.appendChild(more);
+        }
+      });
     }
     var runs = Math.max(0, Math.min(100, +d.runs || 0));
     document.getElementById('ringN').textContent = runs;
