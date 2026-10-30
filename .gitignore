@@ -8,3 +8,5 @@ runs/*
 sandbox/.state/
 gateway/state/
 exports/
+real-names.txt
+docs/runs/

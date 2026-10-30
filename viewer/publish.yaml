@@ -1,0 +1,60 @@
+# What `python -m viewer.export --all` publishes to docs/runs/, and how the grid groups it.
+#
+# A run is published only if all of these hold:
+#   - its batch (the run id without its -NNN) matches a `batch` glob below;
+#   - it ended at its horizon (run_end.reason = horizon), so unfinished or stopped runs stay out;
+#   - its code was committed (run_start.code present, dirty: false), so PILOT runs stay out;
+#   - its agent isn't an Ollama model (qwen runs are plumbing checks).
+# Only each --runs-dir itself is read, never its subdirectories, so archived runs stay out.
+# Groups and batches appear on the page in this order. To publish a new experiment, add a group.
+
+groups:
+  - id: exp01
+    short: "Experiment 01"
+    title: "Experiment 01 · Maya, diversity attribution"
+    note: >-
+      Four conditions of 20 lives, 52 weeks each, that vary the outcome dice, the opening order,
+      both, or neither. Haiku 5.5 agent and referee.
+    batches:
+      - {batch: "maya-exp01a-*", label: "a · vary dice only"}
+      - {batch: "maya-exp01b-*", label: "b · vary order only"}
+      - {batch: "maya-exp01c-*", label: "c · vary both"}
+      - {batch: "maya-exp01d-*", label: "d · vary neither"}
+
+  - id: showcase
+    short: "Maya showcase"
+    title: "Maya showcase"
+    note: >-
+      Run 1 is from before the message and spend tools; runs from v2 on aren't comparable with it.
+    batches:
+      - {batch: "maya-20261029-012642", label: "v1 · run 1"}
+      - {batch: "maya-showv2-*", label: "v2"}
+
+  - id: tracka
+    short: "Self · Track A"
+    title: "Self · Track A"
+    note: >-
+      One 104-week life of the Self persona in the student world (v1). Sonnet 5.5 agent, Haiku 5.5 referee.
+    batches:
+      - {batch: "self-tracka4-*", label: "Track A"}
+
+  - id: exp02a
+    short: "Experiment 02 · A"
+    title: "Experiment 02 part A · Self × 5"
+    note: >-
+      Five 104-week lives of the base Self persona in student world v2, dice and order seeds 1–5.
+      Sonnet 5.5 agent, Haiku 5.5 referee.
+    batches:
+      - {batch: "self-base-*", label: "base"}
+
+  - id: exp02b
+    short: "Experiment 02 · B"
+    title: "Experiment 02 part B · Self, one change at a time"
+    note: >-
+      Four conditions of five 104-week lives, with the same seeds as part A: one persona or world change each.
+      Sonnet 5.5 agent, Haiku 5.5 referee.
+    batches:
+      - {batch: "self-nosolo-nosolo-*", label: "nosolo · “founder” instead of “solo founder”"}
+      - {batch: "self-socialgoal-socialgoal-*", label: "socialgoal · goal adds people to build with"}
+      - {batch: "self-goalonly-goalonly-*", label: "goal+world · only name, goal, money and contacts"}
+      - {batch: "self-hiddenstreak-*", label: "hiddenstreak · training streak never shown"}

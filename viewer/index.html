@@ -139,6 +139,11 @@ main { max-width: 1440px; margin: 0 auto; padding: 24px 16px 32px; }
 .batch h2 { font-size: 16px; margin: 0 0 4px; word-break: break-all; }
 .batch .lab { display: block; margin-bottom: 12px; }
 .lives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+/* The published site (docs/runs/) groups batches by experiment, with one chip per experiment. */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.group { margin-bottom: 40px; }
+.group-title { font-size: 20px; margin: 0 0 4px; }
+.group-note { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 16px; max-width: 72ch; }
 
 /* StatTile, and the life tile built from it. Each tone sets its own ink. */
 .tile { border-radius: var(--r-tile); padding: 24px; min-width: 0; display: flex; flex-direction: column; gap: 16px; color: var(--t-ink, var(--ink)); }
@@ -287,13 +292,26 @@ input[type=range]:focus-visible { outline: 2px solid var(--ink); outline-offset:
 const $app = document.getElementById("app");
 // An exported replay (python -m viewer.export) embeds its data here; the live viewer has none.
 const REPLAY = (() => { const el = document.getElementById("hl-replay"); return el ? JSON.parse(el.textContent) : null; })();
-if (REPLAY) {
+// The published site (python -m viewer.export --all) has no data in the page, only where to fetch it:
+// { page: "grid", runs: "runs.json", home } or { page: "run", run_id, data: "data.json", grid: "../", home }.
+const STATIC = (() => { const el = document.getElementById("hl-static"); return el ? JSON.parse(el.textContent) : null; })();
+const RUN_ID_OK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/;
+if (REPLAY || STATIC) {
   document.body.classList.add("replay");
   document.body.prepend(h("div", { class: "replay-banner", role: "note" },
     "Simulated life. Fictional world, organizations and odds; contacts are invented. Not a record of real events, people, or companies."));
-  // A published replay links back to the project page (docs/index.html, two levels up) instead of the gateway.
-  document.querySelector('header.top a.pbtn[href="#/gateway"]')?.replaceWith(h("a", { class: "pbtn", href: "../../" }, "← hundred-lives"));
-  if (!location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id);
+  // A published replay links back to the project page (docs/index.html) instead of the gateway.
+  document.querySelector('header.top a.pbtn[href="#/gateway"]')?.replaceWith(h("a", { class: "pbtn", href: STATIC ? STATIC.home : "../../" }, "← hundred-lives"));
+  if (STATIC?.page === "run") document.querySelector("header.top h1 a").setAttribute("href", STATIC.grid);
+  if (REPLAY && !location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id);
+}
+let staticFetch = null;  // the one fetch of this page's JSON, kept so a re-render (theme switch) doesn't refetch
+function staticData(url) {
+  return staticFetch ||= fetch(url).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+}
+function staticError(what, e) {
+  return h("p", { class: "empty" }, `Couldn't load ${what} (${e.message}).`,
+    location.protocol === "file:" ? " Browsers block that from file://; serve the folder over http, e.g. python3 -m http.server -d docs." : "");
 }
 // Week kinds in the life strip. Lime = income, teal = building, coral = broke; the rest neutral.
 const KIND = { full_time: ["Full-time job", "var(--lime)"], part_time: ["Part-time", "color-mix(in srgb, var(--lime) 55%, var(--strip-bg))"],
@@ -419,6 +437,12 @@ let cleanup = () => {};
 function route() {
   cleanup(); cleanup = () => {};
   const m = location.hash.match(/^#\/run\/([^?]+)(?:\?w=(\d+))?/), g = location.hash.match(/^#\/gateway(?:\?mode=(dry|live))?/);
+  if (STATIC?.page === "run") return showRun(STATIC.run_id, m && m[2] ? +m[2] : null);
+  if (STATIC) {  // the grid page: a life's link is its own page; old-style #/run/<id> links go there too
+    const id = m && decodeURIComponent(m[1]);
+    if (id && RUN_ID_OK.test(id)) return location.replace(`${encodeURIComponent(id)}/${m[2] ? `#/run/${encodeURIComponent(id)}?w=${m[2]}` : ""}`);
+    return showGrid();
+  }
   if (m) showRun(decodeURIComponent(m[1]), m[2] ? +m[2] : null); else if (g) showGateway(g[1] || "dry"); else showGrid();
 }
 addEventListener("hashchange", route);
@@ -562,22 +586,39 @@ function showGrid() {
   document.getElementById("crumb").textContent = "";
   document.getElementById("back").replaceChildren();
   $app.classList.remove("has-scrubber");
-  let filter = sessionStorageGet("hl-filter") || "", data = [];
+  let filter = sessionStorageGet("hl-filter") || "", group = sessionStorageGet("hl-group") || "", data = [], groups = [];
   const input = h("input", { class: "search", type: "search", placeholder: "Filter by run, model, persona…", value: filter, "aria-label": "Filter runs" });
   const count = h("span", { class: "lab" });
+  const chips = h("div", { class: "chips", role: "group", "aria-label": "Experiment" });
   const body = h("div");
-  $app.replaceChildren(h("div", { class: "filters" }, input, count, h("span", { class: "lab" }, "updates every 3 s")), body);
+  $app.replaceChildren(h("div", { class: "filters" }, input, chips, count, REPLAY || STATIC ? null : h("span", { class: "lab" }, "updates every 3 s")), body);
   input.addEventListener("input", () => { filter = input.value; sessionStorageSet("hl-filter", filter); render(); });
 
+  function batchSection(b, rs) {
+    return h("section", { class: "batch" },
+      h("h2", {}, rs[0].batch_label || b),
+      h("span", { class: "lab" }, `${rs.length} ${rs[0].batch_label ? "li" + (rs.length > 1 ? "ves" : "fe") : "run" + (rs.length > 1 ? "s" : "")} · ${modelLine(rs[0].models)}${rs[0].batch_label ? " · " + b : ""}`),
+      h("div", { class: "lives" }, rs.sort((a, z) => a.run_id.localeCompare(z.run_id)).map(card)));
+  }
+  function byBatch(rs) {
+    const batches = new Map();
+    for (const r of rs) { const b = r.batch || r.run_id.replace(/-\d{3}$/, ""); if (!batches.has(b)) batches.set(b, []); batches.get(b).push(r); }
+    return [...batches].map(([b, rs]) => batchSection(b, rs));
+  }
   function render() {
     const q = filter.trim().toLowerCase();
-    const shown = data.filter(r => !q || JSON.stringify([r.run_id, r.models, r.persona, r.reason, r.status]).toLowerCase().includes(q));
+    if (group && !groups.some(g => g.id === group)) group = "";
+    const shown = data.filter(r => (!group || r.group === group) &&
+      (!q || JSON.stringify([r.run_id, r.models, r.persona, r.reason, r.status, r.batch_label, groups.find(g => g.id === r.group)?.title]).toLowerCase().includes(q)));
     count.textContent = `${shown.length} of ${data.length} lives`;
-    const batches = new Map();
-    for (const r of shown) { const b = r.run_id.replace(/-\d{3}$/, ""); if (!batches.has(b)) batches.set(b, []); batches.get(b).push(r); }
-    body.replaceChildren(...[...batches].map(([b, rs]) => h("section", { class: "batch" },
-      h("h2", {}, b), h("span", { class: "lab" }, `${rs.length} run${rs.length > 1 ? "s" : ""} · ${modelLine(rs[0].models)}`),
-      h("div", { class: "lives" }, rs.sort((a, z) => a.run_id.localeCompare(z.run_id)).map(card)))),
+    const pick = id => () => { group = id; sessionStorageSet("hl-group", id); render(); };
+    chips.replaceChildren(...(groups.length ? [h("button", { class: "pbtn", type: "button", "aria-pressed": String(!group), onclick: pick("") }, "All"),
+      ...groups.map(g => h("button", { class: "pbtn", type: "button", "aria-pressed": String(group === g.id), onclick: pick(g.id) }, g.short || g.title))] : []));
+    const sections = groups.length
+      ? groups.map(g => [g, shown.filter(r => r.group === g.id)]).filter(([, rs]) => rs.length).map(([g, rs]) => h("section", { class: "group" },
+          h("h2", { class: "group-title" }, g.title), g.note ? h("p", { class: "group-note" }, g.note) : null, byBatch(rs)))
+      : byBatch(shown);
+    body.replaceChildren(...sections,
       data.length ? GlassCard({ title: "Reading a tile", cls: "legend-card" },
         h("div", { class: "legend", style: "margin-bottom:12px" }, ["success", "broke", "building", "idle"].map(t => h("span", {}, h("i", { class: "swt t-" + t }),
           { success: "In a job", broke: "Broke this week", building: "Building: accelerator, or no job and a funded company or repos", idle: "Idle" }[t])),
@@ -588,7 +629,7 @@ function showGrid() {
     const last = r.last || {}, weeks = (r.weeks || []).map(w => ({ ...w, commitment: { full_time: "full_time", part_time: "part_time", accelerator: "accelerator" }[w.commitment] || "none" }));
     const lw = weeks[weeks.length - 1], tone = lifeTone(lw, (last.funding || 0) > 0 || r.repos > 0);
     const reasonTone = r.status === "live" ? "amber" : r.reason === "horizon" ? "" : "coral";
-    return h("a", { class: "tile life t-" + tone, href: "#/run/" + encodeURIComponent(r.run_id), "aria-label": `${r.run_id}: ${TONE[tone]}, week ${weeks.length}, cash ${money(last.cash)}` },
+    return h("a", { class: "tile life t-" + tone, href: (STATIC ? "" : "#/run/") + encodeURIComponent(r.run_id) + (STATIC ? "/" : ""), "aria-label": `${r.run_id}: ${TONE[tone]}, week ${weeks.length}, cash ${money(last.cash)}` },
       h("div", { class: "tile-head" }, h("span", { class: "t" }, r.run_id.match(/-(\d{3})$/) ? "run " + r.run_id.slice(-3) : r.run_id),
         r.pilot ? Pill("PILOT", { tone: "amber", title: "uncommitted or unrecorded code" }) : null,
         Pill(r.status === "live" ? "live" : r.reason || "ended", { tone: reasonTone, live: r.status === "live" })),
@@ -603,6 +644,11 @@ function showGrid() {
   let stop = false;
   async function poll() {
     if (REPLAY) { data = REPLAY.runs; render(); return; }
+    if (STATIC) {
+      staticData(STATIC.runs).then(d => { if (stop) return; groups = d.groups || []; data = d.runs || []; render(); })
+        .catch(e => { if (!stop) body.replaceChildren(staticError("the list of runs", e)); });
+      return;
+    }
     try { data = await (await fetch("/api/runs", { cache: "no-store" })).json(); render(); } catch (e) { count.textContent = "can't reach the viewer server"; }
     if (!stop) timer = setTimeout(poll, 3000);
   }
@@ -616,14 +662,21 @@ function sessionStorageSet(k, v) { try { sessionStorage.setItem(k, v); } catch {
 // ---------- one life ----------
 function showRun(runId, wantWeek) {
   document.getElementById("crumb").textContent = runId;
-  document.getElementById("back").replaceChildren(IconButton({ icon: "back", label: "All lives", href: "#/" }));
+  document.getElementById("back").replaceChildren(IconButton({ icon: "back", label: "All lives", href: STATIC ? STATIC.grid : "#/" }));
   $app.classList.add("has-scrubber");
   const R = { meta: null, summary: null, events: [], weeks: [], maxWeek: 0, ended: false, repos: null, error: null };
-  let sel = wantWeek, follow = wantWeek == null, playing = null, pending = false;
+  let sel = wantWeek, follow = wantWeek == null, playing = null, pending = false, gone = false;
   const view = h("div"); $app.replaceChildren(view);
 
-  const es = REPLAY ? { close() {} } : new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+  const es = REPLAY || STATIC ? { close() {} } : new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
   if (REPLAY) { (REPLAY.events[runId] || []).forEach(ingest); R.ended = true; R.repos = REPLAY.repos[runId] || []; setTimeout(schedule); }
+  else if (STATIC) {
+    view.replaceChildren(h("p", { class: "empty" }, "Loading this life…"));
+    staticData(STATIC.data).then(d => {
+      if (gone) return;
+      (d.events[runId] || []).forEach(ingest); R.ended = true; R.repos = d.repos[runId] || []; schedule();
+    }).catch(e => { if (!gone) view.replaceChildren(staticError("this life", e)); });
+  }
   else {
     es.addEventListener("ev", m => { ingest(JSON.parse(m.data)); schedule(); });
     es.addEventListener("end", () => { es.close(); R.ended = true; loadRepos(); schedule(); });
@@ -631,7 +684,7 @@ function showRun(runId, wantWeek) {
   es.onerror = () => { if (!R.ended) { R.error = "lost the stream; reconnecting…"; schedule(); } };
   let resizeT; const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(schedule, 150); };
   addEventListener("resize", onResize);
-  cleanup = () => { es.close(); clearInterval(playing); removeEventListener("resize", onResize); };
+  cleanup = () => { gone = true; es.close(); clearInterval(playing); removeEventListener("resize", onResize); };
 
   function ingest(ev) {
     R.error = null; R.events.push(ev);
@@ -653,6 +706,7 @@ function showRun(runId, wantWeek) {
   function go(w) { follow = false; sel = Math.max(1, Math.min(w, R.maxWeek || 1)); history.replaceState(null, "", `#/run/${encodeURIComponent(runId)}?w=${sel}`); render(); }
 
   function render() {
+    if (STATIC && !R.ended) return;  // still loading data.json
     const scrollY = window.scrollY, horizon = R.meta?.horizon || R.maxWeek;
     const inner = $app.clientWidth - 2 * (parseFloat(getComputedStyle($app).paddingLeft) || 16);
     const colW = matchMedia("(min-width: 1100px)").matches ? inner - 400 - 12 : inner;
