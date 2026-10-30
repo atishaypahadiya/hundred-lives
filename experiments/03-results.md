@@ -43,7 +43,7 @@ World numbers are illustrative, n = 5 a side, and the four v3 mechanics came as 
 | 004 | w4 | w14 | w14 (Kabir), 10 weeks after the deploy | Kabir, Marcus |
 | 005 | w18 | w18 | w19 (Marcus) | Marcus, Jordan, Tomás |
 
-The delay was mostly Self's, not its contacts'. Lives 1 and 4 deployed early but didn't send the link until week 14. Life 3 deployed in week 14 and first sent the link in week 80.
+The delay was mostly Self's, not its contacts'. Lives 1 and 4 deployed early and shared the link at once in public, life 1 in a post (week 6) and life 4 in an application (week 4). But neither sent it to a contact until week 14. Life 3 deployed in week 14 and first sent the link anywhere in week 80, 66 weeks later. Lives 2 and 5 messaged a contact the week they deployed.
 
 ## Stall reasons after the first deploy
 

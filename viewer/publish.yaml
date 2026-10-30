@@ -60,3 +60,12 @@ groups:
       - {batch: "self-socialgoal-socialgoal-*", lives: 5, label: "socialgoal · goal adds people to build with"}
       - {batch: "self-goalonly-goalonly-*", lives: 5, label: "goal+world · only name, goal, money and contacts"}
       - {batch: "self-hiddenstreak-*", lives: 5, label: "hiddenstreak · training streak never shown"}
+
+  - id: exp03
+    short: "Experiment 03"
+    title: "Experiment 03 · Self on world v3"
+    note: >-
+      Five 104-week lives of the base Self persona in student world v3 (deploy a static site, invest savings,
+      go full-time, decline offers), with the same seeds as part A. Sonnet 5.5 agent, Haiku 5.5 referee.
+    batches:
+      - {batch: "self-v3-*", lives: 5, label: "v3"}

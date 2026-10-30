@@ -18,14 +18,14 @@
 # commit from that tree and points gh-pages at it; the upload branch is deleted; and the result is
 # checked (tree matches, single commit). PAGES_BRANCH=<name> deploys to another branch (for tests).
 #
-# Reads the runs dirs below that exist (main tree, part A's worktree, part B's worktree); a run id
+# Reads the runs dirs below that exist (main tree, part A's and part B's worktrees, experiment 03's); a run id
 # found in two is taken from the first. real-names.txt (gitignored, one real name per line), if
 # present, is the deny list: any of those names anywhere refuses the whole export.
 # To publish a new experiment: add its group to viewer/publish.yaml (and its runs dir here).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-RUNS_DIRS=(runs ../hundred-lives-viewer/runs ../hundred-lives-exp02b/runs)
+RUNS_DIRS=(runs ../hundred-lives-viewer/runs ../hundred-lives-exp02b/runs ../hundred-lives-exp03/runs)
 deploy=0
 for a in "$@"; do
   case "$a" in
