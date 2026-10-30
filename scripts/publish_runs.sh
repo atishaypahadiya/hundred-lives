@@ -49,5 +49,7 @@ tree=$(git write-tree)
 n=$(python3 -c 'import json; print(len(json.load(open("docs/runs/runs.json"))["runs"]))')
 commit=$(git commit-tree "$tree" -m "Site: project page and $n published lives, from master $(git rev-parse --short HEAD)")
 git update-ref refs/heads/gh-pages "$commit"
-git push --force origin gh-pages
+# One packing thread: with git 2.56, multi-threaded packs of this tree failed GitHub's index-pack
+# ("inflate returned -5") three times out of three; one thread went through.
+git -c pack.threads=1 push --force origin gh-pages
 echo "pushed gh-pages $(git rev-parse --short "$commit"): $(git ls-tree -r --name-only "$commit" | wc -l | tr -d ' ') files"
