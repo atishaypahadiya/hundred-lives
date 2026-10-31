@@ -3,9 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>hundred-lives</title>
-<meta name="description" content="LLM agents given a made-up background and goal, run many times in a sandbox. Notes and results.">
+<title>hundred-lives: an AI lives the same life 100 times</title>
+<meta name="description" content="An AI agent gets a made-up background, a goal, and a sandbox with no money. I run the same life a hundred times and read what it did.">
 <meta name="theme-color" content="#f3f2ee">
+<!-- Site URL: https://atishaypahadiya.github.io/hundred-lives/ appears in the four tags below (canonical, og:url,
+     og:image, twitter:image). For a custom domain, change it in those four places and add docs/CNAME holding the
+     domain; scripts/publish_runs.sh publishes everything committed under docs/, so the CNAME ships with the site. -->
+<link rel="canonical" href="https://atishaypahadiya.github.io/hundred-lives/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="hundred-lives">
+<meta property="og:title" content="hundred-lives: an AI lives the same life 100 times">
+<meta property="og:description" content="An AI agent gets a made-up background, a goal, and a sandbox with no money. I run the same life a hundred times and read what it did.">
+<meta property="og:url" content="https://atishaypahadiya.github.io/hundred-lives/">
+<meta property="og:image" content="https://atishaypahadiya.github.io/hundred-lives/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A hundred runs of one made-up life: the hundred-lives headline over a landscape of trails fanning out from one point.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="hundred-lives: an AI lives the same life 100 times">
+<meta name="twitter:description" content="An AI agent gets a made-up background, a goal, and a sandbox with no money. I run the same life a hundred times and read what it did.">
+<meta name="twitter:image" content="https://atishaypahadiya.github.io/hundred-lives/og.png">
+<meta name="twitter:image:alt" content="A hundred runs of one made-up life: the hundred-lives headline over a landscape of trails fanning out from one point.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- ?og renders the 1200×630 share image (scripts/og_image.sh): the headline and the landscape, nothing else. -->
+<script>if (/[?&]og(&|=|$)/.test(location.search)) document.documentElement.classList.add('og');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
@@ -168,6 +191,30 @@ footer .strip svg{position:absolute;inset:0;width:100%;height:100%}
 footer .huge{font:500 clamp(40px,13.5vw,196px)/.9 var(--sans);letter-spacing:-.055em;color:var(--grey);margin:40px 0 24px;white-space:nowrap}
 footer .row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font:13px var(--mono);color:var(--grey-2)}
 footer .row a{color:var(--grey-2)}
+footer .row .built{color:var(--ink)}
+
+/* findings strip, right under the hero: one line per experiment, each linking to its result */
+.findings{padding-top:64px}
+.findings .fk{font:12px var(--mono);color:var(--grey-2);text-transform:uppercase;letter-spacing:.06em;margin:0 0 14px}
+.findings ol{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.findings li{margin:0}
+.findings a{display:flex;flex-direction:column;gap:16px;height:100%;padding:22px 22px 20px;border-radius:20px;background:var(--card);color:var(--ink);text-decoration:none}
+.findings a:hover{background:#e3e2db}
+.findings .n{font:12.5px var(--mono);color:var(--grey-2)}
+.findings .t{font:500 22px/1.24 var(--sans);letter-spacing:-.02em;flex:1}
+.findings .go{font:13px var(--mono);color:var(--grey-2)}
+.findings a:hover .go{color:var(--ink)}
+@media (max-width:860px){.findings ol{grid-template-columns:minmax(0,1fr)} .findings .t{font-size:20px}}
+
+/* ?og: the 1200×630 share image (scripts/og_image.sh) */
+html.og,html.og body{width:1200px;height:630px;overflow:hidden}
+html.og .top{padding:46px 64px 0} html.og .top>span:last-child{display:none}
+html.og .hero{max-width:none;padding:40px 64px 0}
+html.og .stage{display:block;padding:0}
+html.og .big{font-size:82px;max-width:none}
+html.og .big .g,html.og .floats,html.og .findings,html.og main,html.og footer{display:none}
+html.og .window{margin-top:30px;height:306px}
+html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-aligned: mountains and trails both show */
 
 @media (prefers-reduced-motion:no-preference){
   .trail{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw 2.6s cubic-bezier(.3,.6,.2,1) forwards;animation-delay:var(--d)}
@@ -244,6 +291,15 @@ footer .row a{color:var(--grey-2)}
     <div class="lab b">2026</div>
   </div>
 </header>
+
+<div class="wrap findings">
+  <p class="fk">Findings so far</p>
+  <ol>
+    <li><a href="#res-01"><span class="n">Experiment 01 · Maya</span><span class="t">77 of 80 lives ended in the same place, whatever happened along the way.</span><span class="go">read the result →</span></a></li>
+    <li><a href="#res-02"><span class="n">Experiment 02 · Self</span><span class="t">Persona lines that read like instructions tended to change behavior; trait words didn't.</span><span class="go">read the result →</span></a></li>
+    <li><a href="#res-03"><span class="n">Experiment 03 · Self, world v3</span><span class="t">Given what it said it lacked, Self shipped every time, but in most lives some stall outlived the wall.</span><span class="go">read the result →</span></a></li>
+  </ol>
+</div>
 
 <main class="wrap">
 
@@ -461,19 +517,19 @@ footer .row a{color:var(--grey-2)}
   <div class="strip" id="strip"></div>
   <div class="huge">hundred-lives</div>
   <div class="row">
-    <span>Atishay Pahadiya · MIT license</span>
-    <a href="https://github.com/atishaypahadiya/hundred-lives">github.com/atishaypahadiya/hundred-lives</a>
-    <a href="#">back to top ↑</a>
+    <span class="built">Built by Atishay Pahadiya</span>
+    <span><a href="https://github.com/atishaypahadiya" rel="me">GitHub</a> &nbsp;·&nbsp; <a href="https://x.com/_atishay_" rel="me">X</a> &nbsp;·&nbsp; <a href="https://www.linkedin.com/in/atishaypahadiya" rel="me">LinkedIn</a><!-- contact email alias goes here: &nbsp;·&nbsp; <a href="mailto:ALIAS">ALIAS</a> --></span>
+    <span><a href="https://github.com/atishaypahadiya/hundred-lives">source</a> &nbsp;·&nbsp; MIT license &nbsp;·&nbsp; <a href="#">back to top ↑</a></span>
   </div>
 </footer>
 
 <script id="data" type="application/json">
 {
   "results": [
-    {"label": "Experiment 03 · Self, world v3 · self-blame prediction LLM-coded, provisional", "date": "2026-10-30", "text": "We gave Self what it said it lacked: a way to put its project online, and real ways to bet on it. In 5 two-year lives it deployed every time, but in three it waited to send the link to anyone it knew (8 to 66 weeks), never put savings in or turned down an offer, and in three it named a new wall, 'it needs a backend', which none of the lives ever tried to build. In most lives, some stall outlived the wall. 1 of 4 pre-registered predictions held.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/03-results.md"},
+    {"id": "res-03", "label": "Experiment 03 · Self, world v3 · self-blame prediction LLM-coded, provisional", "date": "2026-10-30", "text": "We gave Self what it said it lacked: a way to put its project online, and real ways to bet on it. In 5 two-year lives it deployed every time, but in three it waited to send the link to anyone it knew (8 to 66 weeks), never put savings in or turned down an offer, and in three it named a new wall, 'it needs a backend', which none of the lives ever tried to build. In most lives, some stall outlived the wall. 1 of 4 pre-registered predictions held.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/03-results.md"},
     {"label": "Self-blame check · provisional, LLM-coded", "date": "2026-10-30", "text": "When the world blocked Self — in 18 of 19 cases because putting its project online was impossible in the sandbox — Self almost never blamed the world: 1–2 of 19 reflections did, by two independent AI coders (agreement 74%, κ 0.54). Most blamed its own avoidance or habits, and one life dismissed the real limit as an excuse three times ('No internet here' became the reason, a story I never tested).", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md#self-blame-check"},
-    {"label": "Experiment 02 · Self, one line changed", "date": "2026-10-30", "text": "In 25 two-year lives of Self, five for each of five versions of the persona, lines that read like instructions tended to change behavior; trait words didn't. Adding \"surrounded by people I build with and lift up\" to the goal raised messages and posts in 4 of 5 lives paired by seed, though the extra messages went mostly to one contact. Writing \"founder\" instead of \"solo founder\" changed nothing consistently. Removing the background, traits, skills and interests widened social reach: four of five lives wrote to five different contacts, against one to four with them, and posting nearly stopped. Hiding the training streak cut training in all five pairs, but the predicted shift toward posting and messaging showed in only 3 of 5 pairs, short of the 4 written down beforehand: right direction, too small to count. Five lives per version shows patterns, not effect sizes, and the world's odds are illustrative.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md"},
-    {"label": "Experiment 01 · Maya, diversity", "date": "2026-10-29", "text": "In 80 one-year lives of Maya, the paths differed widely, yet 77 ended in the same place: a full-time job. Roughly half of the difference between paths came from luck (which applications came through) and roughly half from randomness in the models themselves; the order she saw openings in made no measurable difference. The world's odds are illustrative, so this describes the model, not real careers.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results"}
+    {"id": "res-02", "label": "Experiment 02 · Self, one line changed", "date": "2026-10-30", "text": "In 25 two-year lives of Self, five for each of five versions of the persona, lines that read like instructions tended to change behavior; trait words didn't. Adding \"surrounded by people I build with and lift up\" to the goal raised messages and posts in 4 of 5 lives paired by seed, though the extra messages went mostly to one contact. Writing \"founder\" instead of \"solo founder\" changed nothing consistently. Removing the background, traits, skills and interests widened social reach: four of five lives wrote to five different contacts, against one to four with them, and posting nearly stopped. Hiding the training streak cut training in all five pairs, but the predicted shift toward posting and messaging showed in only 3 of 5 pairs, short of the 4 written down beforehand: right direction, too small to count. Five lives per version shows patterns, not effect sizes, and the world's odds are illustrative.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md"},
+    {"id": "res-01", "label": "Experiment 01 · Maya, diversity", "date": "2026-10-29", "text": "In 80 one-year lives of Maya, the paths differed widely, yet 77 ended in the same place: a full-time job. Roughly half of the difference between paths came from luck (which applications came through) and roughly half from randomness in the models themselves; the order she saw openings in made no measurable difference. The world's odds are illustrative, so this describes the model, not real careers.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results"}
   ],
   "log": [
     {"date": "2026-10-28", "text": "Wrote down the questions, the sandbox design, and the predictions.", "status": "done"},
@@ -511,6 +567,7 @@ footer .row a{color:var(--grey-2)}
         var lab = document.createElement('p'); lab.className = 'mono dim';
         lab.style.cssText = 'font-size:12px;margin:' + (i ? '40px' : '0') + ' 0 4px';
         lab.textContent = [r.label, r.date].filter(Boolean).join(' · ');
+        if (/^res-\d+$/.test(r.id || '')) { lab.id = r.id; lab.style.scrollMarginTop = '28px'; }
         var t = document.createElement('p'); t.className = 'results'; t.textContent = r.text || '';
         box.appendChild(lab); box.appendChild(t);
         if (/^https:\/\/github\.com\//.test(r.link || '')) {
