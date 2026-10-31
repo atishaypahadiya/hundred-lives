@@ -89,6 +89,26 @@ def life_no(run_id: str) -> int:
     return int(run_id.rsplit("-", 1)[-1])
 
 
+def life_title(run_id: str, persona: str) -> str:
+    """A life's name as the viewer titles it ("Self, base life 3", "Self, Track A", "Maya, exp 01 a life 4").
+    viewer/index.html lifeTitle() is the same rule; the quote-link check compares the two."""
+    m = re.match(r"^[a-z]+-(?:(.*?)-)?(\d{8}-\d{6})-(\d{3})$", run_id)
+    if not m:
+        return f"{persona}, {run_id}"
+    tag, n = re.sub(r"^(\w+)-\1$", r"\1", m.group(1) or ""), int(m.group(3))
+    if re.fullmatch(r"tracka\d*", tag):
+        return f"{persona}, Track A"
+    if e := re.fullmatch(r"exp(\d\d)([a-z])", tag):
+        tag = f"exp {e.group(1)} {e.group(2)}"
+    elif v := re.fullmatch(r"showv(\d+)", tag):
+        tag = f"showcase v{v.group(1)}"
+    return f"{persona}, {tag} life {n}" if tag else f"{persona}, life {n}"
+
+
+def cite(run_id: str, persona: str, week: int) -> str:
+    return f"{life_title(run_id, persona)}, week {week}"
+
+
 def results_table(path: Path, header: str) -> list[list[str]]:
     """Rows of the first markdown table after `header` (cells stripped, separator row dropped)."""
     text = path.read_text()
@@ -121,7 +141,7 @@ def hero_and_story():
     # Inside the pull quote, the reflection's own double quotes become single (typography only).
     q = q.replace('"', "\u2018", 1).replace('"', "\u2019", 1)
     fact("q.nointernet", q, f"{rel(base3)} line {line}: memory_reflection, week 104 (its double quotes shown as single, inside the pull quote)", replay(r["run_id"], 104))
-    fact("q.nointernet.cite", f"Self, base life {life_no(r['run_id'])}, week {r['week']}", f"{rel(base3)} line {line}: run id and week")
+    fact("q.nointernet.cite", cite(r["run_id"], "Self", r["week"]), f"{rel(base3)} line {line}: run id and week")
 
     # Track A
     ta = str(VIEWER / "self-tracka4-20261029-035616-001.jsonl")
@@ -149,10 +169,12 @@ def hero_and_story():
 
     line, r = find(base3, lambda r: r["type"] == "message" and r["week"] == 22 and r["contact_id"] == "kabir")
     fact("q.kabir", sentence(r["reply"], "most 2024 sentence"), f"{rel(base3)} line {line}: message reply from kabir, week 22", replay(r["run_id"], 22))
+    fact("q.kabir.cite", cite(r["run_id"], "Self", r["week"]), f"{rel(base3)} line {line}: run id and week")
 
     v31 = str(EXP03 / "self-v3-20261030-033852-001.jsonl")
     line, r = find(v31, lambda r: r["type"] == "message" and r["week"] == 40 and r["contact_id"] == "marcus")
     fact("q.marcus", sentence(r["reply"], "drowning in homework"), f"{rel(v31)} line {line}: message reply from marcus, week 40", replay(r["run_id"], 40))
+    fact("q.marcus.cite", cite(r["run_id"], "Self", r["week"]), f"{rel(v31)} line {line}: run id and week")
     claim(not r.get("sites_seen"), "Marcus's week-40 reply wasn't a reaction to a site (none linked), so the story doesn't present it as one", f"{rel(v31)} line {line}: sites_seen")
 
     partb = ROOT / "experiments" / "02-results-partB.md"
@@ -402,6 +424,13 @@ def render(page: str) -> str:
             sys.exit(f"page links unknown fact {m.group(1)!r}")
         return re.sub(r'href="[^"]*"', f'href="{html.escape(FACTS[m.group(1)]["link"])}"', m.group(0))
     page = re.sub(r'<a\b[^>]*\sdata-link="([^"]+)"[^>]*>', link, page)
+
+    def cite_attr(m):
+        if m.group(1) not in FACTS:
+            sys.exit(f"page cites unknown fact {m.group(1)!r}")
+        tag = re.sub(r'\stitle="[^"]*"', "", m.group(0))
+        return tag[:-1] + f' title="{html.escape(FACTS[m.group(1)]["value"])}">'
+    page = re.sub(r'<\w+\b[^>]*\sdata-cite="([^"]+)"[^>]*>', cite_attr, page)
     listed = re.findall(r'data-tool="([^"]+)"', page)
     if listed and listed != DATA["tools"]["names"]:
         sys.exit(f"the page's tool table {listed} isn't the logged tool list {DATA['tools']['names']}")
@@ -409,7 +438,7 @@ def render(page: str) -> str:
     page, n = re.subn(r'(<script id="site-data" type="application/json">).*?(</script>)', lambda m: m.group(1) + blob + m.group(2), page, flags=re.S)
     if n != 1:
         sys.exit("page has no <script id=\"site-data\"> block")
-    used = set(re.findall(r'data-(?:fact|link)="([^"]+)"', page))
+    used = set(re.findall(r'data-(?:fact|link|cite)="([^"]+)"', page))
     unused = sorted(set(FACTS) - used)
     if unused:
         print("note: facts not on the page:", ", ".join(unused), file=sys.stderr)

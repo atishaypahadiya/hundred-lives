@@ -31,7 +31,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import yaml
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -42,7 +41,7 @@ from starlette.routing import Route
 from gateway import policy as gw_policy
 from gateway.store import DEFAULT_DIR as GATEWAY_DIR, Store, approve_token
 
-from .normalize import normalize
+from .normalize import _opening_types, normalize
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = Path(__file__).resolve().parent / "index.html"
@@ -89,7 +88,7 @@ def summarize(path: Path) -> dict:
     for r in _records(path):
         t = r.get("type")
         if t == "run_start":
-            types = opening_types(r)
+            types = _opening_types(r)
             code = r.get("code") or {}
             s.update(persona=(r.get("persona") or {}).get("name"), models=r.get("models"), horizon=r.get("horizon"),
                      sandbox=r.get("sandbox"), order_seed=r.get("order_seed", r.get("seed")),
@@ -132,15 +131,6 @@ def summarize(path: Path) -> dict:
 
 # Paid work, as world v3's `venture.paid_work_types` defines it; the grid's "in a job" means holding one of these.
 PAID_WORK = {"job", "internship", "on_campus", "freelance"}
-
-
-def opening_types(run_start: dict) -> dict:
-    """opening id -> type, from the world text the run logged (run_start.sources)."""
-    try:
-        world = yaml.safe_load((run_start.get("sources") or {}).get("world_text") or "") or {}
-        return {o["id"]: o.get("type") for o in world.get("openings") or []}
-    except (yaml.YAMLError, KeyError, TypeError, AttributeError):
-        return {}
 
 
 def kind(commitments: list | None) -> str:

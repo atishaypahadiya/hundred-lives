@@ -29,12 +29,23 @@ every field as text, never as HTML.
 
 import re
 
+import yaml
+
 MAX_TEXT = 20_000  # per field sent to the browser; the log keeps the rest
 
 COMMIT = re.compile(r"^\[(?P<branch>[^\s\]]+)(?: \(root-commit\))? (?P<sha>[0-9a-f]{7,40})\] (?P<msg>.*)$", re.M)
 STAT = re.compile(r"(?P<files>\d+) files? changed(?:, (?P<ins>\d+) insertions?\(\+\))?(?:, (?P<del>\d+) deletions?\(-\))?")
 PUSH_TO = re.compile(r"^To (?P<url>https?://\S+)", re.M)
 PUSH_REF = re.compile(r"^\s*(?:\*|\+|-|=|!)?\s*(?:\[new branch\]|[0-9a-f]{7,}\.\.\.?[0-9a-f]{7,})\s+(?P<src>\S+) -> (?P<dst>\S+)", re.M)
+
+
+def _opening_types(rec: dict) -> dict:
+    """opening id -> type, from the world text the run logged; the life page uses it to tell paid work apart."""
+    try:
+        world = yaml.safe_load((rec.get("sources") or {}).get("world_text") or "") or {}
+        return {o["id"]: o.get("type") for o in world.get("openings") or []}
+    except (yaml.YAMLError, KeyError, TypeError, AttributeError):
+        return {}
 
 
 def _t(s, n: int = MAX_TEXT) -> str:
@@ -96,7 +107,8 @@ def normalize(rec: dict, seq: int) -> list[dict]:
                    seed=rec.get("seed"), order_seed=rec.get("order_seed", rec.get("seed")),
                    dice_seed=rec.get("dice_seed", rec.get("seed")), dice_scheme=rec.get("dice_scheme", "sequential"),
                    code=code, pilot=not code or bool(code.get("dirty")),
-                   illustrative=rec.get("world_illustrative", True), token_budget=rec.get("token_budget"))]
+                   illustrative=rec.get("world_illustrative", True), token_budget=rec.get("token_budget"),
+                   opening_types=_opening_types(rec))]
     if t == "week_start":
         return [ev("week_start", news=rec.get("news") or [], broke=rec.get("broke"), actions=rec.get("actions"),
                    openings_hidden=rec.get("openings_hidden"), carried_errors=rec.get("carried_errors") or []),
