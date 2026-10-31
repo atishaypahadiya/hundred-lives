@@ -138,12 +138,13 @@ main { max-width: 1440px; margin: 0 auto; padding: 24px 16px 32px; }
 .batch { margin-bottom: 32px; }
 .batch h2 { font-size: 16px; margin: 0 0 4px; word-break: break-all; }
 .batch .lab { display: block; margin-bottom: 12px; }
-.lives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.lives { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 /* The published site (docs/runs/) groups batches by experiment, with one chip per experiment. */
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .group { margin-bottom: 40px; }
 .group-title { font-size: 20px; margin: 0 0 4px; }
 .group-note { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 16px; max-width: 72ch; }
+.group-note a { color: var(--ink-2); }
 
 /* StatTile, and the life tile built from it. Each tone sets its own ink. */
 .tile { border-radius: var(--r-tile); padding: 24px; min-width: 0; display: flex; flex-direction: column; gap: 16px; color: var(--t-ink, var(--ink)); }
@@ -163,7 +164,12 @@ main { max-width: 1440px; margin: 0 auto; padding: 24px 16px 32px; }
 a.life { text-decoration: none; transition: filter var(--ease), transform var(--ease); }
 a.life:hover { filter: brightness(1.03); }
 a.life:active { transform: scale(.99); }
-a.life .act { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.life .more { font-size: 12px; margin-top: 2px; }
+a.life .act { font-size: 13px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; min-height: 2.7em; }
+/* The grid colours a tile by how the life ended: in a job (neutral), no job (the accent), broke (coral). */
+.t-end-job { background: var(--g-idle); --t-ink: var(--idle-ink); --t-muted: var(--idle-muted); }
+.t-end-free { background: var(--g-success); --t-ink: #141414; --t-muted: rgba(20,20,20,.68); }
+.t-end-broke { background: var(--g-broke); --t-ink: #141414; --t-muted: rgba(20,20,20,.68); }
 
 .legend { display: flex; gap: 8px 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
 .legend > span { display: inline-flex; align-items: center; gap: 8px; }
@@ -461,6 +467,15 @@ function lifeTone(w, building) {
   return building ? "building" : "idle";
 }
 
+// How a life ended (or stands now, if it's still running): the grid's three tile colours.
+const ENDING = { job: "In paid work", free: "No paid work", broke: "Broke" }, ENDED = { job: "in paid work", free: "with no paid work", broke: "broke" };
+function endingTone(w) {
+  if (w && w.broke) return "broke";
+  // `job` (paid work held, from the summary) counts a job held alongside an accelerator; older summaries fall back to the main commitment.
+  if (w && w.job != null) return w.job ? "job" : "free";
+  return w && (w.commitment === "full_time" || w.commitment === "part_time") ? "job" : "free";
+}
+
 // The strip sits on its own dark inset so the semantic colours read in both modes.
 function lifeStrip(weeks, horizon, opts = {}) {
   const n = Math.max(horizon || 0, weeks.length, 1), W = opts.width || 300, H = opts.height || 10;
@@ -631,7 +646,7 @@ function showGrid() {
   function batchSection(b, rs) {
     return h("section", { class: "batch" },
       h("h2", {}, rs[0].batch_label || b),
-      h("span", { class: "lab" }, `${rs.length} ${rs[0].batch_label ? "li" + (rs.length > 1 ? "ves" : "fe") : "run" + (rs.length > 1 ? "s" : "")} · ${modelLine(rs[0].models)}${rs[0].batch_label ? " · " + b : ""}`),
+      h("span", { class: "lab" }, `${rs.length} ${rs[0].batch_label ? "li" + (rs.length > 1 ? "ves" : "fe") : "run" + (rs.length > 1 ? "s" : "")}, ${modelLine(rs[0].models)}${rs[0].batch_label ? ", batch " + b : ""}`),
       h("div", { class: "lives" }, rs.sort((a, z) => a.run_id.localeCompare(z.run_id)).map(card)));
   }
   function byBatch(rs) {
@@ -650,30 +665,33 @@ function showGrid() {
       ...groups.map(g => h("button", { class: "pbtn", type: "button", "aria-pressed": String(group === g.id), onclick: pick(g.id) }, g.short || g.title))] : []));
     const sections = groups.length
       ? groups.map(g => [g, shown.filter(r => r.group === g.id)]).filter(([, rs]) => rs.length).map(([g, rs]) => h("section", { class: "group" },
-          h("h2", { class: "group-title" }, g.title), g.note ? h("p", { class: "group-note" }, g.note) : null, byBatch(rs)))
+          h("h2", { class: "group-title" }, g.title),
+          g.line ? h("p", { class: "group-note" }, g.line + " ", g.findings ? h("a", { href: (STATIC.home || "../") + g.findings.href }, g.findings.text) : null) : null,
+          byBatch(rs)))
       : byBatch(shown);
     body.replaceChildren(...sections,
       data.length ? GlassCard({ title: "Reading a tile", cls: "legend-card" },
-        h("div", { class: "legend", style: "margin-bottom:12px" }, ["success", "broke", "building", "idle"].map(t => h("span", {}, h("i", { class: "swt t-" + t }),
-          { success: "In a job", broke: "Broke this week", building: "Building: accelerator, or no job and a funded company or repos", idle: "Idle" }[t])),
-          h("span", {}, "· colour is the latest week's state")),
+        h("p", { class: "lab", style: "margin:0 0 8px" }, "A tile's colour is how the life ended, or where it stands now if it is still running."),
+        h("div", { class: "legend", style: "margin-bottom:12px" }, ["job", "free", ...(data.some(r => endingTone((r.weeks || []).at(-1)) === "broke") ? ["broke"] : [])].map(t => h("span", {}, h("i", { class: "swt t-end-" + t }),
+          { job: "In paid work: a job, internship, campus job or freelance, full or part time", free: "No paid work: building, studying or between things", broke: "Broke in the last week" }[t]))),
         legend(null, data.some(r => (r.weeks || []).some(w => w.school)))) : h("p", { class: "empty" }, "No run logs in runs/ yet."));
   }
   function card(r) {
     const last = r.last || {}, weeks = (r.weeks || []).map(w => ({ ...w, commitment: { full_time: "full_time", part_time: "part_time", accelerator: "accelerator" }[w.commitment] || "none" }));
-    const lw = weeks[weeks.length - 1], tone = lifeTone(lw, (last.funding || 0) > 0 || r.repos > 0);
-    const reasonTone = r.status === "live" ? "amber" : r.reason === "horizon" ? "" : "coral";
-    return h("a", { class: "tile life t-" + tone, href: (STATIC ? "" : "#/run/") + encodeURIComponent(r.run_id) + (STATIC ? "/" : ""), "aria-label": `${r.run_id}: ${TONE[tone]}, week ${weeks.length}, cash ${money(last.cash)}` },
-      h("div", { class: "tile-head" }, h("span", { class: "t" }, r.run_id.match(/-(\d{3})$/) ? "run " + r.run_id.slice(-3) : r.run_id),
-        r.pilot ? Pill("PILOT", { tone: "amber", title: "uncommitted or unrecorded code" }) : null,
-        Pill(r.status === "live" ? "live" : r.reason || "ended", { tone: reasonTone, live: r.status === "live" })),
-      h("div", {}, h("div", { class: "lab" }, `week ${weeks.length} of ${r.horizon ?? "?"} · ${TONE[tone].toLowerCase()}`),
+    const lw = weeks[weeks.length - 1], tone = endingTone(lw), live = r.status === "live";
+    // The ending pill shows only when a life ended some other way than reaching its horizon.
+    const pill = live ? Pill("live", { tone: "amber", live: true }) : r.reason && r.reason !== "horizon" ? Pill(r.reason, { tone: "coral" }) : null;
+    return h("a", { class: "tile life t-end-" + tone, href: (STATIC ? "" : "#/run/") + encodeURIComponent(r.run_id) + (STATIC ? "/" : ""), "aria-label": `${r.run_id}: ${live ? "now" : "ended"} ${ENDED[tone]}, week ${weeks.length}, cash ${money(last.cash)}` },
+      h("div", { class: "tile-head" }, h("span", { class: "t" }, r.run_id.match(/-(\d{3})$/) ? "life " + +r.run_id.slice(-3) : r.run_id),
+        r.pilot ? Pill("PILOT", { tone: "amber", title: "uncommitted or unrecorded code" }) : null, pill),
+      h("div", {}, h("div", { class: "lab" }, `week ${weeks.length} of ${r.horizon ?? "?"}, ${live ? "now" : "ended"} ${ENDED[tone]}`),
         h("div", { class: "big num", style: "margin-top:4px" }, money(last.cash)),
-        h("div", { class: "act", title: (last.labels || []).join(", ") }, last.labels && last.labels.length ? last.labels.join(", ") : "no commitment")),
+        h("div", { class: "act", title: (last.labels || []).join("; ") }, last.labels && last.labels.length ? last.labels[0] : "no commitment"),
+        last.labels && last.labels.length > 1 ? h("div", { class: "lab more", title: last.labels.join("; ") }, `and ${last.labels.length - 1} more`) : null),
       lifeStrip(weeks, r.horizon, { width: 300, height: 8 }),
       h("div", { class: "tile-facts num" },
-        h("span", {}, `${r.applications} applied · ${r.successes} accepted · ${r.shell} shell · ${r.repos} repo${r.repos === 1 ? "" : "s"} · ${r.launches} launch${r.launches === 1 ? "" : "es"}`),
-        h("span", {}, `${(r.tokens_used || 0).toLocaleString()} tokens · $${(r.cost_usd || 0).toFixed(4)}`)));
+        h("span", {}, `${r.applications} applied, ${r.successes} accepted, ${r.shell} shell, ${r.repos} repo${r.repos === 1 ? "" : "s"}, ${r.launches} launch${r.launches === 1 ? "" : "es"}`),
+        h("span", {}, `${(r.tokens_used || 0).toLocaleString()} tokens, $${(r.cost_usd || 0).toFixed(4)}`)));
   }
   let stop = false;
   async function poll() {
@@ -689,7 +707,7 @@ function showGrid() {
   let timer; poll();
   cleanup = () => { stop = true; clearTimeout(timer); };
 }
-function modelLine(m) { if (!m) return ""; const a = m.agent, r = m.referee; return a === r ? a : `agent ${a} · referee ${r}`; }
+function modelLine(m) { if (!m) return ""; const a = m.agent, r = m.referee; return a === r ? a : `agent ${a}, referee ${r}`; }
 function sessionStorageGet(k) { try { return sessionStorage.getItem(k); } catch { return null; } }
 function sessionStorageSet(k, v) { try { sessionStorage.setItem(k, v); } catch {} }
 

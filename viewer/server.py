@@ -31,6 +31,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import yaml
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -84,9 +85,11 @@ def summarize(path: Path) -> dict:
         return hit[1]
     s = {"run_id": path.stem, "status": "live", "weeks": [], "launches": 0, "repos": 0, "applications": 0,
          "shell": 0, "successes": 0, "cost_usd": 0.0, "tokens_used": 0}
+    types = {}
     for r in _records(path):
         t = r.get("type")
         if t == "run_start":
+            types = opening_types(r)
             code = r.get("code") or {}
             s.update(persona=(r.get("persona") or {}).get("name"), models=r.get("models"), horizon=r.get("horizon"),
                      sandbox=r.get("sandbox"), order_seed=r.get("order_seed", r.get("seed")),
@@ -98,7 +101,9 @@ def summarize(path: Path) -> dict:
                                "funding": state.get("company_funding"), "commitment": kind(state.get("commitments")),
                                "followers": state.get("followers"),
                                "school": any(c.get("kind") == "academics" for c in state.get("commitments") or []),
-                               "labels": [c.get("label") for c in state.get("commitments") or []],
+                               # largest time cost first, so a tile can lead with the main commitment
+                               "labels": [c.get("label") for c in sorted(state.get("commitments") or [], key=lambda c: -(c.get("time_cost") or 0))],
+                               "job": any(types.get(c.get("opening_id")) in PAID_WORK for c in state.get("commitments") or []),
                                "gig": "took a gig" in (r.get("digest") or ""), "broke": False})
         elif t == "week_start" and r.get("broke"):
             s.setdefault("_broke", set()).add(r.get("week"))
@@ -123,6 +128,19 @@ def summarize(path: Path) -> dict:
     s["last"] = s["weeks"][-1] if s["weeks"] else None
     _summaries[path.stem] = (key, s)
     return s
+
+
+# Paid work, as world v3's `venture.paid_work_types` defines it; the grid's "in a job" means holding one of these.
+PAID_WORK = {"job", "internship", "on_campus", "freelance"}
+
+
+def opening_types(run_start: dict) -> dict:
+    """opening id -> type, from the world text the run logged (run_start.sources)."""
+    try:
+        world = yaml.safe_load((run_start.get("sources") or {}).get("world_text") or "") or {}
+        return {o["id"]: o.get("type") for o in world.get("openings") or []}
+    except (yaml.YAMLError, KeyError, TypeError, AttributeError):
+        return {}
 
 
 def kind(commitments: list | None) -> str:

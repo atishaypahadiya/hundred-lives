@@ -197,7 +197,7 @@ def select(publish: dict) -> tuple[list[dict], list[dict]]:
     return chosen, skipped
 
 
-GRID_WEEK = ("week", "cash", "commitment", "school", "gig", "broke")  # what a tile draws; the life page has the rest
+GRID_WEEK = ("week", "cash", "commitment", "school", "gig", "broke", "job")  # what a tile draws; the life page has the rest
 
 
 def grid_entry(summary: dict, c: dict) -> dict:
@@ -255,7 +255,7 @@ def export_all(out: Path, deny: list[str]) -> dict:
             grid.append(grid_entry(data["runs"][0], c))
         if refused:
             raise ScrubError("; ".join(f"{r['run_id']}: {r['why']}" for r in refused))
-        groups = [{k: g.get(k) for k in ("id", "short", "title", "note")} for g in publish["groups"]
+        groups = [{k: g.get(k) for k in ("id", "short", "title", "line", "findings")} for g in publish["groups"]
                   if any(r["group"] == g["id"] for r in grid)]
         (tmp / "runs.json").write_text(json.dumps({"groups": groups, "runs": grid}, separators=(",", ":")))
         (tmp / "index.html").write_text(_stub(shell, "Runs · Hundred Lives", "assets/", {"page": "grid", "runs": "runs.json", "home": "../"}))
