@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Render the project page's share image and icons with headless Chrome and macOS sips:
-#   docs/og.jpg              1200×630, the page's hero in ?og mode (headline + landscape); JPEG so chat apps
+#   docs/og.jpg              1200×630, the page's hero in ?og mode (headline, pull quote, landscape); JPEG so chat apps
 #                            that skip large preview images (WhatsApp) still show it
 #   docs/favicon-32.png      the dot mark, transparent
 #   docs/apple-touch-icon.png 180×180, the dot mark on the page background

@@ -44,6 +44,7 @@ scripts/render_prompts.py  every agent/referee/contact prompt for a persona + wo
 scripts/smoke_v3.py      world v3 end to end with a scripted agent and canned referee in the real sandbox (no model calls)
 viewer/publish.yaml      which finished batches the Runs site publishes, grouped by experiment
 scripts/publish_runs.sh  rebuild docs/runs/; --deploy publishes the site to gh-pages
+analysis/site_facts.py   fills every number, quote, quote link and chart on docs/index.html from the logs and results files and lists their sources in analysis/site_facts.md; `--check` after any edit to the page
 scripts/og_image.sh      the project page's share image (docs/og.jpg, from the page's ?og mode) and PNG icons, via headless Chrome
 experiments/             experiment plans (question, conditions, commands, measures, cost), one file each
 runs/                    <run_id>.jsonl, <run_id>/workspace/, <run_id>/repos/*.bundle, <batch>-referee-baseline.jsonl (gitignored)

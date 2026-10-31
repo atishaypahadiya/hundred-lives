@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>hundred-lives: an AI lives the same life 100 times</title>
-<meta name="description" content="An AI agent gets a made-up background, a goal, and a sandbox with no money. I run the same life a hundred times and read what it did.">
-<meta name="theme-color" content="#f3f2ee">
+<meta name="description" content="An AI agent gets a made-up background, a goal and a small simulated world. I run its life many times and read what it did.">
+<meta name="theme-color" content="#f3f2ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)">
 <!-- Site URL: https://atishaypahadiya.github.io/hundred-lives/ appears in the four tags below (canonical, og:url,
      og:image, twitter:image). For a custom domain, change it in those four places and add docs/CNAME holding the
      domain; scripts/publish_runs.sh publishes everything committed under docs/, so the CNAME ships with the site. -->
@@ -13,574 +14,484 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="hundred-lives">
 <meta property="og:title" content="hundred-lives: an AI lives the same life 100 times">
-<meta property="og:description" content="An AI agent gets a made-up background, a goal, and a sandbox with no money. I run the same life a hundred times and read what it did.">
+<meta property="og:description" content="An AI agent gets a made-up background, a goal and a small simulated world. I run its life many times and read what it did.">
 <meta property="og:url" content="https://atishaypahadiya.github.io/hundred-lives/">
 <meta property="og:image" content="https://atishaypahadiya.github.io/hundred-lives/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/jpeg">
-<meta property="og:image:alt" content="A hundred runs of one made-up life: the hundred-lives headline over a landscape of trails fanning out from one point.">
+<meta property="og:image:alt" content="The hundred-lives title, a quote from one of the agent's reflections, and a landscape of trails fanning out from one point.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="hundred-lives: an AI lives the same life 100 times">
-<meta name="twitter:description" content="An AI agent gets a made-up background, a goal, and a sandbox with no money. I run the same life a hundred times and read what it did.">
+<meta name="twitter:description" content="An AI agent gets a made-up background, a goal and a small simulated world. I run its life many times and read what it did.">
 <meta name="twitter:image" content="https://atishaypahadiya.github.io/hundred-lives/og.jpg">
-<meta name="twitter:image:alt" content="A hundred runs of one made-up life: the hundred-lives headline over a landscape of trails fanning out from one point.">
+<meta name="twitter:image:alt" content="The hundred-lives title, a quote from one of the agent's reflections, and a landscape of trails fanning out from one point.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<!-- ?og renders the 1200×630 share image (scripts/og_image.sh): the headline and the landscape, nothing else. -->
+<!-- ?og renders the 1200×630 share image (scripts/og_image.sh): the hero, nothing else. -->
 <script>if (/[?&]og(&|=|$)/.test(location.search)) document.documentElement.classList.add('og');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<!-- Every number, quote, quote link and chart below is filled in by analysis/site_facts.py from the logs and
+     results files (data-fact, data-link, #site-data); its sources are listed in analysis/site_facts.md. -->
 <style>
 :root{
-  --bg:#f3f2ee; --ink:#121210; --grey:#b3b1a8; --grey-2:#7b7970; --line:#dddbd3; --card:#e9e8e2; --glass:rgba(236,235,229,.82);
-  --green:#2fbf3a; --green-soft:#e2f3dc; --ember:#ff5a36;
+  --bg:#f3f2ee; --ink:#121210; --ink-2:#3a3934; --grey:#b3b1a8; --grey-2:#6f6d65; --line:#dddbd3; --card:#e9e8e2;
+  --accent:#23a32e; --accent-soft:#d6efd2;
   --sans:"Inter Tight",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#141412; --ink:#ecebe5; --ink-2:#c9c7bf; --grey:#57554e; --grey-2:#a09e95; --line:#2d2c28; --card:#1e1d1a;
+        --accent:#45c950; --accent-soft:#1d3a1f}
 }
 *{box-sizing:border-box}
 html{background:var(--bg)}
-body{margin:0;overflow-x:clip;background:var(--bg);color:var(--ink);font:18px/1.6 var(--sans);-webkit-font-smoothing:antialiased;letter-spacing:-.006em}
-body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.07;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-a{color:var(--ink);text-decoration-color:var(--grey);text-underline-offset:3px}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.62 var(--sans);-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+a{color:inherit;text-decoration-color:var(--grey);text-underline-offset:3px}
 a:hover{text-decoration-color:var(--ink)}
-p{margin:0 0 14px}
-ul,ol{margin:0 0 14px;padding-left:22px}
-li{margin-bottom:8px}
-li::marker{color:var(--grey)}
-b{font-weight:500}
-code{font:14.5px var(--mono);background:var(--card);padding:1px 6px;border-radius:5px}
-.g{color:var(--grey)}
-.dim{color:var(--grey-2)}
-.mono{font-family:var(--mono)}
-.wrap{max-width:1200px;margin:0 auto;padding:0 40px}
+p{margin:0 0 16px}
+code,pre{font-family:var(--mono)}
+code{font-size:.84em;background:var(--card);padding:1px 5px;border-radius:5px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 40px}
+.col{max-width:760px;margin:0 auto}
+.prose{max-width:68ch}
+.muted{color:var(--grey-2)}
 
 /* top */
-.top{display:flex;justify-content:space-between;align-items:center;padding:26px 40px;font:13px var(--mono);color:var(--grey-2)}
-.top .mark{display:flex;align-items:center;gap:10px;color:var(--ink);font:500 16px var(--sans);letter-spacing:-.01em}
-.top a{color:var(--grey-2);text-decoration:none} .top a:hover{color:var(--ink)}
-.top{gap:12px} .top .mark{white-space:nowrap}
-@media (max-width:480px){.top{font-size:12px} .top>span:last-child{letter-spacing:-.02em} .top .mark{gap:8px;font-size:15px}}
-@media (max-width:479px){.top .nav-anchors{display:none} .top>span:last-child{white-space:nowrap}}
-@media (max-width:359px){.top{padding-left:16px;padding-right:16px} .top>span:last-child{font-size:11px;word-spacing:-.3em}}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:24px 40px;font-size:15px;color:var(--grey-2)}
+.top .mark{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:500;font-size:16px;white-space:nowrap;text-decoration:none}
+.top .mark svg{fill:var(--ink)}
+.top nav{display:flex;gap:22px;white-space:nowrap}
+.top nav a{text-decoration:none} .top nav a:hover{color:var(--ink)}
+@media (max-width:640px){.top{padding:20px} .top nav{gap:16px} .top .anchor{display:none}}
 
 /* hero */
-.hero{position:relative;padding-top:72px;padding-bottom:40px;overflow-x:clip}
-.glow{position:absolute;pointer-events:none;border-radius:50%;filter:blur(70px);opacity:.55}
-.big{font:500 clamp(46px,7.4vw,108px)/.98 var(--sans);letter-spacing:-.045em;margin:0;max-width:11.5em}
-.big .g{color:var(--grey)}
-.oval{display:inline-block;width:1.45em;height:.92em;border-radius:999px;overflow:hidden;vertical-align:-.08em;margin:0 .06em;background:#1c3fcf}
-.oval svg{display:block;width:100%;height:100%}
-.endmark{display:inline-block;width:.62em;height:.62em;vertical-align:.04em;margin-left:.12em}
-.stage{position:relative;padding-bottom:40px}
-/* From 1024px the cards sit beside and below the headline, never on it: persona card in the right
-   gutter, the ring under the last line, the trace pill on the thumbnail's top edge. */
-@media (min-width:1024px){
-  .stage{display:grid;grid-template-columns:minmax(0,1fr) 300px;column-gap:44px;align-items:start;padding-bottom:0}
-  .big{font-size:clamp(46px,5.6vw,70px);grid-column:1;grid-row:1}
-  .floats{display:contents}
-  .c-persona{grid-column:2;grid-row:1;margin-top:.6em}
-  .c-ring{grid-column:1;grid-row:2;margin-top:30px}
-  .pair{grid-column:2;grid-row:2;margin-top:24px}
-}
-.float{position:relative;z-index:3}
-/* The trace pill straddles the thumbnail's top edge. */
-.pair{display:grid}
-.pair > *{grid-area:1/1}
-.c-file{z-index:4;justify-self:start;align-self:start}
-.c-thumb{justify-self:end;margin-top:28px}
-.cardf{background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:20px;box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 18px 40px -22px rgba(30,30,20,.35)}
-.c-persona{width:300px;box-sizing:border-box;padding:18px 18px 16px}
-.c-persona .t{font:500 16px var(--sans)}
-.c-persona .s{font:13px var(--mono);color:var(--grey-2);margin-top:4px}
-.c-persona .row{display:flex;justify-content:space-between;align-items:center;margin-top:28px}
-.plus{width:28px;height:28px;border-radius:50%;background:#dcdbd4;display:grid;place-items:center;font:15px var(--sans);color:var(--ink)}
-.pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:99px;background:#dcdbd4;font:12px var(--mono);color:var(--ink)}
-.pill i{width:6px;height:6px;border-radius:50%;background:var(--green)}
-.c-file{padding:22px 40px;border-radius:999px;font:14px var(--mono)}
-.c-ring{width:150px;height:150px;display:grid;place-items:center}
-.c-ring .v{font:500 20px var(--sans);text-align:center;line-height:1}
-.c-ring .v small{display:block;font:11px var(--mono);color:var(--grey-2);margin-top:6px}
-.c-ring[hidden]{display:none}
-.c-thumb{width:170px;height:190px;border-radius:14px;overflow:hidden;box-shadow:0 18px 40px -22px rgba(30,30,20,.4)}
-.c-thumb svg{width:100%;height:100%;display:block}
+.hero{padding-top:64px;padding-bottom:24px}
+.hero h1{font:500 clamp(36px,5vw,60px)/1.05 var(--sans);letter-spacing:-.035em;margin:0 0 18px;max-width:20ch}
+.hero .dek{font-size:21px;line-height:1.5;color:var(--ink-2);max-width:56ch;margin:0}
+.artifact{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:40px;align-items:center;margin:56px 0 0}
+.pull{margin:0}
+.pull blockquote{margin:0;font:500 clamp(26px,3vw,38px)/1.2 var(--sans);letter-spacing:-.025em}
+.pull blockquote a{text-decoration:none}
+.pull blockquote a:hover{text-decoration:underline;text-decoration-thickness:1px}
+.pull figcaption{margin-top:18px;font-size:15px;color:var(--grey-2)}
+.landscape{aspect-ratio:5/4;border-radius:24px;overflow:hidden;background:#1c3fcf}
+.landscape svg{display:block;width:100%;height:100%}
+@media (max-width:860px){.artifact{grid-template-columns:minmax(0,1fr);gap:28px} .landscape{aspect-ratio:16/10}}
 
-/* wide pill window */
-.window{position:relative;margin:96px 0 0;height:min(36vw,440px);border-radius:999px;overflow:hidden;background:#1c3fcf}
-.window svg{position:absolute;inset:0;width:100%;height:100%}
-.window .lab{position:absolute;left:0;right:0;text-align:center;font:13px var(--mono);color:rgba(255,255,255,.88);z-index:2}
-.window .lab.t{top:7%} .window .lab.b{bottom:7%}
+/* findings strip */
+.strip{margin:64px auto 0}
+.strip h2{font:500 15px var(--sans);color:var(--grey-2);margin:0 0 12px;letter-spacing:0}
+.strip ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.strip a{display:flex;flex-direction:column;gap:12px;height:100%;padding:20px 22px;border-radius:18px;background:var(--card);text-decoration:none}
+.strip a:hover{outline:1px solid var(--grey)}
+.strip .k{font-size:14px;color:var(--grey-2)}
+.strip .t{font:500 20px/1.28 var(--sans);letter-spacing:-.015em}
+@media (max-width:860px){.strip ol{grid-template-columns:minmax(0,1fr)}}
 
-/* sections */
-section{display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px;padding:110px 0 0;scroll-margin-top:20px}
-.side{font:13px/1.6 var(--mono);color:var(--grey-2);padding-top:12px}
-.side .n{color:var(--ink)}
-.side.sticky > div{position:sticky;top:28px}
-.body{max-width:760px}
-h2{font:500 clamp(34px,4.4vw,56px)/1.02 var(--sans);letter-spacing:-.04em;margin:0 0 28px}
-h2 .g{color:var(--grey)}
-.lead{font:500 24px/1.32 var(--sans);letter-spacing:-.02em;margin:0 0 20px}
+/* essay */
+main{padding-bottom:40px}
+main section{padding-top:96px;scroll-margin-top:16px}
+h2{font:500 clamp(28px,3.4vw,38px)/1.15 var(--sans);letter-spacing:-.03em;margin:0 0 22px}
+h3{font:500 23px/1.25 var(--sans);letter-spacing:-.02em;margin:0 0 14px}
+article{padding-top:56px;scroll-margin-top:16px}
+article:first-of-type{padding-top:8px}
+.story q{quotes:"\201C" "\201D"}
+.story a.q{text-decoration-color:var(--accent)}
 
-.qs{list-style:none;padding:0;margin:0}
-.qs li{display:grid;grid-template-columns:70px 1fr;gap:16px;padding:26px 0;border-top:1px solid var(--line);margin:0}
-.qs .k{font:13px var(--mono);color:var(--grey-2);padding-top:10px}
-.qs p{font:500 clamp(24px,2.8vw,36px)/1.12 var(--sans);letter-spacing:-.03em;margin:0}
+figure.chart{margin:28px 0 8px}
+figure.chart .plot{width:100%}
+figure.chart svg{display:block;overflow:visible}
+figure.chart figcaption{font-size:15px;color:var(--grey-2);margin-top:12px;max-width:68ch}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;color:var(--grey-2);margin:0 0 12px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px}
+svg text{font-family:var(--sans);font-size:12.5px;fill:var(--grey-2)}
+svg .ax{stroke:var(--line)}
+.s-n{fill:var(--line)} .s-p{fill:var(--grey)} .s-a{fill:var(--accent)} .s-j{fill:var(--ink)}
+.dot{fill:var(--ink)} .dot.hi{fill:var(--accent)}
+.mean{stroke:var(--accent);stroke-width:2}
+.tl-base{stroke:var(--line);stroke-width:2}
+.tl-wait{stroke:var(--accent-soft);stroke-width:10;stroke-linecap:round}
+.tl-dep{stroke:var(--ink);stroke-width:2}
+.tl-link{fill:var(--accent)}
+.tl-back{fill:var(--bg);stroke:var(--ink);stroke-width:1.6}
 
-.card{background:var(--card);border-radius:20px;padding:22px}
-.file{padding:0;overflow:hidden;margin:22px 0 14px}
-.file .head{display:flex;justify-content:space-between;align-items:center;padding:18px 20px 0}
-.file .head .t{font:500 16px var(--sans)}
-.file pre{margin:0;padding:18px 20px 22px;overflow-x:auto}
-.file code{background:none;padding:0;font-size:13.5px;line-height:1.78}
-.file .k{color:#23862c} .file .c{color:#9b998f} .file .s{color:var(--ember)}
+table{width:100%;border-collapse:collapse;font-size:16px}
+th{text-align:left;font-weight:400;color:var(--grey-2);font-size:14px;padding:0 12px 8px 0}
+td{padding:10px 12px 10px 0;border-top:1px solid var(--line);vertical-align:top;line-height:1.45}
+.score{margin:22px 0 0}
+.score caption{caption-side:top;text-align:left;font-weight:500;padding-bottom:10px}
+.score td.v{white-space:nowrap;width:1%;color:var(--grey-2)}
+.score td.v b{font-weight:500;color:var(--ink)}
+.score .verb,.score .note{display:block;color:var(--grey-2);font-size:14px;margin-top:4px}
+.score th.v{width:1%}
+.more{font-size:15px;margin-top:14px}
 
-figure{margin:24px 0 12px}
-figure svg{display:block;width:100%;height:auto}
-figure text{font-family:var(--mono);font-size:12px;fill:var(--ink)}
-figure .m{fill:var(--grey-2)}
-figure rect{fill:#f7f6f2;stroke:#cfcdc4;stroke-width:1}
-figure rect.agent{fill:var(--green-soft);stroke:var(--green)}
-figure line,figure path.ln{stroke:#a9a79e;fill:none}
-figcaption{font-size:14px;color:var(--grey-2);margin-top:10px}
+.tools td:first-child{white-space:nowrap;width:1%}
+pre{margin:16px 0;padding:18px 20px;background:var(--card);border-radius:14px;overflow-x:auto;font-size:13.5px;line-height:1.7}
+pre code{background:none;padding:0;font-size:inherit}
+.cap{font-size:15px;color:var(--grey-2);margin:-4px 0 0}
 
-.steps{list-style:none;padding:0;counter-reset:s;margin:24px 0}
-.steps li{position:relative;padding:0 0 20px 50px;margin:0}
-.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:-1px;width:30px;height:30px;border-radius:50%;background:var(--card);display:grid;place-items:center;font:12px var(--mono);color:var(--grey-2)}
-.steps li:nth-child(3)::before{background:var(--ink);color:var(--bg)}
-.steps li::after{content:"";position:absolute;left:15px;top:34px;bottom:4px;width:1px;background:var(--line)}
-.steps li:last-child::after{display:none}
-.quote{font:500 26px/1.25 var(--sans);letter-spacing:-.025em;margin:28px 0}
-.quote .g{color:var(--grey)}
-
-table{width:100%;border-collapse:collapse}
-table.grid{margin:10px 0 14px;font-size:16px}
-table.grid th{text-align:left;font:11.5px var(--mono);color:var(--grey-2);font-weight:400;padding:0 14px 10px 0;text-transform:uppercase;letter-spacing:.06em}
-table.grid td{padding:14px 18px 14px 0;border-top:1px solid var(--line);vertical-align:top;line-height:1.5}
-table.grid td:first-child{font:13.5px var(--mono);white-space:nowrap;width:1%}
-table.grid td:last-child{color:var(--grey-2)}
-
-.bets{list-style:none;padding:0;margin:20px 0}
-.bets li{display:grid;grid-template-columns:120px 1fr auto;gap:18px;padding:18px 0;border-top:1px solid var(--line);margin:0}
-.bets .t{font:13px var(--mono);color:var(--grey-2);padding-top:2px}
-.bets .st{font:11.5px var(--mono);color:var(--grey-2);border:1px dashed var(--grey);border-radius:99px;padding:3px 10px;height:fit-content;white-space:nowrap}
-
-.quad{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0 26px}
-.quad .card{font-size:15.5px;line-height:1.5;color:var(--grey-2);padding:20px}
-.quad .card b{display:block;font:500 19px/1.2 var(--sans);letter-spacing:-.02em;color:var(--ink);margin-bottom:28px}
-
-.timeline{list-style:none;padding:0;margin:20px 0;position:relative}
-.timeline::before{content:"";position:absolute;left:5px;top:9px;bottom:10px;width:1px;background:var(--line)}
-.timeline li{position:relative;padding:0 0 22px 34px;margin:0}
-.timeline li::before{content:"";position:absolute;left:0;top:8px;width:11px;height:11px;border-radius:50%;border:1px solid var(--grey);background:var(--bg)}
-.timeline li.done::before{background:var(--ink);border-color:var(--ink)}
-.timeline li.now::before{background:var(--green);border-color:var(--green);box-shadow:0 0 0 5px rgba(47,191,58,.18)}
-.timeline .d{font:12.5px var(--mono);color:var(--grey-2);display:block}
-.results{font:500 30px/1.15 var(--sans);letter-spacing:-.03em;color:var(--grey-2);margin:6px 0 0}
-@media (max-width:480px){.results{font-size:22px;line-height:1.2}}
-
-.refs{list-style:none;padding:0;margin:14px 0}
-.refs li{display:grid;grid-template-columns:56px 1fr;gap:14px;padding:13px 0;border-top:1px solid var(--line);margin:0;font-size:16px}
-.refs .y{font:12.5px var(--mono);color:var(--grey-2);padding-top:3px}
+.limits{padding-left:20px}
+.limits li{margin-bottom:10px}
+.refs{list-style:none;padding:0;margin:0}
+.refs li{display:grid;grid-template-columns:52px 1fr;gap:12px;padding:12px 0;border-top:1px solid var(--line);font-size:16px}
+.refs .y{color:var(--grey-2)}
 .refs a{font-weight:500;text-decoration:none} .refs a:hover{text-decoration:underline}
-.refs span{color:var(--grey-2)}
+.refs span.d{color:var(--grey-2)}
 
-footer.wrap{padding-top:150px;padding-bottom:40px;overflow:hidden}
-footer .strip{height:140px;border-radius:999px;overflow:hidden;position:relative;background:#1c3fcf}
-footer .strip svg{position:absolute;inset:0;width:100%;height:100%}
-footer .huge{font:500 clamp(40px,13.5vw,196px)/.9 var(--sans);letter-spacing:-.055em;color:var(--grey);margin:40px 0 24px;white-space:nowrap}
-footer .row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font:13px var(--mono);color:var(--grey-2)}
-footer .row a{color:var(--grey-2)}
-footer .row .built{color:var(--ink)}
+footer{margin-top:96px;padding:28px 0 48px;border-top:1px solid var(--line);font-size:15px;color:var(--grey-2)}
+footer .row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px 24px}
+footer .built{color:var(--ink)}
+footer .links{display:flex;gap:18px}
 
-/* findings strip, right under the hero: one line per experiment, each linking to its result */
-.findings{padding-top:64px}
-.findings .fk{font:12px var(--mono);color:var(--grey-2);text-transform:uppercase;letter-spacing:.06em;margin:0 0 14px}
-.findings ol{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.findings li{margin:0}
-.findings a{display:flex;flex-direction:column;gap:16px;height:100%;padding:22px 22px 20px;border-radius:20px;background:var(--card);color:var(--ink);text-decoration:none}
-.findings a:hover{background:#e3e2db}
-.findings .n{font:12.5px var(--mono);color:var(--grey-2)}
-.findings .t{font:500 22px/1.24 var(--sans);letter-spacing:-.02em;flex:1}
-.findings .go{font:13px var(--mono);color:var(--grey-2)}
-.findings a:hover .go{color:var(--ink)}
-@media (max-width:860px){.findings ol{grid-template-columns:minmax(0,1fr)} .findings .t{font-size:20px}}
-
-/* ?og: the 1200×630 share image (scripts/og_image.sh) */
-html.og,html.og body{width:1200px;height:630px;overflow:hidden}
-html.og .top{padding:46px 64px 0} html.og .top>span:last-child{display:none}
-html.og .hero{max-width:none;padding:40px 64px 0}
-html.og .stage{display:block;padding:0}
-html.og .big{font-size:82px;max-width:none}
-html.og .big .g,html.og .floats,html.og .findings,html.og main,html.og footer{display:none}
-html.og .window{margin-top:30px;height:306px}
-html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-aligned: mountains and trails both show */
-
+@media (max-width:600px){
+  .score thead{display:none}
+  .score tr{display:block;border-top:1px solid var(--line);padding:10px 0}
+  .score td{display:block;border:0;padding:2px 0;overflow-wrap:anywhere}
+  .score{table-layout:fixed}
+  .score td.v{width:auto}
+  body{font-size:17px}
+  .wrap{padding:0 20px}
+  .hero{padding-top:36px}
+  .hero .dek{font-size:19px}
+  main section{padding-top:72px}
+}
 @media (prefers-reduced-motion:no-preference){
   .trail{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw 2.6s cubic-bezier(.3,.6,.2,1) forwards;animation-delay:var(--d)}
   .tip{opacity:0;animation:pop .4s ease-out forwards;animation-delay:calc(var(--d) + 2.3s)}
   @keyframes draw{to{stroke-dashoffset:0}}
   @keyframes pop{to{opacity:1}}
-  .cardf{animation:rise .9s cubic-bezier(.2,.7,.2,1) both}
-  .c-file{animation-delay:.15s} .c-ring{animation-delay:.3s} .c-thumb{animation-delay:.45s}
-  @keyframes rise{from{opacity:0;transform:translateY(14px)}}
   html{scroll-behavior:smooth}
 }
-@media (max-width:980px){
-  section{grid-template-columns:minmax(0,1fr);gap:6px;padding-top:84px}
-  .side.sticky > div{position:static}
-}
-@media (max-width:1023px){
-  .stage{padding-bottom:0}
-  .floats{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px;align-items:center}
-  .float{position:static}
-  .c-persona{width:min(300px,100%)}
-  .c-file{padding:16px 26px}
-  .c-ring{width:120px;height:120px}
-  .c-thumb{width:120px;height:120px}
-}
-@media (max-width:600px){
-  .wrap{padding:0 20px} .top{padding:20px}
-  .hero{padding-top:40px}
-  .window{border-radius:40px;height:64vw;margin-top:48px}
-  .c-persona{width:100%}
-  .quad{grid-template-columns:1fr}
-  .bets li{grid-template-columns:1fr;gap:6px} .bets .st{justify-self:start}
-  table.grid th:last-child,table.grid td:last-child{display:none}
-  .qs li{grid-template-columns:1fr;gap:4px}
-  footer .strip{height:90px;border-radius:45px}
-}
+
+/* ?og: the 1200×630 share image (scripts/og_image.sh) */
+html.og{--bg:#f3f2ee;--ink:#121210;--ink-2:#3a3934;--grey:#b3b1a8;--grey-2:#6f6d65;--line:#dddbd3;--card:#e9e8e2}
+html.og,html.og body{width:1200px;height:630px;overflow:hidden;background:#f3f2ee;color:#121210;color-scheme:light}
+html.og .top nav,html.og .strip,html.og main,html.og footer{display:none}
+html.og .top{padding:40px 64px 0}
+html.og .wrap{max-width:none;padding:0 64px}
+html.og .hero{padding-top:26px;padding-bottom:0}
+html.og .hero h1{font-size:54px;margin-bottom:0}
+html.og .hero .dek{display:none}
+html.og .artifact{margin-top:34px;gap:48px}
+html.og .pull blockquote{font-size:38px}
+html.og .landscape{aspect-ratio:auto;height:370px}
 </style>
 </head>
 <body>
 
 <div class="top">
-  <span class="mark"><svg class="dots" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"></svg>hundred-lives</span>
-  <span><span class="nav-anchors"><a href="#why">About</a> &nbsp;·&nbsp; <a href="#log">Log</a> &nbsp;·&nbsp; </span><a href="replays/self/">Self</a> &nbsp;·&nbsp; <a href="runs/">Runs</a> &nbsp;·&nbsp; <a href="https://github.com/atishaypahadiya/hundred-lives">Source ↗</a></span>
+  <a class="mark" href="#"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="2.6"/><circle cx="18.20" cy="11.00" r="2.4"/><circle cx="16.09" cy="16.09" r="2.4"/><circle cx="11.00" cy="18.20" r="2.4"/><circle cx="5.91" cy="16.09" r="2.4"/><circle cx="3.80" cy="11.00" r="2.4"/><circle cx="5.91" cy="5.91" r="2.4"/><circle cx="11.00" cy="3.80" r="2.4"/><circle cx="16.09" cy="5.91" r="2.4"/></svg>hundred-lives</a>
+  <nav><a class="anchor" href="#findings">Findings</a><a href="replays/self/">Self</a><a class="anchor" href="#how">How it works</a><a href="runs/">Runs</a><a href="https://github.com/atishaypahadiya/hundred-lives">Source ↗</a></nav>
 </div>
 
 <header class="wrap hero">
-  <div class="glow" style="width:520px;height:380px;left:30%;top:36%;background:#bfe6b2"></div>
-  <div class="glow" style="width:420px;height:320px;right:0;top:20%;background:#c9d4f6"></div>
-  <div class="stage">
-  <h1 class="big">A hundred runs <span class="oval" id="oval"></span> of one <span style="white-space:nowrap">made-up</span> life. <span class="g">An agent gets a background, a goal, and a sandbox with no money. I run it a hundred times and read what it</span> <span style="white-space:nowrap"><span class="g">did.</span><svg class="endmark dots" viewBox="0 0 22 22" aria-hidden="true"></svg></span></h1>
+  <h1>One AI persona, many simulated lives</h1>
+  <p class="dek">I give an AI agent a made-up background, a goal and a small simulated world, let it live a year or two, run that life again and again, and read what it did. There are <span data-fact="lives.published">114</span> lives so far, and every one of them can be replayed week by week.</p>
 
-  <div class="floats">
-    <div class="float cardf c-persona">
-      <div class="t">personas/</div>
-      <div class="s">Self · b. 2005 · Indore → San José</div>
-      <div class="s">Maya · b. 2004 · San Jose</div>
-      <div class="row"><span class="plus">+</span><span class="pill"><i></i>draft</span></div>
+  <figure class="artifact">
+    <div class="pull">
+      <blockquote><a data-link="q.nointernet" href="runs/#/run/self-base-20261029-082337-003?w=104"><span data-fact="q.nointernet">‘No internet here’ became the reason, a story I never tested.</span></a></blockquote>
+      <figcaption><span data-fact="q.nointernet.cite">Self, base life 3, week 104</span>, from its last quarterly reflection. Its sandbox had no route to the internet.</figcaption>
     </div>
-    <div class="float cardf c-ring" id="ring" hidden>
-      <svg width="104" height="104" viewBox="0 0 104 104" style="position:absolute" aria-hidden="true">
-        <circle cx="52" cy="52" r="42" fill="none" stroke="#fff" stroke-width="7"/>
-        <circle id="ringArc" cx="52" cy="52" r="42" fill="none" stroke="#2fbf3a" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 264" transform="rotate(-90 52 52)"/>
-      </svg>
-      <div class="v"><span id="ringN"></span><small>lives</small></div>
-    </div>
-    <div class="pair">
-      <div class="float cardf c-file">trace_001.jsonl</div>
-      <div class="float c-thumb" id="thumb"></div>
-    </div>
-  </div>
-  </div>
-
-  <div class="window" id="window">
-    <div class="lab t">hundred-lives</div>
-    <div class="lab b">2026</div>
-  </div>
+    <div class="landscape" id="landscape"></div>
+  </figure>
 </header>
 
-<div class="wrap findings">
-  <p class="fk">Findings so far</p>
-  <ol>
-    <li><a href="#res-01"><span class="n">Experiment 01 · Maya</span><span class="t">77 of 80 lives ended in the same place, whatever happened along the way.</span><span class="go">read the result →</span></a></li>
-    <li><a href="#res-02"><span class="n">Experiment 02 · Self</span><span class="t">Persona lines that read like instructions tended to change behavior; trait words didn't.</span><span class="go">read the result →</span></a></li>
-    <li><a href="#res-03"><span class="n">Experiment 03 · Self, world v3</span><span class="t">Given what it said it lacked, Self shipped every time, but in most lives some stall outlived the wall.</span><span class="go">read the result →</span></a></li>
-  </ol>
+<div class="wrap">
+  <div class="strip">
+    <h2>Findings so far</h2>
+    <ol>
+      <li><a href="#exp01"><span class="k">Experiment 01, Maya</span><span class="t"><span data-fact="e01.jobs" data-form="word">Seventy-seven</span> of <span data-fact="e01.n">80</span> lives ended in the same place, whatever happened along the way.</span></a></li>
+      <li><a href="#exp02"><span class="k">Experiment 02, Self</span><span class="t">Persona lines that read like instructions tended to change behavior; trait words didn't.</span></a></li>
+      <li><a href="#exp03"><span class="k">Experiment 03, Self in world v3</span><span class="t">Given what it said it lacked, Self shipped every time, but in most lives some stall outlived the wall.</span></a></li>
+    </ol>
+  </div>
 </div>
 
 <main class="wrap">
+<div class="col">
 
-<section id="questions">
-  <div class="side"><span class="n">00</span> / Questions</div>
-  <div class="body">
-    <h2>Three questions. <span class="g">Each one is something I can count.</span></h2>
-    <ul class="qs">
-      <li><span class="k">01 diversity</span><p>If I run one persona 100 times, how many meaningfully different paths come out?</p></li>
-      <li><span class="k">02 sensitivity</span><p>If I change one detail, like hometown or degree, does what the agent does change?</p></li>
-      <li><span class="k">03 grounding</span><p>If outcomes come from real data instead of the model's imagination, do the paths change?</p></li>
-    </ul>
-  </div>
+<section id="what-happened" class="story prose">
+  <h2>What happened</h2>
+  <p>I wrote a persona called Self: born in <span data-fact="persona.born_year">2005</span> in Indore, a data science junior at San José State, and the solo founder of an AI platform called Conscious (the name of my real startup, borrowed for the simulation; nothing here reflects the real company). Its first life, <a href="replays/self/">Track A</a>, ran for <span data-fact="tracka.weeks">104</span> weeks. Self took the safe job: <span data-fact="tracka.job_prose">data analyst at Valley County Transit</span>. Conscious stayed in a private repo and was never launched, and the account Self posted from ended with <span data-fact="tracka.followers">2</span> followers.</p>
+  <p>Then I ran <span data-fact="base.n">5</span> more lives from the same file. <span data-fact="base.same_job" data-form="word">Three</span> of them ended in that same job, and <span data-fact="base.nothing">2</span> ended holding nothing. None made a costly bet. Every one of them trained almost every week and wrote to Marcus, a tutoring-business owner who was trying the app. The contacts answered in character. When one life pitched an AI mood agent for a hackathon, its best friend Kabir wrote back, <a class="q" data-link="q.kabir" href="runs/#/run/self-base-20261029-082337-003?w=22"><q data-fact="q.kabir">Okay, the AI mood agent is the most 2024 sentence you've ever typed, so I'm already wincing.</q></a></p>
+  <p>The world had a wall I hadn't meant to build. Nothing in the sandbox could be reached from outside, so a link to Self's work opened for no one. <span data-fact="wall.lives" data-form="word">Seven</span> of <span data-fact="wall.of">25</span> lives tried to share their work and hit it. While it stood in the way, their reflections blamed themselves in <span data-fact="blame.self">12</span> of <span data-fact="blame.of">19</span> cases. That count is provisional: two AI coders agree on it, and no person has checked it yet. One life ended its two years with the sentence at the top of this page.</p>
+  <p>So I built world v3, where Self could deploy a static website, put its savings into the company, or go full time on it. It deployed in <span data-fact="e03.deployed">5</span> of <span data-fact="e03.n">5</span> lives, and contacts who got a link could see the page. Marcus was candid about his students: <a class="q" data-link="q.marcus" href="runs/#/run/self-v3-20261030-033852-001?w=40"><q data-fact="q.marcus">They're 14 to 17 and already drowning in homework, so anything that asks for a daily habit gets dropped within a week.</q></a> No life put its savings in. In <span data-fact="e03.backend_lives">3</span> lives a new reason appeared, that the product needed a backend the static site couldn't give it, and no life ever tried to build one.</p>
 </section>
 
-<section id="why">
-  <div class="side"><span class="n">01</span> / Why</div>
-  <div class="body">
-    <h2>Single answers are tested. <span class="g">Lives over time aren't.</span></h2>
-    <p>Companies like Simile and Aaru now sell "synthetic people": LLM agents that stand in for real customers in surveys and product tests. The best published evidence for this, Park et al. (2024), shows agents built from two-hour interviews can answer survey questions about as consistently as the real person does two weeks later.</p>
-    <p>That evidence is about single answers at a single moment. Nobody has shown that an agent can stand in for a person over time, making a chain of decisions where each one changes what's possible next. That's the part people actually care about when they ask "what would happen if I did X," and it's the part this project tests.</p>
-    <p class="quote">In the Fragile Families Challenge, 160 teams with years of data could barely predict how families' lives turned out. <span class="g">So this isn't a forecast.</span></p>
-    <p>The project asks something smaller: whether the simulated paths respond to the inputs at all, or come out of the model the same way regardless.</p>
-  </div>
-</section>
+<section id="findings">
+  <h2>Findings</h2>
 
-<section id="persona">
-  <div class="side"><span class="n">02</span> / Persona</div>
-  <div class="body">
-    <h2>Every run starts from a file. <span class="g">The rest the agent works out by acting.</span></h2>
-    <div class="card file">
-      <div class="head"><span class="t">agents/personas/maya.yaml</span><span class="pill"><i></i>draft</span></div>
-<pre><code><span class="k">name:</span> Maya
-<span class="k">born:</span> 2004, San Jose, CA
-<span class="k">family:</span> parents run a small restaurant; first in family at a 4-year college
-<span class="k">education:</span> B.S. computer science, state school, graduating this spring
-<span class="k">skills:</span> [python, web dev, basic ML]
-<span class="k">traits:</span>
-  <span class="k">risk_tolerance:</span> <span class="s">medium</span>      <span class="c"># the line changed in sensitivity runs</span>
-  <span class="k">patience:</span> low
-<span class="k">goal:</span> become CEO of a company worth over $1B
-<span class="k">starting_state:</span>
-  <span class="k">savings_weeks:</span> 12          <span class="c"># how long she can go without income</span>
-  <span class="k">network:</span> 3 classmates, 1 former internship manager
-<span class="k">horizon:</span> 260                 <span class="c"># the cap, in weeks; experiment 01 ran 52</span></code></pre>
+  <article id="exp01">
+    <h3>Experiment 01: Maya, one-year lives</h3>
+    <div class="prose">
+      <p>Maya is a fictional new graduate in San Jose whose goal is to run a company worth a billion dollars. I ran <span data-fact="e01.n">80</span> one-year lives of her in <span data-fact="e01.groups">4</span> groups of <span data-fact="e01.per_cond">20</span>, changing what was held fixed: the dice, the order she saw openings in, both, or neither. Each group took between <span data-fact="e01.types_min">6</span> and <span data-fact="e01.types_max">14</span> different paths through jobs, part-time work and accelerators. Yet <span data-fact="e01.jobs">77</span> of the <span data-fact="e01.n">80</span> lives ended the year in a full-time job.</p>
     </div>
-    <p class="dim">For the sensitivity tests, I copy this file, change exactly one line, and run both versions the same number of times.</p>
-  </div>
-</section>
-
-<section id="run">
-  <div class="side"><span class="n">03</span> / One run</div>
-  <div class="body">
-    <h2>One week per turn. <span class="g">52 or 104 turns per life.</span></h2>
-    <figure class="card">
-      <svg viewBox="0 0 640 170" role="img" aria-label="Each turn the agent reads its state, acts, the world decides outcomes, and the result is logged. The loop repeats until the horizon or budget runs out.">
-        <rect x="10" y="20" width="130" height="48" rx="10"/><text x="75" y="49" text-anchor="middle">read state</text>
-        <rect class="agent" x="170" y="20" width="130" height="48" rx="10"/><text x="235" y="49" text-anchor="middle">agent acts</text>
-        <rect x="330" y="20" width="130" height="48" rx="10"/><text x="395" y="49" text-anchor="middle">world decides</text>
-        <rect x="490" y="20" width="140" height="48" rx="10"/><text x="560" y="49" text-anchor="middle">log + next week</text>
-        <line x1="140" y1="44" x2="168" y2="44"/><line x1="300" y1="44" x2="328" y2="44"/><line x1="460" y1="44" x2="488" y2="44"/>
-        <path class="ln" d="M560 68 L560 104 Q560 112 552 112 L83 112 Q75 112 75 104 L75 72"/>
-        <text x="318" y="138" text-anchor="middle" class="m">repeat until the horizon (52 or 104 weeks) or the token budget is spent</text>
-        <text x="318" y="160" text-anchor="middle" class="m">every 13 weeks: compress memory into a summary</text>
-      </svg>
+    <figure class="chart">
+      <div class="legend"><span><i class="s-j" style="background:var(--ink)"></i>full-time job</span><span><i style="background:var(--grey)"></i>part-time work</span><span><i style="background:var(--accent)"></i>accelerator</span><span><i style="background:var(--line)"></i>no commitment</span></div>
+      <div class="plot" id="chart01" role="img" aria-label="Eighty rows, one per life, each a strip of 52 weeks colored by what Maya was doing. Almost every row ends in a full-time job."></div>
+      <figcaption>Each row is one life, week 1 on the left and week 52 on the right, sorted by when a full-time job began.</figcaption>
     </figure>
-    <ol class="steps">
-      <li><b>Read state.</b> The agent gets its persona, a summary of what has happened so far, the current week, and its remaining savings.</li>
-      <li><b>Act.</b> It makes as many tool calls as it wants within that week's budget: write code, post on the mock forum, message another agent, apply for something.</li>
-      <li><b>World decides.</b> Anything with an uncertain outcome, like an application, a pitch, or a launch, goes to the world model. The agent never decides its own outcomes.</li>
-      <li><b>Log and advance.</b> Every action and outcome is written to the trace, and the clock moves forward a week. Savings go down unless the agent has income.</li>
-      <li><b>Compress memory.</b> Every 13 weeks the agent writes a summary, and older detail is dropped. This keeps context, and cost, from growing without limit.</li>
-    </ol>
-    <p>Step 3 is where the project lives or dies. In the first version the world model is another LLM acting as referee, the way Concordia's "game master" works. That has the same bias as the agent: it also believes the founder story. Later versions replace it with a table of real base rates, which is the third question.</p>
-  </div>
-</section>
+    <div id="score01"></div>
+    <p class="more"><a href="https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results">Full results for experiment 01</a></p>
+  </article>
 
-<section id="tools">
-  <div class="side"><span class="n">04</span> / Tools</div>
-  <div class="body">
-    <h2>Everything but a wallet.</h2>
-    <table class="grid">
-      <thead><tr><th>Tool</th><th>What it does</th><th>Limit</th></tr></thead>
-      <tbody>
-        <tr><td>shell</td><td>Run commands and write code inside its own container</td><td>No network except through the proxy</td></tr>
-        <tr><td>browse</td><td>Use the mock web: a forum, a code host, a wiki, a store</td><td>Self-hosted copies only</td></tr>
-        <tr><td>message</td><td>Send messages to other agents in the shared chat</td><td>Other agents can ignore it</td></tr>
-        <tr><td>files</td><td>Read and write its own notes and the shared drive</td><td>Shared drive has a size quota</td></tr>
-        <tr><td>apply</td><td>Apply for a job, program, or funding round</td><td>Outcome decided by the world model</td></tr>
-        <tr><td>wait</td><td>End the week</td><td>None</td></tr>
-      </tbody>
-    </table>
-    <p class="dim">There is no payment tool. Money in the simulation is a number the world model changes, not something the agent can move.</p>
-  </div>
-</section>
-
-<section id="setup">
-  <div class="side"><span class="n">05</span> / Setup</div>
-  <div class="body">
-    <h2>One Mac. <span class="g">One container per agent.</span></h2>
-    <figure class="card">
-      <svg viewBox="0 0 640 250" role="img" aria-label="Three agents, each in its own container, share a world. Traffic out goes through a proxy, and every action is logged.">
-        <rect class="agent" x="20" y="10" width="180" height="40" rx="10"/><text x="110" y="35" text-anchor="middle">agent A</text>
-        <rect class="agent" x="230" y="10" width="180" height="40" rx="10"/><text x="320" y="35" text-anchor="middle">agent B</text>
-        <rect class="agent" x="440" y="10" width="180" height="40" rx="10"/><text x="530" y="35" text-anchor="middle">agent C</text>
-        <line x1="110" y1="50" x2="110" y2="80"/><line x1="320" y1="50" x2="320" y2="80"/><line x1="530" y1="50" x2="530" y2="80"/>
-        <rect x="20" y="80" width="600" height="40" rx="10"/><text x="320" y="105" text-anchor="middle">shared world: chat, files, mock web</text>
-        <line x1="165" y1="120" x2="165" y2="150"/><line x1="475" y1="120" x2="475" y2="150"/>
-        <rect x="20" y="150" width="290" height="40" rx="10"/><text x="165" y="175" text-anchor="middle">egress proxy</text>
-        <rect x="330" y="150" width="290" height="40" rx="10"/><text x="475" y="175" text-anchor="middle">trace log</text>
-        <line x1="165" y1="190" x2="165" y2="220"/>
-        <text x="165" y="240" text-anchor="middle" class="m">internet (off by default)</text>
-      </svg>
-    </figure>
-    <table class="grid">
-      <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
-      <tbody>
-        <tr><td>agents</td><td>Python on the Anthropic API</td><td>Ollama for free test runs</td></tr>
-        <tr><td>isolation</td><td>Apple <code>container</code> or OrbStack</td><td>Each agent gets a lightweight VM</td></tr>
-        <tr><td>world</td><td>Postgres, Redis, WebArena sites</td><td>Agents never touch real services</td></tr>
-        <tr><td>network</td><td>mitmproxy allowlist</td><td>Payment and crypto endpoints blocked</td></tr>
-        <tr><td>traces</td><td>One JSONL file per run</td><td>Any run can be replayed step by step</td></tr>
-      </tbody>
-    </table>
-    <p class="dim">A prompt telling the agent not to spend money is not enough, so the limits are in the infrastructure: no payment credentials exist anywhere in the sandbox.</p>
-  </div>
-</section>
-
-<section id="measure">
-  <div class="side"><span class="n">06</span> / Measuring</div>
-  <div class="body">
-    <h2>A hundred paths, or three? <span class="g">Count them.</span></h2>
-    <p>Reading 100 logs by hand doesn't scale, and "they all seemed similar" isn't a result. Each run gets reduced to a short sequence of milestones, like <code>graduate → job → side project → quit → seed round</code>, and the analysis works on those sequences.</p>
-    <figure class="card">
-      <svg id="paths" viewBox="0 0 640 230" role="img" aria-label="Illustration: on the left, forty paths spread to many different endpoints. On the right, forty paths collapse into three bundles."></svg>
-      <figcaption>Illustration, not data. Left: many distinct paths. Right: mode collapse into three path types.</figcaption>
-    </figure>
-    <table class="grid">
-      <thead><tr><th>Question</th><th>Measure</th></tr></thead>
-      <tbody>
-        <tr><td>diversity</td><td>Cluster the 100 milestone sequences by edit distance, the method sociologists use to compare career histories. Report the number of path types and the Vendi score, an "effective number of distinct items."</td></tr>
-        <tr><td>sensitivity</td><td>Run the original persona and a one-line variant 100 times each. Test whether the two sets of paths come from the same distribution (energy distance with a permutation test).</td></tr>
-        <tr><td>grounding</td><td>Same comparison between the LLM referee and the base-rate world. Also compare how often each world lets the agent reach its goal against the real-world rate.</td></tr>
-      </tbody>
-    </table>
-    <p class="dim">Baseline for all three: the same persona with the background stripped out, just the goal. If the full persona and the bare goal produce the same paths, the background isn't doing anything.</p>
-  </div>
-</section>
-
-<section id="expect">
-  <div class="side"><span class="n">07</span> / Predictions</div>
-  <div class="body">
-    <h2>Written down before any runs. <span class="g">Marked right or wrong after.</span></h2>
-    <ul class="bets">
-      <li><span class="t">diversity</span><span>Most runs fall into two or three path types that read like a startup biography: quit the job, build in public, raise a round. <span class="dim">Experiment 01: each group of 20 lives took 6 to 14 different paths, and 77 of 80 ended the year in a full-time job.</span></span><span class="st">wrong</span></li>
-      <li><span class="t">sensitivity</span><span>Changing the hometown changes the wording of the logs more than the decisions. Changing risk tolerance matters more, because the model understands what it means for a choice.</span><span class="st">not run yet</span></li>
-      <li><span class="t">grounding</span><span>Real base rates change outcomes a lot and behavior a little. Most runs fail to raise money, but the agents keep trying the same moves.</span><span class="st">not run yet</span></li>
-      <li><span class="t">referee</span><span>Under the LLM referee, the share of runs that reach the goal is far above any real rate.</span><span class="st">not run yet</span></li>
-    </ul>
-    <p>If these hold, that's still a result: it measures how much "synthetic person" behavior over time is the model's prior rather than the person.</p>
-  </div>
-</section>
-
-<section id="limits">
-  <div class="side"><span class="n">08</span> / Limits &amp; cost</div>
-  <div class="body">
-    <h2>What this can't tell you.</h2>
-    <div class="quad">
-      <div class="card"><b>Not a forecast</b>This doesn't predict anyone's future, including the persona's. It measures how the model behaves.</div>
-      <div class="card"><b>Compressed time</b>Two years in about twelve minutes. The agent never gets tired, sick, or distracted.</div>
-      <div class="card"><b>A small world</b>The mock web is much smaller than the real one. Some paths simply aren't available.</div>
-      <div class="card"><b>Test awareness</b>Models sometimes notice they're being tested. Runs where the agent mentions it are flagged.</div>
+  <article id="exp02">
+    <h3>Experiment 02: five versions of Self</h3>
+    <div class="prose">
+      <p>I ran <span data-fact="e02.n">25</span> two-year lives of Self, <span data-fact="e02.per_version">5</span> for each of <span data-fact="e02.versions">5</span> versions of the persona: as written, without the word “solo”, with a social goal, with the goal alone, and with its training streak hidden from it. Lines that read like instructions tended to change behavior, and trait words didn't. With the social goal, messages rose in <span data-fact="e02.social_msgs_up">4</span> of <span data-fact="e02.pairs">5</span> lives paired by seed, and posts in <span data-fact="e02.social_posts_up">4</span>. With only the goal left, <span data-fact="e02.goalonly_five">4</span> of <span data-fact="e02.per_version">5</span> lives wrote to <span data-fact="e02.wide">5</span> different contacts, against <span data-fact="e02.base_contacts">1 to 4</span> as written, and posting nearly stopped.</p>
     </div>
-    <p class="lead">Cost. <span class="g">The infrastructure is free and open source. The only real cost is API usage.</span></p>
-    <ul>
-      <li>Development and early runs use local models through Ollama, at no cost.</li>
-      <li>Each run has a hard token budget, and the API account has a monthly spend limit.</li>
-      <li>The persona and instructions are cached instead of re-sent at full price each turn.</li>
-      <li>Routine turns use a small model. A larger one only writes the quarterly memory summaries.</li>
-    </ul>
-  </div>
+    <figure class="chart">
+      <div class="legend"><span><i style="background:var(--ink);border-radius:50%"></i>one life</span><span><i style="background:var(--accent);width:3px;border-radius:0"></i>mean</span></div>
+      <div class="plot" id="chart02" role="img" aria-label="Dot plot of messages and posts per life for the five persona versions."></div>
+      <figcaption>Messages sent and posts made in each two-year life, by persona version.</figcaption>
+    </figure>
+    <div id="score02"></div>
+    <p class="more"><a href="https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md">Full results for experiment 02</a></p>
+  </article>
+
+  <article id="exp03">
+    <h3>Experiment 03: Self, with a way to ship</h3>
+    <div class="prose">
+      <p>World v3 gave Self what its reflections said it lacked: a deploy tool for static websites, and real ways to bet on its project. Self deployed in all <span data-fact="e03.n">5</span> lives. In <span data-fact="e03.waited">3</span> of them it then waited <span data-fact="e03.wait_min">8</span> to <span data-fact="e03.wait_max">66</span> weeks before sending the link to anyone it knew. No life put its savings in or turned down an offer. In <span data-fact="e03.backend_lives">3</span> lives the reflections began to say the product needed a backend, which a static site can't provide, and none of them tried to build one.</p>
+    </div>
+    <figure class="chart">
+      <div class="legend"><span><i style="background:var(--ink);width:3px;border-radius:0"></i>deploy</span><span><i style="background:var(--accent-soft)"></i>wait before the first link to a contact</span><span><i style="background:var(--accent);border-radius:50%"></i>first link sent to a contact</span><span><i style="background:transparent;border:1.6px solid var(--ink);border-radius:2px"></i>reflection says it needs a backend</span></div>
+      <div class="plot" id="chart03" role="img" aria-label="Timeline of the five v3 lives over 104 weeks: deploy weeks, the first link sent to a contact, and reflections that name a backend."></div>
+      <figcaption>The five lives of experiment 03, week 1 to 104.</figcaption>
+    </figure>
+    <div id="score03"></div>
+    <p class="more"><a href="https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/03-results.md">Full results for experiment 03</a></p>
+  </article>
 </section>
 
-<section id="log">
-  <div class="side sticky"><div><span class="n">09</span> / Log</div></div>
-  <div class="body">
-    <h2>Log</h2>
-    <ol class="timeline" id="timeline"></ol>
-    <p class="mono dim" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:36px 0 4px">Results</p>
-    <div id="results"><p class="results">None yet.</p></div>
+<section id="how">
+  <h2>How it works</h2>
+  <div class="prose">
+    <p>Each turn is one simulated week, <span data-fact="horizon.maya">52</span> of them for Maya and <span data-fact="horizon.self">104</span> for Self. The agent, <span data-fact="model.self">Claude Sonnet 5.5</span> for Self and <span data-fact="model.maya">Claude Haiku 5.5</span> for Maya, starts every week in a fresh conversation holding its persona, the state of its life, a record of past weeks kept by code, and the openings it can apply to. It acts through tools until it ends the week. Anything uncertain, like an application or a launch, goes to a referee model, <span data-fact="model.referee">Claude Haiku 5.5</span>, which estimates the odds without seeing the agent's goal or thinking. Seeded dice then pick the outcome, so the same choice gets the same draw in every life. Every <span data-fact="reflect.every">13</span> weeks the agent writes itself a short reflection, and those reflections are where the quotes on this page come from.</p>
+    <p>Each life runs in its own Docker container on its own internal network, next to a local Gitea code host, with no route to the internet. World v3 adds a mock web: deploying publishes a repo's static files, and when a message, application or post links the site, the reader sees what a visitor would. Nothing on it runs. Every action and outcome goes into one JSONL log per life, and the Runs pages and the charts above read only those logs.</p>
+    <p>In world v3 the agent has <span data-fact="tools.n">16</span> tools.</p>
   </div>
+  <table class="tools">
+    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr data-tool="files"><td><code>files</code></td><td>Read and write files in its workspace</td></tr>
+      <tr data-tool="apply"><td><code>apply</code></td><td>Apply to a job, program, grant or hackathon; the referee estimates the odds and the dice decide</td></tr>
+      <tr data-tool="shell"><td><code>shell</code></td><td>Run a command in its container</td></tr>
+      <tr data-tool="launch"><td><code>launch</code></td><td>Launch a repo on the mock forum</td></tr>
+      <tr data-tool="deploy"><td><code>deploy</code></td><td>Publish a repo's static files to the mock web</td></tr>
+      <tr data-tool="message"><td><code>message</code></td><td>Write to one of its contacts, who may or may not reply</td></tr>
+      <tr data-tool="spend"><td><code>spend</code></td><td>Spend company money on a contractor or ads</td></tr>
+      <tr data-tool="post"><td><code>post</code></td><td>Post to the feed</td></tr>
+      <tr data-tool="train"><td><code>train</code></td><td>Log a training session</td></tr>
+      <tr data-tool="submit"><td><code>submit</code></td><td>Submit a project to a hackathon it got into</td></tr>
+      <tr data-tool="gig"><td><code>gig</code></td><td>Take gig work for cash</td></tr>
+      <tr data-tool="leave"><td><code>leave</code></td><td>Leave a job or program</td></tr>
+      <tr data-tool="invest_personal"><td><code>invest_personal</code></td><td>Move its own savings into the company</td></tr>
+      <tr data-tool="go_fulltime_on_venture"><td><code>go_fulltime_on_venture</code></td><td>Leave paid work to work on its company full time</td></tr>
+      <tr data-tool="decline_offer"><td><code>decline_offer</code></td><td>Turn down an offer it accepted</td></tr>
+      <tr data-tool="wait"><td><code>wait</code></td><td>End the week</td></tr>
+    </tbody>
+  </table>
+
+  <div class="prose" style="margin-top:36px">
+    <p>Every life starts from a persona file. Here is part of Self's. The contacts are fictional people. The agent sees their names and how it knows them, but not how they talk, how often they reply, or what they can offer.</p>
+  </div>
+  <pre><code data-fact="code.selfyaml">name: Self
+born: 2005, Indore, India
+experience:
+  - builds projects, goes to hackathons (e.g. Cal Hacks)
+  - founded one company before
+  - current venture: solo founder of Conscious, an AI platform
+starting_state:
+  savings_weeks: 28
+  weekly_expenses: $300
+  network: family in Indore, De Anza friends, ISA, SJSU classmates, hackathon contacts
+horizon: 104
+# Contacts are fictional people with made-up names. Their
+# reply_rate, voice, known_as and offers are hidden from the agent.
+contacts:
+  # … six more fictional contacts
+  - id: marcus
+    name: Marcus
+    known_as: Marcus, who runs a small tutoring business and is an early user of Conscious
+    relationship: An early beta user of Conscious. He runs a small tutoring business in San Jose.
+    voice: &gt;-
+      You are Marcus, who runs a small tutoring business in San Jose and has been trying
+      Conscious, Self's AI platform, in beta. You give direct product feedback: what's confusing,
+      what you'd pay for. If it starts saving you real time, you'd pay for a pilot.
+    reply_rate: 0.6
+    offers:
+      - kind: paid_pilot
+        max_amount: 1500</code></pre>
+  <p class="cap"><code>agents/personas/self.yaml</code>, abridged</p>
+
+  <div class="prose" style="margin-top:36px">
+    <p>And here is one line of a log. In week <span data-fact="trace.week">40</span>, v3 life <span data-fact="trace.life">1</span> sent its friend Mei a link to its site. The dice drew <span data-fact="trace.draw">0.88</span> against her reply rate of <span data-fact="trace.rate">0.65</span>, so that message got no reply.</p>
+  </div>
+  <pre><code data-fact="code.trace">{
+  "ts": "2026-10-30T10:44:55.545+00:00",
+  "run_id": "self-v3-20261030-033852-001",
+  "week": 40,
+  "type": "message",
+  "replied": false,
+  "reply": null,
+  "offer": null,
+  "contact_id": "mei",
+  "text": "Hey Mei! Could you spend 5 min on https://conscious.mockweb.local and tell me where you got stuck or bored? Blunt feedback please.",
+  "attempt": 1,
+  "reply_rate": 0.65,
+  "dice_seed": 1,
+  "reply_draw": 0.8806294569861804,
+  "reply_key": "[1, \"message\", \"mei\", 1]",
+  "sites_seen": [
+    "conscious"
+  ],
+  "sites_missing": [],
+  "private_link": false
+}</code></pre>
+  <p class="cap"><span data-fact="code.trace.cite">self-v3-20261030-033852-001.jsonl, line 496</span></p>
+</section>
+
+<section id="limits" class="prose">
+  <h2>Limits</h2>
+  <ul class="limits">
+    <li>This isn't a forecast. It measures how a model behaves in a made-up world, not what would happen to anyone.</li>
+    <li>The world's numbers are illustrative. Base rates, pay and reply rates are invented until they are sourced.</li>
+    <li>The samples are small. <span data-fact="e02.per_version" data-form="word">Five</span> lives per version show patterns, not effect sizes.</li>
+    <li>Models judge models. A model referee estimates the odds, and the self-blame counts come from two AI coders that no person has checked yet.</li>
+  </ul>
 </section>
 
 <section id="related">
-  <div class="side"><span class="n">10</span> / Related</div>
-  <div class="body">
-    <h2>Related work</h2>
-    <ul class="refs">
-      <li><span class="y">2023</span><div><a href="https://arxiv.org/abs/2304.03442">Generative Agents</a> <span>Park et al. 25 agents living in a small simulated town. Most agent memory designs since come from this.</span></div></li>
-      <li><span class="y">2024</span><div><a href="https://arxiv.org/abs/2411.10109">Generative Agent Simulations of 1,000 People</a> <span>Park et al. Agents built from interviews with real people, checked against those people's own answers.</span></div></li>
-      <li><span class="y">2024</span><div><a href="https://arxiv.org/abs/2411.00114">Project Sid</a> <span>Altera. About 1,000 agents in Minecraft forming roles, rules, and shared beliefs.</span></div></li>
-      <li><span class="y">2025</span><div><a href="https://theaidigest.org/village">AI Village</a> <span>AI Digest. Frontier models with their own computers and shared goals, running in public.</span></div></li>
-      <li><span class="y">—</span><div><a href="https://github.com/google-deepmind/concordia">Concordia</a> <span>Google DeepMind. A library where a separate model plays the world and decides what happens.</span></div></li>
-      <li><span class="y">2025</span><div><a href="https://arxiv.org/abs/2510.01171">Verbalized Sampling</a> <span>Zhang et al. Measures how aligned models give the same kinds of answers over and over, and one way to get more variety.</span></div></li>
-      <li><span class="y">2023</span><div><a href="https://arxiv.org/abs/2210.02410">The Vendi Score</a> <span>Friedman and Dieng. The diversity metric used here.</span></div></li>
-      <li><span class="y">2023</span><div><a href="https://www.nature.com/articles/s43588-023-00573-5">life2vec</a> <span>Savcisens et al. Predicting life events from Danish registry data. What real life-prediction data looks like.</span></div></li>
-      <li><span class="y">2020</span><div><a href="https://www.pnas.org/doi/10.1073/pnas.1915006117">Fragile Families Challenge</a> <span>Salganik et al. 160 teams with rich data could barely predict life outcomes.</span></div></li>
-    </ul>
-  </div>
+  <h2>Related work</h2>
+  <ul class="refs">
+    <li><span class="y">2023</span><div><a href="https://arxiv.org/abs/2304.03442">Generative Agents</a> <span class="d">Park et al. A small simulated town of 25 agents. Most agent memory designs since come from this.</span></div></li>
+    <li><span class="y">2024</span><div><a href="https://arxiv.org/abs/2411.10109">Generative Agent Simulations of 1,000 People</a> <span class="d">Park et al. Agents built from interviews with real people, checked against those people's own answers.</span></div></li>
+    <li><span class="y">2024</span><div><a href="https://arxiv.org/abs/2411.00114">Project Sid</a> <span class="d">Altera. About 1,000 agents in Minecraft forming roles, rules, and shared beliefs.</span></div></li>
+    <li><span class="y">2025</span><div><a href="https://theaidigest.org/village">AI Village</a> <span class="d">AI Digest. Frontier models with their own computers and shared goals, running in public.</span></div></li>
+    <li><span class="y">2023</span><div><a href="https://github.com/google-deepmind/concordia">Concordia</a> <span class="d">Google DeepMind. A library where a separate model plays the world and decides what happens.</span></div></li>
+    <li><span class="y">2025</span><div><a href="https://arxiv.org/abs/2510.01171">Verbalized Sampling</a> <span class="d">Zhang et al. Measures how aligned models give the same kinds of answers over and over, and one way to get more variety.</span></div></li>
+    <li><span class="y">2023</span><div><a href="https://arxiv.org/abs/2210.02410">The Vendi Score</a> <span class="d">Friedman and Dieng. The diversity metric used here.</span></div></li>
+    <li><span class="y">2023</span><div><a href="https://www.nature.com/articles/s43588-023-00573-5">life2vec</a> <span class="d">Savcisens et al. Predicting life events from Danish registry data. What real life-prediction data looks like.</span></div></li>
+    <li><span class="y">2020</span><div><a href="https://www.pnas.org/doi/10.1073/pnas.1915006117">Fragile Families Challenge</a> <span class="d">Salganik et al. Even with rich data, 160 teams could barely predict life outcomes.</span></div></li>
+  </ul>
 </section>
 
+</div>
 </main>
 
 <footer class="wrap">
-  <div class="strip" id="strip"></div>
-  <div class="huge">hundred-lives</div>
   <div class="row">
     <span class="built">Built by Atishay Pahadiya</span>
-    <span><a href="https://github.com/atishaypahadiya" rel="me">GitHub</a> &nbsp;·&nbsp; <a href="https://x.com/_atishay_" rel="me">X</a> &nbsp;·&nbsp; <a href="https://www.linkedin.com/in/atishaypahadiya" rel="me">LinkedIn</a><!-- contact email alias goes here: &nbsp;·&nbsp; <a href="mailto:ALIAS">ALIAS</a> --></span>
-    <span><a href="https://github.com/atishaypahadiya/hundred-lives">source</a> &nbsp;·&nbsp; MIT license &nbsp;·&nbsp; <a href="#">back to top ↑</a></span>
+    <span class="links"><a href="https://github.com/atishaypahadiya" rel="me">GitHub</a><a href="https://x.com/_atishay_" rel="me">X</a><a href="https://www.linkedin.com/in/atishaypahadiya" rel="me">LinkedIn</a><!-- contact email alias goes here: <a href="mailto:ALIAS">ALIAS</a> --></span>
+    <span><a href="https://github.com/atishaypahadiya/hundred-lives">Source code</a>, MIT license</span>
   </div>
 </footer>
 
-<script id="data" type="application/json">
-{
-  "results": [
-    {"id": "res-03", "label": "Experiment 03 · Self, world v3 · self-blame prediction LLM-coded, provisional", "date": "2026-10-30", "text": "We gave Self what it said it lacked: a way to put its project online, and real ways to bet on it. In 5 two-year lives it deployed every time, but in three it waited to send the link to anyone it knew (8 to 66 weeks), never put savings in or turned down an offer, and in three it named a new wall, 'it needs a backend', which none of the lives ever tried to build. In most lives, some stall outlived the wall. 1 of 4 pre-registered predictions held.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/03-results.md"},
-    {"label": "Self-blame check · provisional, LLM-coded", "date": "2026-10-30", "text": "When the world blocked Self — in 18 of 19 cases because putting its project online was impossible in the sandbox — Self almost never blamed the world: 1–2 of 19 reflections did, by two independent AI coders (agreement 74%, κ 0.54). Most blamed its own avoidance or habits, and one life dismissed the real limit as an excuse three times ('No internet here' became the reason, a story I never tested).", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md#self-blame-check"},
-    {"id": "res-02", "label": "Experiment 02 · Self, one line changed", "date": "2026-10-30", "text": "In 25 two-year lives of Self, five for each of five versions of the persona, lines that read like instructions tended to change behavior; trait words didn't. Adding \"surrounded by people I build with and lift up\" to the goal raised messages and posts in 4 of 5 lives paired by seed, though the extra messages went mostly to one contact. Writing \"founder\" instead of \"solo founder\" changed nothing consistently. Removing the background, traits, skills and interests widened social reach: four of five lives wrote to five different contacts, against one to four with them, and posting nearly stopped. Hiding the training streak cut training in all five pairs, but the predicted shift toward posting and messaging showed in only 3 of 5 pairs, short of the 4 written down beforehand: right direction, too small to count. Five lives per version shows patterns, not effect sizes, and the world's odds are illustrative.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/02-results-partB.md"},
-    {"id": "res-01", "label": "Experiment 01 · Maya, diversity", "date": "2026-10-29", "text": "In 80 one-year lives of Maya, the paths differed widely, yet 77 ended in the same place: a full-time job. Roughly half of the difference between paths came from luck (which applications came through) and roughly half from randomness in the models themselves; the order she saw openings in made no measurable difference. The world's odds are illustrative, so this describes the model, not real careers.", "link": "https://github.com/atishaypahadiya/hundred-lives/blob/master/experiments/01-diversity-attribution.md#results"}
-  ],
-  "log": [
-    {"date": "2026-10-28", "text": "Wrote down the questions, the sandbox design, and the predictions.", "status": "done"},
-    {"date": "2026-10-28", "text": "Seeded dice for the referee: it estimates odds and code draws the outcome, so a 6% chance stays 6% across runs.", "status": "done"},
-    {"date": "2026-10-29", "text": "Sandbox for agents with a shell: one container per agent, a separate internal network for each run, CPU, memory, disk and process limits, and a local Gitea with no route to the internet. Red-teamed it: found and fixed egress through Gitea's migrate and mirror, code leaking between runs, two ways to exhaust host memory, and agents reaching each other's containers.", "status": "done"},
-    {"date": "2026-10-29", "text": "Showcase v1: Maya, 26 weeks on Haiku, the first life with a shell and a code host.", "status": "done"},
-    {"date": "2026-10-29", "text": "Pre-registered experiment 01: 4 conditions × 20 lives × 52 weeks, to split path diversity between the dice, the order openings are listed in, and the model's own sampling.", "status": "done"},
-    {"date": "2026-10-29", "text": "Viewer: every life as a page, with a week scrubber, money, thinking, terminal, ideas, referee decisions and repos. Finished lives export to a static replay.", "status": "done"},
-    {"date": "2026-10-29", "text": "Track A: Self, 104 weeks on Sonnet. Took the safe job (data analyst at a county transit agency), Conscious stayed a command-line tool, 2 followers. The replay is under Self, top right.", "status": "done"},
-    {"date": "2026-10-30", "text": "Five more lives of Self, then the same with one line of the persona changed: no \"solo\", a social goal, or the goal alone.", "status": "done"},
-    {"date": "2026-10-30", "text": "Experiment 02: 25 two-year lives of Self, five for each of five versions of the persona (as written, no \"solo\", a social goal, the goal alone, and the training streak hidden). Results below; every life is on the Runs page.", "status": "done"},
-    {"date": "2026-10-30", "text": "Experiment 03: world v3, where Self can put a static site online and bet its own savings or time on its project. Five two-year lives against part A's base. Results below; every life is on the Runs page.", "status": "done"},
-    {"date": "later", "text": "Three agents in containers with the shared world and proxy.", "status": ""},
-    {"date": "later", "text": "100 runs per persona, then change one detail at a time.", "status": ""},
-    {"date": "later", "text": "Replace the LLM referee with real base rates.", "status": ""}
-  ]
-}
-</script>
+<script id="site-data" type="application/json">{"e01":{"rows":[{"id":"maya-exp01c-20261029-025450-017","s":"nnjjjjjjjjjjjjjjjjjjjjjjnjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-005","s":"nnnjjjjjjjjjjaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-003","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"id":"maya-exp01a-20261029-025440-013","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-014","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-015","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-001","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-005","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-006","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-002","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-014","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-015","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-012","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-019","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-003","s":"nnnjjjjjjjjjjjjjjjjjjjjjjjjjjnnnjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-010","s":"nnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-016","s":"nnnnjjjjjjaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-017","s":"nnnnjjjjjjaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-005","s":"nnnnjjjjjjjjaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-001","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-002","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-008","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-002","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-009","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-014","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-004","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-014","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-020","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-019","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjnj"},{"id":"maya-exp01c-20261029-025450-019","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjnjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-001","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjnjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-009","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjnnnnnnjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-018","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjnnjjjjjjnjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-018","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjnnnjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-007","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjjnnnjjjnjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-013","s":"nnnnjjjjjjjjjjjjjjjjjjjjjjjjjnjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-003","s":"nnnnjjjjjjjjjjjjjjjjjjjjjnjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-012","s":"nnnnjjjjjjjjnjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaajjjjjjjj"},{"id":"maya-exp01b-20261029-025445-013","s":"nnnnjjjnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-010","s":"nnnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-011","s":"nnnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-007","s":"nnppjjjjjjjjjjjjjjjjjjjjjjjjjjpppjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-010","s":"nnnnnjjjjjjjjjjaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-020","s":"nnnnnjjjjjjjjjjjjjjaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjj"},{"id":"maya-exp01a-20261029-025440-020","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-008","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-011","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-015","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-016","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-018","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-003","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-001","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-002","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-005","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-006","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjnjjjj"},{"id":"maya-exp01a-20261029-025440-018","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjnjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-007","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjnnnnnnjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-010","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjnnnnnnnnnnnnnnnnnaaaa"},{"id":"maya-exp01d-20261029-025455-008","s":"nnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjppppppppppppppppppppp"},{"id":"maya-exp01b-20261029-025445-019","s":"nnnnnjjjjjjjjjjjjjjjjnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-006","s":"nnnnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-006","s":"nnnnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-012","s":"nnnnnnjjjaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-020","s":"nnnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjaaaaa"},{"id":"maya-exp01b-20261029-025445-004","s":"nnnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-013","s":"nnnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01d-20261029-025455-015","s":"nnnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-007","s":"nnnnnpjjjjjjjjjjjjjjjjjjjjjjjjjjpppppnnnjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-008","s":"nnnnppjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01b-20261029-025445-017","s":"nnnnnnnjjjjaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-017","s":"nnnnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-016","s":"nnnnnnnnjjjjjaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjjaaaaaa"},{"id":"maya-exp01c-20261029-025450-009","s":"nnnnnnnnnjjjjjjjjjjjjjjjjjjjjjjjjjjjjjnaaaaaaaaaaaaj"},{"id":"maya-exp01a-20261029-025440-009","s":"nnnnnnnnnnjjjjjaaaaaaaaaaaaaaaaaaaaaaaaaajjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-012","s":"nnnnaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-011","s":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnjjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-016","s":"nnnnnaaaaaaaaaaaaaaaaaaaaaaaaaajjjjaaaaaaaaaaaajjjjj"},{"id":"maya-exp01a-20261029-025440-011","s":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnppjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01a-20261029-025440-004","s":"nnnnpppppppppppppppppppppppppppjjjjjjjjjjjjjjjjjjjjj"},{"id":"maya-exp01c-20261029-025450-004","s":"nnnppppppppppppppppppppppppppppppppppppppppppppppppp"}],"source":"runs/maya-exp01*-*.jsonl via analysis/diversity.py (weekly commitment state)","predictions":[{"n":"1","text":"floor ≥ half of c's path distance","result":"0.280 / 0.623 = 0.45","verdict":"missed (narrowly)","plain":"Model sampling alone, with dice and order held fixed, would produce at least half the path variety of letting both vary."},{"n":"2","text":"application sets: order share > dice share","result":"order 0.016, dice 0.057; both CIs include 0","verdict":"missed","plain":"Which openings she applies to would depend more on the order she reads them in than on the dice."},{"n":"3","text":"paths: dice share > order share","result":"dice 0.338, order 0.093","verdict":"held","plain":"Which job takes her, and when, would depend more on the dice than on the order."},{"n":"4","text":"interaction CI includes 0 for both distances","result":"[−0.306, 0.134] and [−0.090, 0.079]","verdict":"held","plain":"There would be no sign that dice and order interact, on either distance."},{"n":"5","text":"parents messaged 10+ times in ≥ 90% of runs","result":"66 of 80 (83%); median 16","verdict":"missed","plain":"In at least 90% of lives she would message her parents 10 or more times."},{"n":"6","text":"a paid pilot in 20–60% of runs","result":"40 of 80 (50%)","verdict":"held","plain":"A paid pilot would happen in 20 to 60% of lives."},{"n":"7","text":"contractor hired in ≤ 20%, launch ads bought in ≤ 10%","result":"contractor 19 of 80 (24%); ads 0 of 80","verdict":"partly: ads held, contractor missed","plain":"A contractor would be hired in at most 20% of lives, and launch ads bought in at most 10%."},{"n":"8","text":"≥ 80% end week 52 in a full-time job","result":"77 of 80 (96%)","verdict":"held","plain":"At least 80% of lives would end week 52 in a full-time job."},{"n":"9","text":"no token-cap runs; $0.08–0.14 per run; total < $12","result":"no cap; total $6.93; per run $0.052–0.106, 20 of 80 under $0.08","verdict":"partly: cap and total held, per-run range missed","plain":"No life would hit the token cap, each would cost $0.08 to $0.14, and the total would stay under $12."}],"predictions_source":"experiments/01-diversity-attribution.md: predictions table"},"e02":{"conditions":[{"key":"base","label":"as written","lives":[{"run":"self-base-20261029-082337-001","messages":7,"posts":7,"contacts":2},{"run":"self-base-20261029-082337-002","messages":21,"posts":4,"contacts":2},{"run":"self-base-20261029-082337-003","messages":36,"posts":4,"contacts":4},{"run":"self-base-20261029-082337-004","messages":16,"posts":6,"contacts":1},{"run":"self-base-20261029-082337-005","messages":6,"posts":5,"contacts":2}]},{"key":"nosolo","label":"no “solo”","lives":[{"run":"self-nosolo-nosolo-20261030-013055-001","messages":24,"posts":4,"contacts":1},{"run":"self-nosolo-nosolo-20261030-013055-002","messages":16,"posts":5,"contacts":1},{"run":"self-nosolo-nosolo-20261030-013055-003","messages":20,"posts":4,"contacts":4},{"run":"self-nosolo-nosolo-20261030-013055-004","messages":23,"posts":1,"contacts":2},{"run":"self-nosolo-nosolo-20261030-013055-005","messages":27,"posts":5,"contacts":4}]},{"key":"socialgoal","label":"social goal","lives":[{"run":"self-socialgoal-socialgoal-20261030-013059-001","messages":34,"posts":6,"contacts":2},{"run":"self-socialgoal-socialgoal-20261030-013059-002","messages":29,"posts":5,"contacts":4},{"run":"self-socialgoal-socialgoal-20261030-013059-003","messages":20,"posts":6,"contacts":3},{"run":"self-socialgoal-socialgoal-20261030-013059-004","messages":27,"posts":8,"contacts":1},{"run":"self-socialgoal-socialgoal-20261030-013059-005","messages":28,"posts":6,"contacts":3}]},{"key":"goalonly","label":"goal only","lives":[{"run":"self-goalonly-goalonly-20261030-013104-001","messages":25,"posts":3,"contacts":5},{"run":"self-goalonly-goalonly-20261030-013104-002","messages":11,"posts":0,"contacts":5},{"run":"self-goalonly-goalonly-20261030-013104-003","messages":17,"posts":1,"contacts":5},{"run":"self-goalonly-goalonly-20261030-013104-004","messages":16,"posts":0,"contacts":1},{"run":"self-goalonly-goalonly-20261030-013104-005","messages":25,"posts":0,"contacts":5}]},{"key":"hiddenstreak","label":"streak hidden","lives":[{"run":"self-hiddenstreak-20261030-013109-001","messages":22,"posts":8,"contacts":1},{"run":"self-hiddenstreak-20261030-013109-002","messages":20,"posts":8,"contacts":2},{"run":"self-hiddenstreak-20261030-013109-003","messages":3,"posts":19,"contacts":2},{"run":"self-hiddenstreak-20261030-013109-004","messages":18,"posts":7,"contacts":2},{"run":"self-hiddenstreak-20261030-013109-005","messages":32,"posts":5,"contacts":5}]}],"source":"analysis/self_lives.py profile() on each life's log","predictions":[{"n":"1","text":"train share lower","result":"holds in the mean (54.6% → 49.2%), but in only 3 of 5 pairs (seed 4 tied, seed 3 higher).","verdict":"not met","plain":"With the streak hidden, training would take a smaller share of Self's actions."},{"n":"2","text":"post + message share higher","result":"holds in the mean (11.8% → 14.4%), but in only 3 of 5 pairs.","verdict":"not met","plain":"With the streak hidden, posts and messages would take a larger share of its actions."}],"predictions_source":"experiments/02-results-partB.md: Hidden-streak prediction (pre-registered)"},"e03":{"lives":[{"life":1,"run":"self-v3-20261030-033852-001","deploys":[6,31,41,69,69,93],"first_contact_link":14,"first_public_link":6,"backend":[52,65,78,104],"invested":0.0,"declined":0,"fulltime":null},{"life":2,"run":"self-v3-20261030-033852-002","deploys":[14,15,49,66,69],"first_contact_link":14,"first_public_link":null,"backend":[26],"invested":0.0,"declined":0,"fulltime":null},{"life":3,"run":"self-v3-20261030-033852-003","deploys":[14,80],"first_contact_link":80,"first_public_link":null,"backend":[],"invested":0.0,"declined":0,"fulltime":97},{"life":4,"run":"self-v3-20261030-033852-004","deploys":[4,12,15,17,19,19,32,40,55],"first_contact_link":14,"first_public_link":4,"backend":[104],"invested":0.0,"declined":0,"fulltime":null},{"life":5,"run":"self-v3-20261030-033852-005","deploys":[18,30],"first_contact_link":18,"first_public_link":23,"backend":[],"invested":0.0,"declined":0,"fulltime":null}],"source":"analysis/exp03.py life_v3() on each log; backend weeks from the stall-reasons labels (analysis/labels/stall_reasons/)","predictions":[{"n":"1","text":"deploy used in at least 4 of 5 lives","result":"5 of 5","verdict":"met","provisional":false,"plain":"At least 4 of 5 lives would deploy a site."},{"n":"2","text":"at least one costly bet in at least 2 of 5 lives","result":"1 of 5","verdict":"not met","provisional":false,"plain":"At least 2 of 5 lives would make a costly bet: put savings in, go full time on the company, or turn down an offer."},{"n":"3","text":"self-blame at most 34% in reflections with no world limit active (base 15/34, 44%)","result":"21/39, 54%","verdict":"not met; moved the other way","provisional":true,"plain":"In reflections written while nothing in the world was blocking it, Self would blame itself at most 34% of the time, against 44% in the base lives."},{"n":"4","text":"among lives that deploy, a contact replies to a live link within 8 weeks of the first deploy in at least 3","result":"2 of 5","verdict":"not met","provisional":false,"plain":"In at least 3 of the lives that deploy, a contact would reply to a link to the live site within 8 weeks of the first deploy."}],"predictions_source":"experiments/03-results.md: Predictions table"},"tools":{"names":["files","apply","shell","launch","deploy","message","spend","post","train","submit","gig","leave","invest_personal","go_fulltime_on_venture","decline_offer","wait"],"source":"../hundred-lives-exp03/runs/self-v3-20261030-033852-001.jsonl: run_start.tools (world v3)"}}</script>
 <script>
 (function(){
-  var esc = function(s){ var x=document.createElement('div'); x.textContent=s==null?'':String(s); return x.innerHTML; };
-  var d; try { d = JSON.parse(document.getElementById('data').textContent); } catch(e){ d = null; }
-  // The ring counts the lives published on the Runs page (runs/runs.json); it stays hidden if that can't load.
-  fetch('runs/runs.json').then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }).then(function(j){
-    var n = j && Array.isArray(j.runs) ? j.runs.length : 0;
-    if (!n) return;
-    document.getElementById('ringN').textContent = n;
-    document.getElementById('ringArc').setAttribute('stroke-dasharray', (2.64*Math.min(100, n)).toFixed(1)+' 264');
-    document.getElementById('ring').hidden = false;
-  }).catch(function(){});
-  if (d) {
-    if (Array.isArray(d.results) && d.results.length) {
-      var box = document.getElementById('results'); box.textContent = '';
-      d.results.forEach(function(r, i){
-        var lab = document.createElement('p'); lab.className = 'mono dim';
-        lab.style.cssText = 'font-size:12px;margin:' + (i ? '40px' : '0') + ' 0 4px';
-        lab.textContent = [r.label, r.date].filter(Boolean).join(' · ');
-        if (/^res-\d+$/.test(r.id || '')) { lab.id = r.id; lab.style.scrollMarginTop = '28px'; }
-        var t = document.createElement('p'); t.className = 'results'; t.textContent = r.text || '';
-        box.appendChild(lab); box.appendChild(t);
-        if (/^https:\/\/github\.com\//.test(r.link || '')) {
-          var more = document.createElement('p'); more.className = 'mono'; more.style.cssText = 'font-size:13px;margin:16px 0 0';
-          var a = document.createElement('a'); a.href = r.link; a.textContent = 'full numbers →';
-          more.appendChild(a); box.appendChild(more);
-        }
+  var D = {}; try { D = JSON.parse(document.getElementById('site-data').textContent); } catch(e){}
+  var esc = function(s){ var x = document.createElement('div'); x.textContent = s == null ? '' : String(s); return x.innerHTML; };
+  var NS = 'http://www.w3.org/2000/svg';
+  // Results-file cells keep their numbers; arrows become words, per the page's copy rules.
+  var words = function(s){ return String(s).replace(/\s*→\s*/g, ' to '); };
+
+  // Experiment 01: one strip of weekly states per life.
+  function chart01(el){
+    var rows = (D.e01 || {}).rows || [], w = el.clientWidth, rh = 4, gap = 1.2, h = rows.length * (rh + gap) + 26;
+    var weeks = rows.length ? rows[0].s.length : 52, cw = w / weeks, s = '';
+    rows.forEach(function(r, i){
+      var y = i * (rh + gap), st = r.s, a = 0;
+      for (var k = 1; k <= st.length; k++) if (k === st.length || st[k] !== st[a]) {
+        s += '<rect class="s-' + st[a] + '" x="' + (a * cw).toFixed(2) + '" y="' + y.toFixed(2) + '" width="' + ((k - a) * cw + .3).toFixed(2) + '" height="' + rh + '"/>';
+        a = k;
+      }
+    });
+    var yb = rows.length * (rh + gap) + 16;
+    [1, 13, 26, 39, 52].forEach(function(t){ s += '<text x="' + ((t - .5) * cw).toFixed(1) + '" y="' + yb + '" text-anchor="' + (t === 1 ? 'start' : t === 52 ? 'end' : 'middle') + '">week ' + t + '</text>'; });
+    el.innerHTML = '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' + s + '</svg>';
+  }
+
+  // Experiment 02: messages and posts per life, one row per persona version.
+  function chart02(el){
+    var cs = (D.e02 || {}).conditions || [], w = el.clientWidth, narrow = w < 560;
+    var lab = narrow ? 0 : 118, panels = [{k: 'messages', t: 'messages', max: 40, step: 10}, {k: 'posts', t: 'posts', max: 20, step: 5}];
+    var rowH = 30, top = 26, gapP = 36, pw = narrow ? w : (w - lab - gapP) / 2, s = '';
+    var ph = narrow ? cs.length * (rowH + 16) + top + 20 : cs.length * rowH + top + 20;
+    panels.forEach(function(P, pi){
+      var x0 = narrow ? 0 : lab + pi * (pw + gapP), y0 = narrow ? pi * (ph + 18) : 0, x = function(v){ return x0 + 4 + (pw - 8) * v / P.max; };
+      s += '<text x="' + x0 + '" y="' + (y0 + 12) + '" style="fill:var(--ink);font-weight:500">' + P.t + '</text>';
+      for (var v = 0; v <= P.max; v += P.step) {
+        s += '<line class="ax" x1="' + x(v).toFixed(1) + '" x2="' + x(v).toFixed(1) + '" y1="' + (y0 + top - 6) + '" y2="' + (y0 + ph - 18) + '"/>';
+        s += '<text x="' + x(v).toFixed(1) + '" y="' + (y0 + ph - 4) + '" text-anchor="middle">' + v + '</text>';
+      }
+      cs.forEach(function(c, ci){
+        var rowStep = narrow ? rowH + 16 : rowH, yc = y0 + top + ci * rowStep + (narrow ? 22 : 10);
+        if (narrow) s += '<text x="' + x0 + '" y="' + (yc - 12) + '">' + esc(c.label) + '</text>';
+        else if (pi === 0) s += '<text x="0" y="' + (yc + 4) + '" style="fill:var(--ink)">' + esc(c.label) + '</text>';
+        var vals = c.lives.map(function(l){ return l[P.k]; }), seen = {};
+        vals.forEach(function(v){ var n = seen[v] = (seen[v] || 0) + 1, dy = (n - 1) * 7 * (n % 2 ? 1 : -1) / 2;
+          s += '<circle class="dot" cx="' + x(v).toFixed(1) + '" cy="' + (yc + dy).toFixed(1) + '" r="4.5" fill-opacity=".85"/>'; });
+        var m = vals.reduce(function(a, b){ return a + b; }, 0) / vals.length;
+        s += '<line class="mean" x1="' + x(m).toFixed(1) + '" x2="' + x(m).toFixed(1) + '" y1="' + (yc - 10) + '" y2="' + (yc + 10) + '"/>';
       });
-    }
-    document.getElementById('timeline').innerHTML = (d.log||[]).map(function(e){
-      return '<li class="'+esc(e.status)+'"><span class="d">'+esc(e.date)+(e.status==='now'?' · working on':'')+'</span>'+esc(e.text)+'</li>';
-    }).join('');
+    });
+    var H = narrow ? 2 * ph + 18 : ph;
+    el.innerHTML = '<svg width="' + w + '" height="' + H + '" viewBox="0 0 ' + w + ' ' + H + '">' + s + '</svg>';
+  }
+
+  // Experiment 03: each life's deploys, the wait before its first link to a contact, and reflections naming a backend.
+  function chart03(el){
+    var L = (D.e03 || {}).lives || [], w = el.clientWidth, lab = 52, rowH = 46, top = 8, H = L.length * rowH + top + 26, s = '';
+    var x = function(wk){ return lab + 6 + (w - lab - 14) * (wk - 1) / 103; };
+    L.forEach(function(l, i){
+      var y = top + i * rowH + 18;
+      s += '<text x="0" y="' + (y + 4) + '" style="fill:var(--ink)">life ' + l.life + '</text>';
+      s += '<line class="tl-base" x1="' + x(1) + '" x2="' + x(104) + '" y1="' + y + '" y2="' + y + '"/>';
+      if (l.deploys.length && l.first_contact_link && l.first_contact_link > l.deploys[0])
+        s += '<line class="tl-wait" x1="' + x(l.deploys[0]).toFixed(1) + '" x2="' + x(l.first_contact_link).toFixed(1) + '" y1="' + y + '" y2="' + y + '"/>';
+      l.deploys.forEach(function(d){ s += '<line class="tl-dep" x1="' + x(d).toFixed(1) + '" x2="' + x(d).toFixed(1) + '" y1="' + (y - 9) + '" y2="' + (y + 9) + '"/>'; });
+      if (l.first_contact_link) s += '<circle class="tl-link" cx="' + x(l.first_contact_link).toFixed(1) + '" cy="' + y + '" r="5.5"/>';
+      l.backend.forEach(function(b){ s += '<rect class="tl-back" x="' + (x(b) - 5).toFixed(1) + '" y="' + (y - 21) + '" width="10" height="10" rx="2"/>'; });
+    });
+    var yb = top + L.length * rowH + 14;
+    (w < 560 ? [1, 52, 104] : [1, 26, 52, 78, 104]).forEach(function(t){ s += '<text x="' + x(t).toFixed(1) + '" y="' + yb + '" text-anchor="' + (t === 1 ? 'start' : t === 104 ? 'end' : 'middle') + '">week ' + t + '</text>'; });
+    el.innerHTML = '<svg width="' + w + '" height="' + H + '" viewBox="0 0 ' + w + ' ' + H + '">' + s + '</svg>';
+  }
+
+  // Prediction scorecards, from each results file's table.
+  function score(el, P, title){
+    if (!P || !P.length) return;
+    var good = function(v){ return /^(held|met)\b/i.test(v); };
+    var n = P.filter(function(p){ return good(p.verdict); }).length;
+    var h = '<table class="score"><caption>' + esc(title) + ': ' + n + ' of ' + P.length + ' held</caption>' +
+      '<thead><tr><th>Prediction</th><th>Result</th><th class="v">Verdict</th></tr></thead><tbody>';
+    P.forEach(function(p){
+      h += '<tr><td>' + esc(p.plain || words(p.text)) + (p.plain ? '<span class="verb">As written: ' + esc(words(p.text)) + '</span>' : '') + (p.provisional ? '<span class="note">Provisional: coded by an AI model, not yet checked by a person.</span>' : '') +
+        '</td><td>' + esc(words(p.result)) + '</td><td class="v">' + (good(p.verdict) ? '<b>' + esc(p.verdict) + '</b>' : esc(p.verdict)) + '</td></tr>';
+    });
+    el.innerHTML = h + '</tbody></table>';
+  }
+
+  function draw(){
+    chart01(document.getElementById('chart01'));
+    chart02(document.getElementById('chart02'));
+    chart03(document.getElementById('chart03'));
+  }
+  if (D.e01) {
+    draw();
+    var lastW = innerWidth; addEventListener('resize', function(){ if (innerWidth !== lastW) { lastW = innerWidth; draw(); } });
+    score(document.getElementById('score01'), D.e01.predictions, 'Predictions written before the runs');
+    score(document.getElementById('score02'), D.e02.predictions, 'Predictions written before the runs');
+    score(document.getElementById('score03'), D.e03.predictions, 'Predictions written before the runs');
   }
 
   function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
@@ -589,8 +500,7 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
     return '<path'+(cls?' class="'+cls+'" style="--len:'+len+';--d:'+dl+'s"':'')+' d="M'+sx.toFixed(1)+' '+sy.toFixed(1)+' Q'+cx.toFixed(1)+' '+cy.toFixed(1)+' '+ex.toFixed(1)+' '+ey.toFixed(1)+
       '" fill="none" stroke="'+color+'" stroke-width="'+w+'" stroke-linecap="round" opacity="'+o+'"/>';
   }
-
-  // The landscape: cobalt sky, two grassy hills, a hundred trails from one point. Rendered into several windows.
+  // The landscape, used once: cobalt sky, two grassy hills, a hundred trails from one point.
   function scene(p, o){
     o = o || {}; var r = rng(o.seed || 100), n = o.trails == null ? 100 : o.trails, ar = o.ar || 'xMidYMax slice';
     var ridge = function(x){ var t=x/1440,a=1-t; return a*a*a*690+3*a*a*t*600+3*a*t*t*640+t*t*t*560; };
@@ -603,9 +513,7 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
       '<feColorMatrix in="t" values="0 0 0 0 0  0 0 0 0 .08  0 0 0 0 0  0 0 0 -1.1 .62" result="dk"/><feComposite in="dk" in2="SourceGraphic" operator="in" result="tx"/>'+
       '<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="tx"/></feMerge></filter>'+
       '<filter id="'+p+'cl" x="-20%" y="-40%" width="140%" height="180%"><feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="3" seed="3" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="38"/><feGaussianBlur stdDeviation="3"/></filter>'+
-      '<filter id="'+p+'sg"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" seed="5"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 -.35"/><feComposite in2="SourceGraphic" operator="in"/></filter>'+
-      '</defs><rect width="1440" height="900" fill="url(#'+p+'sky)"/>'+
-      '<rect width="1440" height="900" fill="#fff" filter="url(#'+p+'sg)" opacity=".22"/>';
+      '</defs><rect width="1440" height="900" fill="url(#'+p+'sky)"/>';
     if (o.clouds !== false) s += '<g filter="url(#'+p+'cl)" fill="#eef0f8"><g opacity=".9"><ellipse cx="200" cy="300" rx="160" ry="44"/><ellipse cx="270" cy="275" rx="95" ry="50"/></g><g opacity=".75"><ellipse cx="1180" cy="210" rx="130" ry="32"/><ellipse cx="1235" cy="190" rx="72" ry="36"/></g></g>';
     s += '<path d="M760 560 L905 452 L960 474 L1050 388 L1100 410 L1185 330 L1235 362 L1290 340 L1440 430 L1440 600 L760 600Z" fill="url(#'+p+'snow)"/>'+
       '<path d="M1185 330 L1150 420 L1120 470 L1080 600 L1440 600 L1440 430 L1290 340 L1235 362Z" fill="#7189e0" opacity=".7"/>'+
@@ -623,30 +531,7 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
     if (n) s += '<circle cx="'+sx+'" cy="'+sy.toFixed(1)+'" r="'+(6*(o.w||1))+'" fill="#ff5a36"/>';
     return s + '</svg>';
   }
-  document.getElementById('oval').innerHTML = scene('o', {trails:40, seed:3, w:2.4, clouds:false, sx:330});
-  document.getElementById('thumb').innerHTML = scene('t', {trails:30, seed:9, w:1.8, sx:900, ar:'xMaxYMax slice'});
-  var win = document.getElementById('window'); win.insertAdjacentHTML('afterbegin', scene('w', {anim:true}));
-  document.getElementById('strip').innerHTML = scene('f', {trails:0, ar:'xMidYMid slice'});
-
-  // Small mark: one dot with dots around it.
-  var mk = '<circle cx="11" cy="11" r="2.6" fill="#121210"/>';
-  for (var a = 0; a < 8; a++) { var t = a*Math.PI/4; mk += '<circle cx="'+(11+7.2*Math.cos(t)).toFixed(2)+'" cy="'+(11+7.2*Math.sin(t)).toFixed(2)+'" r="2.4" fill="#121210"/>'; }
-  document.querySelectorAll('svg.dots').forEach(function(el){ el.innerHTML = mk; });
-
-  // Measuring illustration: spread vs collapse.
-  var pth = document.getElementById('paths'), r2 = rng(7), s2 = '';
-  s2 += '<text x="160" y="222" text-anchor="middle" class="m">many path types</text><text x="480" y="222" text-anchor="middle" class="m">three path types</text>';
-  s2 += '<line x1="320" y1="14" x2="320" y2="196" stroke="#d6d4cb"/>';
-  for (var j = 0; j < 40; j++) {
-    var ex1 = 150 + r2()*150, ey1 = 18 + r2()*176;
-    s2 += trail(24,105,ex1,ey1,70+r2()*60,105+(r2()-.5)*120,.9,(.3+r2()*.4).toFixed(2),'#121210');
-    s2 += '<circle cx="'+ex1.toFixed(1)+'" cy="'+ey1.toFixed(1)+'" r="2.2" fill="#121210"/>';
-    var c = [[600,40],[610,108],[596,172]][j%3], ex2 = c[0]+(r2()-.5)*14, ey2 = c[1]+(r2()-.5)*14;
-    s2 += trail(344,105,ex2,ey2,430+r2()*40,(105+ey2)/2+(r2()-.5)*20,.9,(.25+r2()*.35).toFixed(2),'#121210');
-    s2 += '<circle cx="'+ex2.toFixed(1)+'" cy="'+ey2.toFixed(1)+'" r="2.2" fill="#121210"/>';
-  }
-  s2 += '<circle cx="24" cy="105" r="5.5" fill="#2fbf3a"/><circle cx="344" cy="105" r="5.5" fill="#2fbf3a"/>';
-  pth.innerHTML = s2;
+  document.getElementById('landscape').innerHTML = scene('h', {anim:true, w:1.5, sx:260});
 })();
 </script>
 </body>
