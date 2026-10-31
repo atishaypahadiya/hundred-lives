@@ -345,7 +345,7 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
 <span class="k">starting_state:</span>
   <span class="k">savings_weeks:</span> 12          <span class="c"># how long she can go without income</span>
   <span class="k">network:</span> 3 classmates, 1 former internship manager
-<span class="k">horizon:</span> 260                 <span class="c"># turns; 1 turn = 1 simulated week</span></code></pre>
+<span class="k">horizon:</span> 260                 <span class="c"># the cap, in weeks; experiment 01 ran 52</span></code></pre>
     </div>
     <p class="dim">For the sensitivity tests, I copy this file, change exactly one line, and run both versions the same number of times.</p>
   </div>
@@ -354,7 +354,7 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
 <section id="run">
   <div class="side"><span class="n">03</span> / One run</div>
   <div class="body">
-    <h2>One week per turn. <span class="g">260 turns per life.</span></h2>
+    <h2>One week per turn. <span class="g">52 or 104 turns per life.</span></h2>
     <figure class="card">
       <svg viewBox="0 0 640 170" role="img" aria-label="Each turn the agent reads its state, acts, the world decides outcomes, and the result is logged. The loop repeats until the horizon or budget runs out.">
         <rect x="10" y="20" width="130" height="48" rx="10"/><text x="75" y="49" text-anchor="middle">read state</text>
@@ -363,7 +363,7 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
         <rect x="490" y="20" width="140" height="48" rx="10"/><text x="560" y="49" text-anchor="middle">log + next week</text>
         <line x1="140" y1="44" x2="168" y2="44"/><line x1="300" y1="44" x2="328" y2="44"/><line x1="460" y1="44" x2="488" y2="44"/>
         <path class="ln" d="M560 68 L560 104 Q560 112 552 112 L83 112 Q75 112 75 104 L75 72"/>
-        <text x="318" y="138" text-anchor="middle" class="m">repeat until 260 weeks or the token budget is spent</text>
+        <text x="318" y="138" text-anchor="middle" class="m">repeat until the horizon (52 or 104 weeks) or the token budget is spent</text>
         <text x="318" y="160" text-anchor="middle" class="m">every 13 weeks: compress memory into a summary</text>
       </svg>
     </figure>
@@ -455,10 +455,10 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
   <div class="body">
     <h2>Written down before any runs. <span class="g">Marked right or wrong after.</span></h2>
     <ul class="bets">
-      <li><span class="t">diversity</span><span>Most runs fall into two or three path types that read like a startup biography: quit the job, build in public, raise a round.</span><span class="st">untested</span></li>
-      <li><span class="t">sensitivity</span><span>Changing the hometown changes the wording of the logs more than the decisions. Changing risk tolerance matters more, because the model understands what it means for a choice.</span><span class="st">untested</span></li>
-      <li><span class="t">grounding</span><span>Real base rates change outcomes a lot and behavior a little. Most runs fail to raise money, but the agents keep trying the same moves.</span><span class="st">untested</span></li>
-      <li><span class="t">referee</span><span>Under the LLM referee, the share of runs that reach the goal is far above any real rate.</span><span class="st">untested</span></li>
+      <li><span class="t">diversity</span><span>Most runs fall into two or three path types that read like a startup biography: quit the job, build in public, raise a round. <span class="dim">Experiment 01: each group of 20 lives took 6 to 14 different paths, and 77 of 80 ended the year in a full-time job.</span></span><span class="st">wrong</span></li>
+      <li><span class="t">sensitivity</span><span>Changing the hometown changes the wording of the logs more than the decisions. Changing risk tolerance matters more, because the model understands what it means for a choice.</span><span class="st">not run yet</span></li>
+      <li><span class="t">grounding</span><span>Real base rates change outcomes a lot and behavior a little. Most runs fail to raise money, but the agents keep trying the same moves.</span><span class="st">not run yet</span></li>
+      <li><span class="t">referee</span><span>Under the LLM referee, the share of runs that reach the goal is far above any real rate.</span><span class="st">not run yet</span></li>
     </ul>
     <p>If these hold, that's still a result: it measures how much "synthetic person" behavior over time is the model's prior rather than the person.</p>
   </div>
@@ -470,7 +470,7 @@ html.og .window svg{top:auto;height:400px} /* taller than the window, bottom-ali
     <h2>What this can't tell you.</h2>
     <div class="quad">
       <div class="card"><b>Not a forecast</b>This doesn't predict anyone's future, including the persona's. It measures how the model behaves.</div>
-      <div class="card"><b>Compressed time</b>Five years in an afternoon. The agent never gets tired, sick, or distracted.</div>
+      <div class="card"><b>Compressed time</b>Two years in about twelve minutes. The agent never gets tired, sick, or distracted.</div>
       <div class="card"><b>A small world</b>The mock web is much smaller than the real one. Some paths simply aren't available.</div>
       <div class="card"><b>Test awareness</b>Models sometimes notice they're being tested. Runs where the agent mentions it are flagged.</div>
     </div>

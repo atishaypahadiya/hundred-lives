@@ -179,8 +179,11 @@ a.life .act { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-
 .life-detail { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1100px) {
   .life-detail { grid-template-columns: 400px minmax(0, 1fr); }
-  .figcol { position: sticky; top: 92px; align-self: start; }
+  .figcol { align-self: start; }
 }
+/* The figure column (~530px) sticks under the header only where it also clears the week scrubber;
+   on shorter screens it scrolls with the page instead of sliding under the scrubber. */
+@media (min-width: 1100px) and (min-height: 720px) { .figcol { position: sticky; top: 92px; } }
 .bento { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .span1 { grid-column: span 1; } .span2 { grid-column: span 2; } .span4 { grid-column: 1 / -1; }
 @media (max-width: 720px) { .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } .span2 { grid-column: 1 / -1; } }
@@ -320,7 +323,7 @@ const KIND = { full_time: ["Full-time job", "var(--lime)"], part_time: ["Part-ti
 const OUTCOME = { success: ["success", "lime"], failure: ["rejected", "coral"], ignored: ["no reply", ""], traction: ["traction", "lime"], quiet: ["quiet", ""],
                   placed: ["placed", "lime"], not_placed: ["didn't place", "coral"], no_submission: ["no submission", ""] };
 const TONE = { success: "In a job", broke: "Broke", building: "Building", idle: "Idle" };
-const money = v => v == null ? "–" : (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const money = v => v == null || !Number.isFinite(+v) ? "–" : (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
 const pct = v => v == null ? "–" : (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
 const SVG = "http://www.w3.org/2000/svg";
 let uid = 0;
@@ -978,7 +981,13 @@ function messagePanel(upTo, sel, persona) {
   const ms = upTo.filter(e => e.kind === "message");
   if (!ms.length) return GlassCard({ title: "Messages" }, h("div", { class: "empty" }, "No messages yet."));
   const by = new Map(); for (const m of ms) { if (!by.has(m.contact_id)) by.set(m.contact_id, []); by.get(m.contact_id).push(m); }
-  const offer = o => !o ? null : o.kind === "referral" ? `offer: referral to ${o.opening_id}` : `offer: paid pilot $${Math.round(o.amount).toLocaleString()}`;
+  const offer = o => !o ? null
+    : o.kind === "referral" ? `offer: referral to ${o.opening_id}`
+    : o.kind === "paid_pilot" ? `offer: paid pilot ${money(o.amount)}`
+    : o.kind === "money" ? `offer: ${money(o.amount)} to personal cash`
+    : o.kind === "teammate" ? `offer: teammate for ${o.opening_id}`
+    : o.kind === "boost" ? `offer: boost to about ${(o.reach || 0).toLocaleString()} people${o.community ? ` (${o.community})` : ""}`
+    : `offer: ${o.kind}`;
   return GlassCard({ title: "Messages", sub: `${ms.length} sent through week ${sel} · ${ms.filter(m => m.replied).length} replied` },
     h("div", { class: "feed" }, [...by].map(([cid, thread]) => h("div", { class: "thread" }, h("div", { class: "t" }, cid),
       h("div", { class: "tools" }, thread.map(m => h("div", { class: "item" + (m.week === sel ? " now" : "") },
