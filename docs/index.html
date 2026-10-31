@@ -42,7 +42,7 @@ code{font:14.5px var(--mono);background:var(--card);padding:1px 6px;border-radiu
 @media (max-width:420px){.top .nav-about{display:none}}
 
 /* hero */
-.hero{position:relative;padding:72px 0 40px;overflow-x:clip}
+.hero{position:relative;padding-top:72px;padding-bottom:40px;overflow-x:clip}
 .glow{position:absolute;pointer-events:none;border-radius:50%;filter:blur(70px);opacity:.55}
 .big{font:500 clamp(46px,7.4vw,108px)/.98 var(--sans);letter-spacing:-.045em;margin:0;max-width:11.5em}
 .big .g{color:var(--grey)}
@@ -50,21 +50,36 @@ code{font:14.5px var(--mono);background:var(--card);padding:1px 6px;border-radiu
 .oval svg{display:block;width:100%;height:100%}
 .endmark{display:inline-block;width:.62em;height:.62em;vertical-align:.04em;margin-left:.12em}
 .stage{position:relative;padding-bottom:40px}
-.float{position:absolute;z-index:3}
+/* From 1024px the cards sit beside and below the headline, never on it: persona card in the right
+   gutter, the ring under the last line, the trace pill on the thumbnail's top edge. */
+@media (min-width:1024px){
+  .stage{display:grid;grid-template-columns:minmax(0,1fr) 300px;column-gap:44px;align-items:start;padding-bottom:0}
+  .big{font-size:clamp(46px,5.6vw,70px);grid-column:1;grid-row:1}
+  .floats{display:contents}
+  .c-persona{grid-column:2;grid-row:1;margin-top:.6em}
+  .c-ring{grid-column:1;grid-row:2;margin-top:30px}
+  .pair{grid-column:2;grid-row:2;margin-top:24px}
+}
+.float{position:relative;z-index:3}
+/* The trace pill straddles the thumbnail's top edge. */
+.pair{display:grid}
+.pair > *{grid-area:1/1}
+.c-file{z-index:4;justify-self:start;align-self:start}
+.c-thumb{justify-self:end;margin-top:28px}
 .cardf{background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:20px;box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 18px 40px -22px rgba(30,30,20,.35)}
-.c-persona{left:47%;top:47%;width:300px;padding:18px 18px 16px}
+.c-persona{width:300px;box-sizing:border-box;padding:18px 18px 16px}
 .c-persona .t{font:500 16px var(--sans)}
 .c-persona .s{font:13px var(--mono);color:var(--grey-2);margin-top:4px}
 .c-persona .row{display:flex;justify-content:space-between;align-items:center;margin-top:28px}
 .plus{width:28px;height:28px;border-radius:50%;background:#dcdbd4;display:grid;place-items:center;font:15px var(--sans);color:var(--ink)}
 .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:99px;background:#dcdbd4;font:12px var(--mono);color:var(--ink)}
 .pill i{width:6px;height:6px;border-radius:50%;background:var(--green)}
-.c-file{right:-1%;top:21%;padding:22px 40px;border-radius:999px;font:14px var(--mono)}
-.c-ring{left:22%;bottom:-6%;width:150px;height:150px;display:grid;place-items:center}
+.c-file{padding:22px 40px;border-radius:999px;font:14px var(--mono)}
+.c-ring{width:150px;height:150px;display:grid;place-items:center}
 .c-ring .v{font:500 20px var(--sans);text-align:center;line-height:1}
 .c-ring .v small{display:block;font:11px var(--mono);color:var(--grey-2);margin-top:6px}
 .c-ring[hidden]{display:none}
-.c-thumb{right:3%;bottom:-12%;width:170px;height:190px;border-radius:14px;overflow:hidden;box-shadow:0 18px 40px -22px rgba(30,30,20,.4)}
+.c-thumb{width:170px;height:190px;border-radius:14px;overflow:hidden;box-shadow:0 18px 40px -22px rgba(30,30,20,.4)}
 .c-thumb svg{width:100%;height:100%;display:block}
 
 /* wide pill window */
@@ -166,6 +181,8 @@ footer .row a{color:var(--grey-2)}
 @media (max-width:980px){
   section{grid-template-columns:minmax(0,1fr);gap:6px;padding-top:84px}
   .side.sticky > div{position:static}
+}
+@media (max-width:1023px){
   .stage{padding-bottom:0}
   .floats{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px;align-items:center}
   .float{position:static}
@@ -198,7 +215,7 @@ footer .row a{color:var(--grey-2)}
   <div class="glow" style="width:520px;height:380px;left:30%;top:36%;background:#bfe6b2"></div>
   <div class="glow" style="width:420px;height:320px;right:0;top:20%;background:#c9d4f6"></div>
   <div class="stage">
-  <h1 class="big">A hundred runs <span class="oval" id="oval"></span> of one <span style="white-space:nowrap">made-up</span> life. <span class="g">An agent gets a background, a goal, and a sandbox with no money. I run it a hundred times and read what it did.</span><svg class="endmark dots" viewBox="0 0 22 22" aria-hidden="true"></svg></h1>
+  <h1 class="big">A hundred runs <span class="oval" id="oval"></span> of one <span style="white-space:nowrap">made-up</span> life. <span class="g">An agent gets a background, a goal, and a sandbox with no money. I run it a hundred times and read what it</span> <span style="white-space:nowrap"><span class="g">did.</span><svg class="endmark dots" viewBox="0 0 22 22" aria-hidden="true"></svg></span></h1>
 
   <div class="floats">
     <div class="float cardf c-persona">
@@ -207,7 +224,6 @@ footer .row a{color:var(--grey-2)}
       <div class="s">Maya · b. 2004 · San Jose</div>
       <div class="row"><span class="plus">+</span><span class="pill"><i></i>draft</span></div>
     </div>
-    <div class="float cardf c-file">trace_001.jsonl</div>
     <div class="float cardf c-ring" id="ring" hidden>
       <svg width="104" height="104" viewBox="0 0 104 104" style="position:absolute" aria-hidden="true">
         <circle cx="52" cy="52" r="42" fill="none" stroke="#fff" stroke-width="7"/>
@@ -215,7 +231,10 @@ footer .row a{color:var(--grey-2)}
       </svg>
       <div class="v"><span id="ringN"></span><small>lives</small></div>
     </div>
-    <div class="float c-thumb" id="thumb"></div>
+    <div class="pair">
+      <div class="float cardf c-file">trace_001.jsonl</div>
+      <div class="float c-thumb" id="thumb"></div>
+    </div>
   </div>
   </div>
 
