@@ -1,0 +1,847 @@
+
+"use strict";
+// Every value from a log is agent- or model-made text: it only ever reaches the DOM as text nodes.
+const $app = document.getElementById("app");
+// An exported replay (python -m viewer.export) embeds its data here; the live viewer has none.
+const REPLAY = (() => { const el = document.getElementById("hl-replay"); return el ? JSON.parse(el.textContent) : null; })();
+// The published site (python -m viewer.export --all) has no data in the page, only where to fetch it:
+// { page: "grid", runs: "runs.json", home } or { page: "run", run_id, data: "data.json", grid: "../", home }.
+const STATIC = (() => { const el = document.getElementById("hl-static"); return el ? JSON.parse(el.textContent) : null; })();
+const RUN_ID_OK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/;
+if (REPLAY || STATIC) {
+  document.body.classList.add("replay");
+  document.body.prepend(h("div", { class: "replay-banner", role: "note" },
+    "Simulated life. Fictional world, organizations and odds; contacts are invented. Not a record of real events, people, or companies."));
+  // A published replay links back to the project page (docs/index.html) instead of the gateway.
+  document.querySelector('header.top a.pbtn[href="#/gateway"]')?.replaceWith(h("a", { class: "pbtn", href: STATIC ? STATIC.home : "../../" }, "Project page"));
+  if (STATIC?.page === "run") document.querySelector("header.top h1 a").setAttribute("href", STATIC.grid);
+  if (REPLAY && !location.hash) location.hash = "#/run/" + encodeURIComponent(REPLAY.runs[0].run_id);
+}
+let staticFetch = null;  // the one fetch of this page's JSON, kept so a re-render (theme switch) doesn't refetch
+function staticData(url) {
+  return staticFetch ||= fetch(url).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+}
+function staticError(what, e) {
+  return h("p", { class: "empty" }, `Couldn't load ${what} (${e.message}).`,
+    location.protocol === "file:" ? " Browsers block that from file://; serve the folder over http, e.g. python3 -m http.server -d docs." : "");
+}
+// Week kinds in the life strip. Lime = income, teal = building, coral = broke; the rest neutral.
+const KIND = { full_time: ["Full-time job", "var(--lime)"], part_time: ["Part-time", "color-mix(in srgb, var(--lime) 55%, var(--strip-bg))"],
+               accelerator: ["Accelerator", "var(--teal)"], gig: ["Gig week", "var(--strip-gig)"], school: ["Classes only", "var(--strip-school)"],
+               none: ["No commitment", "var(--strip-none)"] };
+const OUTCOME = { success: ["success", "lime"], failure: ["rejected", "coral"], ignored: ["no reply", ""], traction: ["traction", "lime"], quiet: ["quiet", ""],
+                  placed: ["placed", "lime"], not_placed: ["didn't place", "coral"], no_submission: ["no submission", ""] };
+const money = v => v == null || !Number.isFinite(+v) ? "–" : (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const pct = v => v == null ? "–" : (v * 100).toFixed(v < 0.1 ? 1 : 0) + "%";
+const SVG = "http://www.w3.org/2000/svg";
+let uid = 0;
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return el;
+}
+function s(tag, attrs) { const el = document.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v); return el; }
+
+// ================= Components =================
+const ICON = {
+  back: ["M15 5l-7 7 7 7"], prev: ["M15 6l-6 6 6 6"], next: ["M9 6l6 6-6 6"],
+  play: ["M8 5.5v13l11-6.5z", true], pause: ["M7 5h3.5v14H7zM13.5 5H17v14h-3.5z", true],
+  end: ["M6 6l6 6-6 6M13 6l6 6-6 6"],
+  sun: ["M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z"],
+  moon: ["M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"],
+};
+function Icon(name) {
+  const [d, filled] = ICON[name];
+  const svg = s("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", fill: filled ? "currentColor" : "none", stroke: filled ? "none" : "currentColor",
+    "stroke-width": 1.75, "stroke-linecap": "round", "stroke-linejoin": "round" });
+  svg.append(s("path", { d }));
+  return svg;
+}
+function IconButton({ icon, label, onclick, disabled, pressed, href }) {
+  const attrs = { class: "ibtn", "aria-label": label, title: label, onclick, disabled: disabled || null,
+                  "aria-pressed": pressed == null ? null : String(pressed) };
+  return href ? h("a", { ...attrs, href }, Icon(icon)) : h("button", { ...attrs, type: "button" }, Icon(icon));
+}
+function Pill(text, { tone, title, live, k } = {}) {
+  return h("span", { class: "pill", title }, tone != null ? h("i", { class: `dot ${tone}${live ? " pulse" : ""}` }) : null,
+    k ? h("span", { class: "k" }, k) : null, text);
+}
+function GlassCard({ title, sub, cls }, ...kids) {
+  return h("section", { class: "glass card " + (cls || "") }, title ? h("h3", {}, title, sub ? h("span", { class: "lab" }, sub) : null) : null, kids);
+}
+// A stat tile: label, big numeral, optional sub-label, ring or sparkline. tone = success | broke | building | idle | glass.
+function StatTile({ label, value, sub, ring, spark, tone = "glass", span, xl }, ...kids) {
+  return h("section", { class: `tile t-${tone}${span ? " span" + span : ""}` },
+    h("div", { class: "lab" }, label),
+    h("div", { class: "tile-body" }, h("div", { class: "big" + (xl ? " xl" : "") }, value), ring ? Ring(ring) : null),
+    sub ? h("div", { class: "lab" }, sub) : null,
+    spark ? Spark(spark) : null, kids);
+}
+// A thin arc: 6px, rounded cap, track at 12% opacity. value in [0, 1]; tick marks a reference point.
+function Ring({ value, tick, size = 72, label }) {
+  const r = (size - 6) / 2, c = 2 * Math.PI * r, wrap = h("div", { class: "ring", role: "img", "aria-label": label || "" });
+  const svg = s("svg", { width: size, height: size, viewBox: `0 0 ${size} ${size}` });
+  svg.append(s("circle", { cx: size / 2, cy: size / 2, r, fill: "none", stroke: "currentColor", "stroke-opacity": .12, "stroke-width": 6 }));
+  const v = Math.max(0, Math.min(1, value || 0));
+  if (v > 0) svg.append(s("circle", { cx: size / 2, cy: size / 2, r, fill: "none", stroke: "currentColor", "stroke-width": 6, "stroke-linecap": "round",
+    "stroke-dasharray": `${Math.max(0.001, v * c - (v < 1 ? 0 : 0))} ${c}`, transform: `rotate(-90 ${size / 2} ${size / 2})` }));
+  if (tick != null) {
+    const a = tick * 2 * Math.PI - Math.PI / 2, x1 = size / 2 + (r - 7) * Math.cos(a), y1 = size / 2 + (r - 7) * Math.sin(a);
+    const x2 = size / 2 + (r + 3) * Math.cos(a), y2 = size / 2 + (r + 3) * Math.sin(a);
+    svg.append(s("line", { x1, y1, x2, y2, stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-opacity": .7 }));
+  }
+  wrap.append(svg);
+  return wrap;
+}
+function Spark(values, W = 240, H = 40) {
+  const max = Math.max(1, ...values), n = Math.max(values.length - 1, 1), id = "sp" + (++uid);
+  const x = i => i / n * W, y = v => H - 2 - v / max * (H - 4);
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", style: "width:100%;height:40px;display:block;overflow:visible", "aria-hidden": "true" });
+  const g = s("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+  g.append(s("stop", { offset: 0, style: "stop-color:currentColor;stop-opacity:.18" }), s("stop", { offset: 1, style: "stop-color:currentColor;stop-opacity:0" }));
+  const defs = s("defs"); defs.append(g); svg.append(defs);
+  if (values.length) {
+    const d = values.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+    svg.append(s("path", { d: d + ` L${x(values.length - 1)} ${H} L0 ${H} Z`, fill: `url(#${id})` }),
+               s("path", { d, fill: "none", stroke: "currentColor", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }));
+  }
+  return svg;
+}
+// Pill track, round thumb, one tick per week (every 13th taller). The range's own keyboard handling stays.
+function Scrubber({ sel, max, horizon, onpick, playing, onplay, follow, onfollow, ended }) {
+  const top = Math.max(max, 1), p = top > 1 ? (sel - 1) / (top - 1) * 100 : 100;
+  const range = h("input", { type: "range", min: 1, max: top, value: sel, "aria-label": "Week", "aria-valuetext": `Week ${sel} of ${horizon || "?"}`, style: `--p:${p}%` });
+  range.addEventListener("input", () => onpick(+range.value));
+  const step = top <= 60 ? 1 : top <= 130 ? 2 : 4, ticks = h("div", { class: "ticks", "aria-hidden": "true" });
+  for (let w = 1; w <= top; w += step) ticks.append(h("i", { class: w % 13 === 0 ? "q" : null, style: `left:${top > 1 ? (w - 1) / (top - 1) * 100 : 50}%` }));
+  return h("div", { class: "scrubber glass", role: "group", "aria-label": "Week scrubber" },
+    IconButton({ icon: "prev", label: "Previous week", onclick: () => onpick(sel - 1), disabled: sel <= 1 }),
+    IconButton({ icon: playing ? "pause" : "play", label: playing ? "Pause" : "Play", onclick: onplay, pressed: !!playing }),
+    h("div", { class: "track" }, ticks, range),
+    IconButton({ icon: "next", label: "Next week", onclick: () => onpick(sel + 1), disabled: sel >= max }),
+    h("span", { class: "wk", "aria-label": `Week ${sel} of ${horizon || "?"}` }, h("span", { class: "wkw" }, "Week "), `${sel} of ${horizon || "?"}`),
+    h("button", { class: "pbtn", type: "button", "aria-pressed": String(follow), onclick: onfollow }, ended ? "Last week" : "Follow live"));
+}
+
+// ---------- theme ----------
+function themeButton() {
+  const dark = (document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
+  document.getElementById("themeSlot").replaceChildren(IconButton({ icon: dark ? "sun" : "moon", label: dark ? "Switch to light" : "Switch to dark", onclick: () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
+    try { localStorage.setItem("hl-theme", document.documentElement.dataset.theme); } catch {}
+    themeButton(); route();
+  } }));
+}
+try { const t = localStorage.getItem("hl-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+themeButton();
+
+// ---------- routing ----------
+let cleanup = () => {};
+function route() {
+  cleanup(); cleanup = () => {};
+  const m = location.hash.match(/^#\/run\/([^?]+)(?:\?w=(\d+))?/), g = location.hash.match(/^#\/gateway(?:\?mode=(dry|live))?/);
+  if (STATIC?.page === "run") return showRun(STATIC.run_id, m && m[2] ? +m[2] : null);
+  if (STATIC) {  // the grid page: a life's link is its own page; old-style #/run/<id> links go there too
+    const id = m && decodeURIComponent(m[1]);
+    if (id && RUN_ID_OK.test(id)) return location.replace(`${encodeURIComponent(id)}/${m[2] ? `#/run/${encodeURIComponent(id)}?w=${m[2]}` : ""}`);
+    return showGrid();
+  }
+  if (m) showRun(decodeURIComponent(m[1]), m[2] ? +m[2] : null); else if (g) showGateway(g[1] || "dry"); else showGrid();
+}
+addEventListener("hashchange", route);
+
+// ---------- life strip + cash chart (shared by grid tiles and the detail view) ----------
+function weekKind(w) { return w.commitment && w.commitment !== "none" ? w.commitment : w.gig ? "gig" : w.school ? "school" : "none"; }
+
+// How a life ended (or stands now, if it's still running): the grid's three tile colours.
+const ENDING = { job: "In paid work", free: "No paid work", broke: "Broke" }, ENDED = { job: "in paid work", free: "with no paid work", broke: "broke" };
+function endingTone(w) {
+  if (w && w.broke) return "broke";
+  // `job` (paid work held, from the summary) counts a job held alongside an accelerator; older summaries fall back to the main commitment.
+  if (w && w.job != null) return w.job ? "job" : "free";
+  return w && (w.commitment === "full_time" || w.commitment === "part_time") ? "job" : "free";
+}
+
+// The strip sits on its own dark inset so the semantic colours read in both modes.
+function lifeStrip(weeks, horizon, opts = {}) {
+  const n = Math.max(horizon || 0, weeks.length, 1), W = opts.width || 300, H = opts.height || 10;
+  const pad = opts.pad || { l: 0, r: 0 }, inset = 4, slot = (W - pad.l - pad.r) / n, gap = Math.min(2, slot / 4), cw = slot - gap;
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H + 2 * inset}`, class: "strip", role: "img", "aria-label": `Life strip, ${weeks.length} of ${n} weeks` });
+  svg.append(s("rect", { x: pad.l - inset, y: 0, width: W - pad.l - pad.r + 2 * inset, height: H + 2 * inset, rx: (H + 2 * inset) / 2, fill: "var(--strip-bg)" }));
+  for (let i = 0; i < n; i++) {
+    const w = weeks[i], x = pad.l + i * slot + gap / 2;
+    const r = s("rect", { x, y: inset, width: Math.max(cw, 1), height: H, rx: Math.min(H / 2, cw / 2),
+      fill: !w ? "var(--strip-future)" : w.broke ? "var(--coral)" : KIND[weekKind(w)][1] });
+    if (opts.onpick && w) { r.style.cursor = "pointer"; r.addEventListener("click", () => opts.onpick(w.week)); }
+    if (w) { const t = s("title"); t.textContent = `Week ${w.week}: ${KIND[weekKind(w)][0]}${w.broke ? ", broke" : ""}, cash ${money(w.cash)}`; r.append(t); }
+    svg.append(r);
+    if (w && w.broke && cw >= 3) svg.append(s("circle", { cx: x + cw / 2, cy: inset + H / 2, r: Math.min(1.4, cw / 4), fill: "#fff", "pointer-events": "none" }));
+    if (opts.sel && w && w.week === opts.sel) svg.append(s("rect", { x: x - 1.5, y: inset - 2.5, width: cw + 3, height: H + 5, rx: Math.min((H + 5) / 2, (cw + 3) / 2),
+      fill: "none", stroke: "#fff", "stroke-width": 1.5, "pointer-events": "none" }));
+  }
+  return svg;
+}
+
+function legend(extra, school) {
+  return h("div", { class: "legend" },
+    ["full_time", "part_time", "accelerator", "gig", ...(school ? ["school"] : []), "none"].map(k => h("span", {}, h("i", { class: "sw", style: `--c:${KIND[k][1]}` }), KIND[k][0])),
+    h("span", {}, h("i", { class: "sw broke" }), "Broke (coral, white dot)"), extra || []);
+}
+
+// LineChart: 1.5px line, soft fill below, no gridlines, a dot on hover. Click picks the week.
+function cashChart(weeks, horizon, opts = {}) {
+  const wrap = h("div", { class: "chart" }), tip = h("div", { class: "tip glass" });
+  const W = opts.width || 640, H = opts.height || 180, pad = { ...CHART_PAD, t: 12, b: 24 };
+  const n = Math.max(horizon || 0, weeks.length, 1), slot = (W - pad.l - pad.r) / n;
+  const vals = weeks.map(w => w.cash ?? 0), max = Math.max(1, ...vals) * 1.08, id = "lc" + (++uid);
+  const x = wk => pad.l + (wk - 0.5) * slot, y = v => H - pad.b - v / max * (H - pad.t - pad.b);
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `Cash by week: ${weeks.length ? money(vals[0]) + " in week 1, " + money(vals[vals.length - 1]) + " in week " + weeks[weeks.length - 1].week : "no weeks yet"}` });
+  const g = s("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+  g.append(s("stop", { offset: 0, style: "stop-color:var(--ink);stop-opacity:.14" }), s("stop", { offset: 1, style: "stop-color:var(--ink);stop-opacity:0" }));
+  const defs = s("defs"); defs.append(g); svg.append(defs);
+  const top = niceStep(max / 3) * Math.floor(max / niceStep(max / 3));
+  for (const v of [0, top]) { const t = s("text", { x: pad.l - 12, y: y(v) + 4, "text-anchor": "end", "font-size": 12, fill: "var(--muted)", class: "num" }); t.textContent = money(v); svg.append(t); }
+  for (const wk of ticks(n)) { const t = s("text", { x: x(wk), y: H - 4, "text-anchor": "middle", "font-size": 12, fill: "var(--muted)" }); t.textContent = "w" + wk; svg.append(t); }
+  if (opts.sel) svg.append(s("line", { x1: x(opts.sel), x2: x(opts.sel), y1: pad.t, y2: H - pad.b, stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "2 4", "stroke-linecap": "round" }));
+  if (weeks.length) {
+    const d = weeks.map((w, i) => (i ? "L" : "M") + x(w.week).toFixed(1) + " " + y(w.cash ?? 0).toFixed(1)).join(" ");
+    svg.append(s("path", { d: d + ` L${x(weeks[weeks.length - 1].week).toFixed(1)} ${y(0)} L${x(weeks[0].week).toFixed(1)} ${y(0)} Z`, fill: `url(#${id})` }));
+    svg.append(s("path", { d, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    if (opts.sel) { const w = weeks.find(w => w.week === opts.sel); if (w) svg.append(s("circle", { cx: x(w.week), cy: y(w.cash ?? 0), r: 4.5, fill: "var(--base)", stroke: "var(--ink)", "stroke-width": 1.5 })); }
+    // World v3: a teal dot with a dark ring where the agent deployed a site, a dark diamond where it made a costly bet.
+    // Above the line, or below it when there's no room above.
+    for (const w of weeks) {
+      const cx = x(w.week), cy = y(w.cash ?? 0), dir = cy - 26 < pad.t ? 1 : -1;
+      if (w.deployed?.length) { const m = s("circle", { cx, cy: cy + dir * 10, r: 4.5, fill: "var(--teal)", stroke: "var(--ink)", "stroke-width": 1.25, "pointer-events": "none" });
+        const t = s("title"); t.textContent = `Week ${w.week}: deployed ${w.deployed.join(", ")}`; m.append(t); svg.append(m); }
+      if (w.bets?.length) { const r = 4.5, by = cy + dir * (w.deployed?.length ? 22 : 10);
+        const m = s("path", { d: `M${cx} ${by - r} L${cx + r} ${by} L${cx} ${by + r} L${cx - r} ${by} Z`, fill: "var(--ink)", "pointer-events": "none" });
+        const t = s("title"); t.textContent = `Week ${w.week}: ${w.bets.join("; ")}`; m.append(t); svg.append(m); }
+    }
+  }
+  const hair = s("line", { y1: pad.t, y2: H - pad.b, stroke: "var(--ink-2)", "stroke-width": 1, visibility: "hidden" });
+  const dot = s("circle", { r: 4, fill: "var(--ink)", visibility: "hidden" });
+  const hit = s("rect", { x: pad.l, y: 0, width: W - pad.l - pad.r, height: H, fill: "transparent" });
+  svg.append(hair, dot, hit);
+  const at = ev => { const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W;
+    const wk = Math.floor((px - pad.l) / slot) + 1; return weeks.find(w => w.week === wk) || null; };
+  const hide = () => { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); };
+  hit.addEventListener("pointermove", ev => {
+    const w = at(ev); if (!w) return hide();
+    hair.setAttribute("x1", x(w.week)); hair.setAttribute("x2", x(w.week)); hair.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", x(w.week)); dot.setAttribute("cy", y(w.cash ?? 0)); dot.setAttribute("visibility", "visible");
+    tip.replaceChildren(h("div", { class: "t" }, "Week " + w.week), h("div", {}, h("b", { class: "num" }, money(w.cash)), " cash"),
+      h("div", {}, h("b", { class: "num" }, money(w.income)), " income/wk"), w.funding ? h("div", {}, h("b", { class: "num" }, money(w.funding)), " company funds") : null,
+      h("div", { class: "muted" }, KIND[weekKind(w)][0], w.broke ? ", broke" : ""),
+      w.deployed?.length ? h("div", {}, "deployed ", w.deployed.join(", ")) : null,
+      (w.bets || []).map(b => h("div", {}, b)),
+      opts.onpick ? h("div", { class: "muted" }, "click to go to this week") : null);
+    const r = wrap.getBoundingClientRect(), left = ev.clientX - r.left;
+    tip.style.display = "block"; tip.style.top = "8px";
+    tip.style.left = Math.max(0, Math.min(left + 12, r.width - tip.offsetWidth - 4)) + "px";
+  });
+  hit.addEventListener("pointerleave", hide);
+  if (opts.onpick) hit.addEventListener("click", ev => { const w = at(ev); if (w) opts.onpick(w.week); });
+  wrap.append(svg, tip);
+  return wrap;
+}
+const CHART_PAD = { l: 64, r: 8 };
+// World v3 events, in words: the cash chart's tooltip and the venture panel.
+// `week` is that week's events, to name the commitments going full-time ended (the log has their ids).
+function betText(e, week = []) {
+  if (e.event === "invest_personal") return `put ${money(e.amount)} of savings into the company`;
+  if (e.event === "go_fulltime") {
+    const left = week.filter(x => x.kind === "life" && x.event === "commitment_ended" && x.reason === "go_fulltime").map(x => x.label || x.opening_id);
+    return `went full-time on ${e.venture}${e.enrolled ? " (classes stay)" : ""}${left.length ? ", left " + left.join(", ") : e.left?.length ? `, left ${e.left.length} commitment${e.left.length === 1 ? "" : "s"}` : ""}`;
+  }
+  if (e.event === "decline_offer") return `declined ${e.opening_id} (${e.stage === "started" ? "just started" : e.stage === "upcoming" ? "starts later" : "held offer"}${e.weekly_pay ? ", " + money(e.weekly_pay) + "/wk" : ""})`;
+  return e.event;
+}
+function chartMarks(weeks) {
+  const dep = weeks.some(w => w.deployed?.length), bet = weeks.some(w => w.bets?.length);
+  if (!dep && !bet) return null;
+  const mk = (svgKids, label) => { const v = s("svg", { width: 12, height: 12, viewBox: "0 0 12 12", "aria-hidden": "true", style: "vertical-align:-1px;margin-right:6px" }); v.append(...svgKids); return h("span", {}, v, label); };
+  return [dep ? mk([s("circle", { cx: 6, cy: 6, r: 4.5, fill: "var(--teal)", stroke: "var(--ink)", "stroke-width": 1.25 })], "Deployed a site") : null,
+          bet ? mk([s("path", { d: "M6 1.5 L10.5 6 L6 10.5 L1.5 6 Z", fill: "var(--ink)" })], "Costly bet") : null];
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); return [1, 2, 2.5, 5, 10].map(m => m * p).find(v => v >= raw) || p * 10; }
+function ticks(n) { const st = n <= 13 ? 1 : n <= 30 ? 5 : n <= 60 ? 10 : 26, out = [1]; for (let i = st; i <= n; i += st) if (i !== 1) out.push(i); return out; }
+
+// ---------- the live gateway's outbox (Track B) ----------
+// Drafts wait here for a person. Approve and Reject append a decision to the gateway's own log;
+// the gateway checks its rules again before sending. Nothing on this page posts anything.
+function showGateway(mode) {
+  document.getElementById("crumb").textContent = "gateway, " + mode;
+  document.getElementById("back").replaceChildren(IconButton({ icon: "back", label: "Back to all lives", href: "#/" }));
+  $app.classList.remove("has-scrubber");
+  let token = null, timer = null, msg = "";
+  const STATUS = { pending: "amber", approved: "teal", sent: "lime", rejected: null, blocked: "coral", failed: "coral" };
+  async function act(path) {
+    try {
+      token = token || (await (await fetch("/api/gateway/token")).json()).token;
+      const r = await fetch(`/api/gateway/${mode}/${path}`, { method: "POST", headers: { "X-HL-Token": token } });
+      msg = r.ok ? "" : (await r.json()).error || `error ${r.status}`;
+    } catch (e) { msg = String(e); }
+    load();
+  }
+  async function load() {
+    let d;
+    try { d = await (await fetch(`/api/gateway?mode=${mode}`)).json(); } catch (e) { msg = String(e); return; }
+    const pending = d.items.filter(i => i.status === "pending");
+    $app.replaceChildren(h("div", {},
+      h("div", { class: "bento" },
+        StatTile({ label: "Kill switch", value: d.killed ? "On" : "Off", tone: d.killed ? "broke" : "glass", sub: d.killed ? "no turns, no sends" : "turns and sends allowed" },
+          h("div", { style: "margin-top:12px" }, h("button", { class: "pbtn", type: "button", onclick: () => act(d.killed ? "unkill" : "kill") }, d.killed ? "Turn off" : "Stop everything"))),
+        StatTile({ label: "Posted today (UTC)", value: `${d.sent_today} / ${d.limits.posts}`, sub: `link posts ≤ ${d.limits.links} a day` }),
+        StatTile({ label: "Reads today", value: `${d.reads_today} / ${d.limits.reads}`, sub: "mentions and replies read" }),
+        StatTile({ label: "Waiting for you", value: pending.length, sub: mode === "dry" ? "dry run: nothing reaches X" : "live: approved items are sent" })),
+      h("div", { class: "tile-head", style: "margin:16px 0" },
+        h("a", { class: "pbtn", href: "#/gateway?mode=dry", "aria-pressed": String(mode === "dry") }, "Dry run"),
+        h("a", { class: "pbtn", href: "#/gateway?mode=live", "aria-pressed": String(mode === "live") }, "Live"),
+        msg ? h("span", { class: "lab", role: "alert" }, msg) : null),
+      GlassCard({ title: "Outbox", sub: `${d.items.length} item${d.items.length === 1 ? "" : "s"}`, cls: "wide" },
+        d.items.length ? h("div", { class: "feed", style: "max-height:none" }, d.items.map(i => h("div", { class: "item" },
+          h("div", { class: "tile-head" }, Pill(i.status, { tone: STATUS[i.status] }), Pill(i.kind), h("span", { class: "meta" }, `${i.id}, ${i.created}`)),
+          i.replying_to ? h("div", { class: "inner", style: "margin-top:8px" }, h("div", { class: "meta" }, `replying to @${i.replying_to.author} (untrusted)`), h("div", { class: "text" }, i.replying_to.text)) : null,
+          h("div", { class: "text", style: "margin-top:8px" }, i.kind === "publish_repo" ? `Mirror ${i.run_id}/${i.repo} to GitHub as ${i.publish_as} (private)` : i.text),
+          i.kind !== "publish_repo" ? h("div", { class: "meta" }, `${[...(i.text || "")].length} characters`) : null,
+          (i.history || []).filter(x => x.reason).map(x => h("div", { class: "meta" }, `${x.status}: ${x.reason}`)),
+          i.status === "pending" || i.status === "approved" ? h("div", { class: "tile-head", style: "margin-top:8px" },
+            i.status === "pending" ? h("button", { class: "pbtn", type: "button", onclick: () => act(`${i.id}/approve`) }, "Approve") : null,
+            h("button", { class: "pbtn", type: "button", onclick: () => act(`${i.id}/reject`) }, "Reject")) : null)))
+          : h("div", { class: "empty" }, "Nothing in the outbox."))));
+  }
+  load(); timer = setInterval(load, 5000);
+  cleanup = () => clearInterval(timer);
+}
+
+// ---------- grid of lives ----------
+function showGrid() {
+  document.getElementById("crumb").textContent = "";
+  document.getElementById("back").replaceChildren();
+  $app.classList.remove("has-scrubber");
+  let filter = sessionStorageGet("hl-filter") || "", group = sessionStorageGet("hl-group") || "", data = [], groups = [];
+  const input = h("input", { class: "search", type: "search", placeholder: "Filter by run, model, persona…", value: filter, "aria-label": "Filter runs" });
+  const count = h("span", { class: "lab" });
+  const chips = h("div", { class: "chips", role: "group", "aria-label": "Experiment" });
+  const body = h("div");
+  $app.replaceChildren(h("div", { class: "filters" }, input, chips, count, REPLAY || STATIC ? null : h("span", { class: "lab" }, "updates every 3 s")), body);
+  input.addEventListener("input", () => { filter = input.value; sessionStorageSet("hl-filter", filter); render(); });
+
+  function batchSection(b, rs) {
+    return h("section", { class: "batch" },
+      h("h2", {}, rs[0].batch_label || b),
+      h("span", { class: "lab" }, `${rs.length} ${rs[0].batch_label ? "li" + (rs.length > 1 ? "ves" : "fe") : "run" + (rs.length > 1 ? "s" : "")}, ${modelLine(rs[0].models)}${rs[0].batch_label ? ", batch " + b : ""}`),
+      h("div", { class: "lives" }, rs.sort((a, z) => a.run_id.localeCompare(z.run_id)).map(card)));
+  }
+  function byBatch(rs) {
+    const batches = new Map();
+    for (const r of rs) { const b = r.batch || r.run_id.replace(/-\d{3}$/, ""); if (!batches.has(b)) batches.set(b, []); batches.get(b).push(r); }
+    return [...batches].map(([b, rs]) => batchSection(b, rs));
+  }
+  function render() {
+    const q = filter.trim().toLowerCase();
+    if (group && !groups.some(g => g.id === group)) group = "";
+    const shown = data.filter(r => (!group || r.group === group) &&
+      (!q || JSON.stringify([r.run_id, r.models, r.persona, r.reason, r.status, r.batch_label, groups.find(g => g.id === r.group)?.title]).toLowerCase().includes(q)));
+    count.textContent = `${shown.length} of ${data.length} lives`;
+    const pick = id => () => { group = id; sessionStorageSet("hl-group", id); render(); };
+    chips.replaceChildren(...(groups.length ? [h("button", { class: "pbtn", type: "button", "aria-pressed": String(!group), onclick: pick("") }, "All"),
+      ...groups.map(g => h("button", { class: "pbtn", type: "button", "aria-pressed": String(group === g.id), onclick: pick(g.id) }, g.short || g.title))] : []));
+    const sections = groups.length
+      ? groups.map(g => [g, shown.filter(r => r.group === g.id)]).filter(([, rs]) => rs.length).map(([g, rs]) => h("section", { class: "group" },
+          h("h2", { class: "group-title" }, g.title),
+          g.line ? h("p", { class: "group-note" }, g.line + " ", g.findings ? h("a", { href: (STATIC.home || "../") + g.findings.href }, g.findings.text) : null) : null,
+          byBatch(rs)))
+      : byBatch(shown);
+    body.replaceChildren(...sections,
+      data.length ? GlassCard({ title: "Reading a tile", cls: "legend-card" },
+        h("p", { class: "lab", style: "margin:0 0 8px" }, "A tile's colour is how the life ended, or where it stands now if it is still running."),
+        h("div", { class: "legend", style: "margin-bottom:12px" }, ["job", "free", ...(data.some(r => endingTone((r.weeks || []).at(-1)) === "broke") ? ["broke"] : [])].map(t => h("span", {}, h("i", { class: "swt t-end-" + t }),
+          { job: "In paid work: a job, internship, campus job or freelance, full or part time", free: "No paid work: building, studying or between things", broke: "Broke in the last week" }[t]))),
+        legend(null, data.some(r => (r.weeks || []).some(w => w.school)))) : h("p", { class: "empty" }, "No run logs in runs/ yet."));
+  }
+  function card(r) {
+    const last = r.last || {}, weeks = (r.weeks || []).map(w => ({ ...w, commitment: { full_time: "full_time", part_time: "part_time", accelerator: "accelerator" }[w.commitment] || "none" }));
+    const lw = weeks[weeks.length - 1], tone = endingTone(lw), live = r.status === "live";
+    // The ending pill shows only when a life ended some other way than reaching its horizon.
+    const pill = live ? Pill("live", { tone: "amber", live: true }) : r.reason && r.reason !== "horizon" ? Pill(r.reason, { tone: "coral" }) : null;
+    return h("a", { class: "tile life t-end-" + tone, href: (STATIC ? "" : "#/run/") + encodeURIComponent(r.run_id) + (STATIC ? "/" : ""), "aria-label": `${r.run_id}: ${live ? "now" : "ended"} ${ENDED[tone]}, week ${weeks.length}, cash ${money(last.cash)}` },
+      h("div", { class: "tile-head" }, h("span", { class: "t" }, r.run_id.match(/-(\d{3})$/) ? "life " + +r.run_id.slice(-3) : r.run_id),
+        r.pilot ? Pill("PILOT", { tone: "amber", title: "uncommitted or unrecorded code" }) : null, pill),
+      h("div", {}, h("div", { class: "lab" }, `week ${weeks.length} of ${r.horizon ?? "?"}, ${live ? "now" : "ended"} ${ENDED[tone]}`),
+        h("div", { class: "big num", style: "margin-top:4px" }, money(last.cash)),
+        h("div", { class: "act", title: (last.labels || []).join("; ") }, last.labels && last.labels.length ? last.labels[0] : "no commitment"),
+        last.labels && last.labels.length > 1 ? h("div", { class: "lab more", title: last.labels.join("; ") }, `and ${last.labels.length - 1} more`) : null),
+      lifeStrip(weeks, r.horizon, { width: 300, height: 8 }),
+      h("div", { class: "tile-facts num" },
+        h("span", {}, `${r.applications} applied, ${r.successes} accepted, ${r.shell} shell, ${r.repos} repo${r.repos === 1 ? "" : "s"}, ${r.launches} launch${r.launches === 1 ? "" : "es"}`),
+        h("span", {}, `${(r.tokens_used || 0).toLocaleString()} tokens, $${(r.cost_usd || 0).toFixed(4)}`)));
+  }
+  let stop = false;
+  async function poll() {
+    if (REPLAY) { data = REPLAY.runs; render(); return; }
+    if (STATIC) {
+      staticData(STATIC.runs).then(d => { if (stop) return; groups = d.groups || []; data = d.runs || []; render(); })
+        .catch(e => { if (!stop) body.replaceChildren(staticError("the list of runs", e)); });
+      return;
+    }
+    try { data = await (await fetch("/api/runs", { cache: "no-store" })).json(); render(); } catch (e) { count.textContent = "can't reach the viewer server"; }
+    if (!stop) timer = setTimeout(poll, 3000);
+  }
+  let timer; poll();
+  cleanup = () => { stop = true; clearTimeout(timer); };
+}
+// A life's name, matching the project page: "Self, base life 3", "Self, Track A", "Maya, exp 01 a life 4".
+// analysis/site_facts.py life_title() is the same rule; its quote-link check compares the two.
+function lifeTitle(runId, persona) {
+  const p = persona || "Life", m = runId.match(/^[a-z]+-(?:(.*?)-)?(\d{8}-\d{6})-(\d{3})$/);
+  if (!m) return `${p}, ${runId}`;
+  let tag = (m[1] || "").replace(/^(\w+)-\1$/, "$1"), e, v;
+  const n = +m[3];
+  if (/^tracka\d*$/.test(tag)) return `${p}, Track A`;
+  if ((e = tag.match(/^exp(\d\d)([a-z])$/))) tag = `exp ${e[1]} ${e[2]}`;
+  else if ((v = tag.match(/^showv(\d+)$/))) tag = `showcase v${v[1]}`;
+  return tag ? `${p}, ${tag} life ${n}` : `${p}, life ${n}`;
+}
+function modelLine(m) { if (!m) return ""; const a = m.agent, r = m.referee; return a === r ? a : `agent ${a}, referee ${r}`; }
+function sessionStorageGet(k) { try { return sessionStorage.getItem(k); } catch { return null; } }
+function sessionStorageSet(k, v) { try { sessionStorage.setItem(k, v); } catch {} }
+
+// ---------- one life ----------
+function showRun(runId, wantWeek) {
+  document.getElementById("crumb").textContent = runId;
+  document.getElementById("back").replaceChildren(IconButton({ icon: "back", label: "All lives", href: STATIC ? STATIC.grid : "#/" }));
+  $app.classList.add("has-scrubber");
+  const R = { meta: null, summary: null, events: [], weeks: [], maxWeek: 0, ended: false, repos: null, error: null };
+  let sel = wantWeek, follow = wantWeek == null, playing = null, pending = false, gone = false;
+  const view = h("div"); $app.replaceChildren(view);
+
+  const es = REPLAY || STATIC ? { close() {} } : new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+  if (REPLAY) { (REPLAY.events[runId] || []).forEach(ingest); R.ended = true; R.repos = REPLAY.repos[runId] || []; setTimeout(schedule); }
+  else if (STATIC) {
+    view.replaceChildren(h("p", { class: "empty" }, "Loading this life…"));
+    staticData(STATIC.data).then(d => {
+      if (gone) return;
+      (d.events[runId] || []).forEach(ingest); R.ended = true; R.repos = d.repos[runId] || []; schedule();
+    }).catch(e => { if (!gone) view.replaceChildren(staticError("this life", e)); });
+  }
+  else {
+    es.addEventListener("ev", m => { ingest(JSON.parse(m.data)); schedule(); });
+    es.addEventListener("end", () => { es.close(); R.ended = true; loadRepos(); schedule(); });
+  }
+  es.onerror = () => { if (!R.ended) { R.error = "lost the stream; reconnecting…"; schedule(); } };
+  let resizeT; const onResize = () => { clearTimeout(resizeT); resizeT = setTimeout(schedule, 150); };
+  addEventListener("resize", onResize);
+  cleanup = () => { gone = true; es.close(); clearInterval(playing); removeEventListener("resize", onResize); };
+
+  function ingest(ev) {
+    R.error = null; R.events.push(ev);
+    if (ev.kind === "meta" && ev.event === "start") R.meta = ev;
+    if (ev.kind === "summary") R.summary = ev;
+    if (ev.kind === "money" && ev.at === "end") {
+      const wk = R.events.filter(e => e.week === ev.week);
+      R.weeks[ev.week - 1] = { week: ev.week, cash: ev.cash, income: ev.income, expenses: ev.expenses,
+        funding: ev.company_balance ?? ev.company_funding, raised: ev.company_funding, revenue: ev.company_revenue, spent: ev.company_spent,
+        labels: ev.commitments, detail: ev.commitment_detail, followers: ev.followers, streak: ev.train_streak,
+        trained: wk.some(e => e.kind === "life" && e.event === "train"),
+        school: (ev.commitment_detail || []).some(c => c.kind === "academics"),
+        gig: wk.some(e => e.kind === "life" && e.event === "gig"), broke: wk.some(e => e.kind === "week_start" && e.broke),
+        invested: ev.company_invested,
+        deployed: wk.filter(e => e.kind === "venture" && e.event === "deploy").map(e => e.url),
+        bets: wk.filter(e => e.kind === "venture" && e.event !== "deploy").map(e => betText(e, wk)) };
+    }
+    if (ev.week) R.maxWeek = Math.max(R.maxWeek, ev.week);
+  }
+  async function loadRepos() { try { R.repos = await (await fetch(`/api/runs/${encodeURIComponent(runId)}/repos`)).json(); } catch { R.repos = []; } schedule(); }
+  function schedule() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; render(); }); } }
+  function go(w) { follow = false; sel = Math.max(1, Math.min(w, R.maxWeek || 1)); history.replaceState(null, "", `#/run/${encodeURIComponent(runId)}?w=${sel}`); render(); }
+
+  function render() {
+    if (STATIC && !R.ended) return;  // still loading data.json
+    const scrollY = window.scrollY, horizon = R.meta?.horizon || R.maxWeek;
+    const inner = $app.clientWidth - 2 * (parseFloat(getComputedStyle($app).paddingLeft) || 16);
+    const chartW = Math.max(240, Math.round(inner - 2 * 24));  // the cash tile's inner width, in px
+    const weeks = R.weeks.filter(Boolean).map(w => ({ ...w, commitment: commitmentKind(w) }));
+    const doneWeeks = weeks.length ? weeks[weeks.length - 1].week : 0;
+    if (follow || sel == null) sel = Math.max(R.maxWeek, 1);
+    sel = Math.min(sel, Math.max(R.maxWeek, 1));
+    const upTo = R.events.filter(e => e.week == null || e.week <= sel), thisWeek = R.events.filter(e => e.week === sel);
+    const m = R.meta || {}, sm = R.summary;
+    const state = weeks.find(w => w.week === sel) || [...weeks].reverse().find(w => w.week < sel) || {};
+    const cost = sm?.cost_usd ?? [...R.events].reverse().find(e => e.kind === "usage")?.cost_usd_total;
+    const tokens = sm?.tokens_used ?? [...R.events].reverse().find(e => e.kind === "usage")?.tokens_used;
+    const tone = weekTone(state, m.opening_types);
+    // A panel shows only if this life has something for it somewhere; week-by-week gaps keep their empty line.
+    const any = (kind, f) => R.events.some(e => e.kind === kind && (!f || f(e)));
+    const decided = e => e.event === "apply" || e.event === "launch" || e.event === "hackathon";
+    const details = [["Run", runId], ["Ended", !sm ? "still running" : sm.reason === "horizon" ? `at its horizon, week ${horizon}` : sm.reason.replace(/_/g, " ")],
+      ["World", m.illustrative ? "illustrative numbers, not sourced" : "sourced numbers"],
+      ["Agent", m.models?.agent || "–"], ["Referee", m.models?.referee || "–"],
+      ["Order seed", String(m.order_seed ?? "–")], ["Dice seed", String(m.dice_seed ?? "–") + (m.dice_scheme === "sequential" ? " (sequential)" : "")],
+      ["Code", (m.code?.git_sha || "–").slice(0, 7) + (m.code?.dirty ? " (dirty)" : "")], ["Sandbox", m.sandbox ? "docker" : "none"],
+      ["Tokens", (tokens || 0).toLocaleString() + (m.token_budget ? ` of ${m.token_budget.toLocaleString()}` : "")],
+      ["Cost", cost != null ? "$" + cost.toFixed(4) : "–"]];
+
+    view.replaceChildren(
+      h("div", { class: "dhead" },
+        h("div", { style: "min-width:0;flex:1" },
+          h("h2", {}, lifeTitle(runId, m.persona)),
+          ...[[!sm ? Pill("live", { tone: "amber", live: true }) : sm.reason !== "horizon" ? Pill(`ended: ${sm.reason}`, { tone: "coral" }) : null,
+            m.pilot ? Pill("PILOT", { tone: "amber", title: "uncommitted or unrecorded code" }) : null,
+            R.error ? Pill(R.error, { tone: "amber" }) : null].filter(Boolean)].filter(p => p.length).map(p => h("div", { class: "pills" }, p)),
+          h("details", { class: "rundetails" }, h("summary", {}, "Run details"),
+            h("dl", {}, details.map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]))))),
+      h("div", { class: "life-detail" },
+        weekCard(state, thisWeek, upTo, sel, horizon, tone),
+        h("div", { class: "bento" },
+          cashTile(weeks, state, sel, horizon, chartW, go),
+          validTile(upTo, sel),
+          any("referee", e => (e.event === "apply" || e.event === "launch") && e.base_rate) ? refereeRingTile(R.events, sel) : null,
+          any("git_commit") || any("git_push") || any("shell_output") || any("referee", e => e.event === "launch") ? projectsTile(upTo, sel, weeks) : null,
+          weeks.some(w => w && w.streak != null) ? trainTile(weeks, sel) : null,
+          any("idea") ? ideaPanel(upTo, sel) : null,
+          any("thought") ? thinkingPanel(thisWeek) : null),
+        h("div", { class: "panels" },
+          weekPanel(thisWeek, sel, doneWeeks),
+          any("message") ? messagePanel(upTo, sel, m.persona) : null,
+          any("venture") || any("blocked") ? venturePanel(upTo, sel, go) : null,
+          weeks.some(w => w.followers != null) || any("post") ? feedPanel(upTo, weeks, sel, horizon) : null,
+          any("shell_output") ? terminalPanel(upTo, sel) : null,
+          any("tool_call") ? toolsPanel(thisWeek) : null,
+          any("referee", decided) ? refereePanel(R.events, sel, go) : null,
+          any("git_commit") || any("git_push") || any("referee", e => e.event === "launch") || R.repos?.length ? repoPanel(upTo, sel, R) : null)),
+      Scrubber({ sel, max: R.maxWeek, horizon, onpick: go, playing, onplay: togglePlay, follow, ended: R.ended,
+        onfollow: () => { follow = true; history.replaceState(null, "", `#/run/${encodeURIComponent(runId)}`); render(); } }));
+    window.scrollTo(0, scrollY);
+  }
+  function commitmentKind(w) {
+    if (w.detail) {  // newer logs: classes aren't a job; part-time by the actions it uses
+      const cs = w.detail.filter(c => c.kind !== "academics");
+      if (!cs.length) return "none";
+      if (cs.some(c => (c.opening_id || "").startsWith("acc-"))) return "accelerator";
+      return Math.max(...cs.map(c => c.time_cost || 0)) >= 5 ? "full_time" : "part_time";
+    }
+    const labels = w.labels || [];
+    if (!labels.length) return "none";
+    const starts = R.events.filter(e => e.kind === "life" && e.event === "commitment_started" && e.week <= w.week && labels.includes(e.label));
+    if (starts.some(e => (e.opening_id || "").startsWith("acc-"))) return "accelerator";
+    const txt = labels.join(" ").toLowerCase();
+    return /part[- ]time|20 hours/.test(txt) ? "part_time" : "full_time";
+  }
+  function togglePlay() {
+    if (playing) { clearInterval(playing); playing = null; render(); return; }
+    follow = false; if (sel >= R.maxWeek) sel = 0;
+    playing = setInterval(() => { if (sel >= R.maxWeek) { clearInterval(playing); playing = null; render(); } else go(sel + 1); }, 900);
+    go(sel + 1);
+  }
+}
+
+// A week's colour on the life page, the same three as the grid: in paid work, no paid work, broke.
+// Paid work is world v3's paid_work_types, read from the opening types the run logged; older exports fall back to the main commitment.
+const PAID_WORK = ["job", "internship", "on_campus", "freelance"];
+function weekTone(state, types) {
+  if (!state || !state.week) return "free";
+  if (state.broke) return "broke";
+  if (types && Object.keys(types).length && state.detail) return state.detail.some(c => PAID_WORK.includes(types[c.opening_id])) ? "job" : "free";
+  return endingTone({ commitment: state.commitment });
+}
+
+// The week's top event: the one thing worth reading first, in a fixed order of importance.
+function topEvent(evs) {
+  const cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+  const ws = evs.find(e => e.kind === "week_start"), we = evs.find(e => e.kind === "week_end");
+  const find = (kind, f) => evs.find(e => e.kind === kind && (!f || f(e)));
+  const news = id => (ws?.news || []).find(t => t.startsWith(id + " "));
+  if (ws?.broke) return { k: "Broke", t: "Cash plus income didn't cover this week's expenses." };
+  const won = find("referee", e => e.event === "reply" && e.outcome === "success");
+  if (won && news(won.opening_id)) return { k: "Accepted", t: news(won.opening_id).slice(won.opening_id.length + 1), quote: true };
+  const started = find("life", e => e.event === "commitment_started"); if (started) return { k: "Started", t: started.label };
+  const v = find("venture"); if (v) return v.event === "deploy" ? { k: "Deployed a site", t: v.url } : { k: "Costly bet", t: betText(v, evs) };
+  const hk = find("referee", e => e.event === "hackathon"); if (hk) return { k: "Hackathon judging", t: `${hk.opening_id}: ${(OUTCOME[hk.outcome] || [hk.outcome])[0]}` };
+  const rep = find("message", e => e.replied); if (rep) return { k: `${cap(rep.contact_id)} replied`, t: rep.reply, quote: true };
+  const bo = find("post", e => e.breakout); if (bo) return { k: "A post broke out", t: bo.text, quote: true };
+  const ended = find("life", e => e.event === "commitment_ended"); if (ended) return { k: "Ended", t: ended.label + (ended.reason ? ` (${ended.reason.replace(/_/g, " ")})` : "") };
+  const refl = find("idea", e => e.source === "reflection"); if (refl) return { k: "Quarterly reflection", t: refl.text, quote: true };
+  const launch = find("referee", e => e.event === "launch"); if (launch) return { k: "Launched on the forum", t: launch.title || (launch.repo || "").split("/").pop() };
+  if (ws?.news?.length) return { k: "News", t: ws.news[0] };
+  const sent = find("message"); if (sent) return { k: `Wrote to ${cap(sent.contact_id)}`, t: sent.text, quote: true };
+  const post = find("post"); if (post) return { k: "Posted", t: post.text, quote: true };
+  const apps = evs.filter(e => e.kind === "referee" && e.event === "apply");
+  if (apps.length) return { k: apps.length === 1 ? "Applied" : `Applied to ${apps.length} openings`, t: apps.map(a => a.opening_id).join(", ") };
+  const note = find("thought", e => e.source === "note"); if (note) return { k: "Wait note", t: note.text, quote: true, ev: note };
+  return { k: "The week", t: we?.digest || "Nothing logged yet." };
+}
+
+function weekCard(state, thisWeek, upTo, sel, horizon, tone) {
+  const top = topEvent(thisWeek);
+  const thoughts = upTo.filter(e => (e.kind === "thought" && e.source === "note") || (e.kind === "idea" && e.source === "idea"));
+  const latest = [...thoughts].reverse().find(e => e.week === sel) || thoughts[thoughts.length - 1];
+  // When the wait note is already the top event, the third column shows the week's digest instead of repeating it.
+  const we = thisWeek.find(e => e.kind === "week_end");
+  const plan = top.ev && top.ev === latest ? (we?.digest ? { label: "The week", text: we.digest } : null)
+    : latest ? { label: `${latest.source === "idea" ? "Idea" : "Plan"}, week ${latest.week}`, text: latest.text } : null;
+  // Paid work and other commitments first, largest time cost first; classes last.
+  const labels = state.detail ? [...state.detail].sort((a, z) => (a.kind === "academics") - (z.kind === "academics") || (z.time_cost || 0) - (a.time_cost || 0)).map(c => c.label) : state.labels || [];
+  return h("section", { class: "tile weekcard t-end-" + tone },
+    h("div", { class: "tile-head" }, h("span", { class: "t" }, `Week ${sel} of ${horizon || "?"}`),
+      Pill({ job: "In paid work this week", free: "No paid work this week", broke: "Broke this week" }[tone])),
+    h("div", {}, h("div", { class: "lab" }, top.k), h("div", { class: "ev" + (top.quote ? " q" : ""), title: top.t }, top.t)),
+    h("div", { class: "facts" },
+      h("div", {}, h("div", { class: "lab" }, "Cash"), h("div", { class: "v num" }, money(state.cash))),
+      h("div", {}, h("div", { class: "lab" }, "Doing"), h("div", { class: "v txt", title: labels.join("; ") }, labels[0] || "no commitment",
+        labels.length > 1 ? h("span", { class: "lab" }, `, and ${labels.length - 1} more`) : null)),
+      h("div", {}, h("div", { class: "lab" }, plan ? plan.label : "Plan"),
+        h("div", { class: "v txt", title: plan?.text || "" }, plan ? plan.text : "nothing written yet"))));
+}
+
+function cashTile(weeks, state, sel, horizon, chartW, go) {
+  return h("section", { class: "tile t-glass span4" },
+    h("div", { class: "lab" }, `Cash at the end of week ${sel}`),
+    h("div", { class: "money" },
+      h("div", { class: "big xl" }, money(state.cash)),
+      h("div", { class: "sm" }, h("div", { class: "v" }, money(state.income)), h("div", { class: "lab" }, "income / week")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, money(state.expenses)), h("div", { class: "lab" }, "expenses / week")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, money(state.funding)), h("div", { class: "lab" },
+        state.spent || state.revenue ? `company funds (raised ${money(state.raised)}, customers ${money(state.revenue)}, spent ${money(state.spent)})` : "company funds")),
+      h("div", { class: "sm", style: "min-width:0" }, h("div", { style: "font-size:14px" }, (state.labels || []).join(", ") || "none"), h("div", { class: "lab" }, "commitments"))),
+    cashChart(weeks, horizon, { sel, onpick: go, width: chartW, height: chartW < 600 ? 160 : 200 }),
+    lifeStrip(weeks, horizon, { width: chartW, height: 12, sel, onpick: go, pad: CHART_PAD }),
+    legend(chartMarks(weeks), weeks.some(w => w.school)),
+    h("details", {}, h("summary", {}, "Table view"), h("div", { class: "tbl" }, weekTable(weeks, sel, go))));
+}
+
+function validTile(upTo, sel) {
+  const we = upTo.filter(e => e.kind === "week_end"), valid = we.reduce((a, e) => a + (e.valid || 0), 0), invalid = we.reduce((a, e) => a + (e.invalid || 0), 0);
+  const rate = valid + invalid ? valid / (valid + invalid) : null;
+  return StatTile({ label: "Valid actions", value: rate == null ? "–" : pct(rate), span: 1,
+    sub: rate == null ? "no finished weeks yet" : `${valid} of ${valid + invalid} calls through week ${sel}`,
+    ring: { value: rate, label: `valid-action rate ${pct(rate)}` } });
+}
+
+function refereeRingTile(all, sel) {
+  const apps = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch") && e.week <= sel && e.base_rate);
+  const ratio = apps.length ? apps.reduce((a, e) => a + e.estimated_chance / e.base_rate, 0) / apps.length : null;
+  return StatTile({ label: "Referee estimate ÷ base", value: ratio == null ? "–" : ratio.toFixed(2) + "×", span: 1,
+    sub: apps.length ? `mean of ${apps.length} decision${apps.length === 1 ? "" : "s"}, tick = 1×` : "no decisions yet",
+    ring: { value: ratio == null ? 0 : ratio / 2, tick: 0.5, label: ratio == null ? "no decisions" : `estimate is ${ratio.toFixed(2)} times the base rate; full ring is 2×` } });
+}
+
+// Training: the streak (weeks in a row with a session) and how many weeks had one.
+function trainTile(weeks, sel) {
+  const upTo = weeks.filter(w => w && w.week <= sel), last = upTo[upTo.length - 1];
+  const best = Math.max(0, ...upTo.map(w => w.streak || 0)), n = upTo.filter(w => w.trained).length;
+  return StatTile({ label: "Training streak", value: `${last?.streak ?? 0} wk`, span: 1,
+    sub: `${n} of ${upTo.length} weeks with training, best ${best}`, spark: upTo.map(w => w.streak || 0) });
+}
+
+function projectsTile(upTo, sel, weeks) {
+  const commits = upTo.filter(e => e.kind === "git_commit"), pushes = upTo.filter(e => e.kind === "git_push" && !e.first);
+  const repos = upTo.filter(e => e.kind === "git_push" && e.first), launches = upTo.filter(e => e.kind === "referee" && e.event === "launch");
+  const shell = upTo.filter(e => e.kind === "shell_output").length;
+  let run = 0; const cum = Array.from({ length: Math.max(sel, 1) }, (_, i) => (run += commits.filter(c => c.week === i + 1).length));
+  return StatTile({ label: "Projects and commits", value: String(commits.length), tone: "building", span: 2,
+    sub: `commit${commits.length === 1 ? "" : "s"}, ${repos.length} repo${repos.length === 1 ? "" : "s"}, ${pushes.length} push${pushes.length === 1 ? "" : "es"}, ${launches.length} launch${launches.length === 1 ? "" : "es"}, ${shell} shell command${shell === 1 ? "" : "s"} through week ${sel}`,
+    spark: cum },
+    repos.length ? h("div", { class: "tile-head" }, repos.map(r => Pill((r.repo || "").split("/").pop(), { k: "w" + r.week }))) : null);
+}
+
+function weekTable(weeks, sel, go) {
+  return h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Week"), h("th", { class: "r" }, "Cash"), h("th", { class: "r" }, "Income"), h("th", { class: "r" }, "Funding"), h("th", {}, "Commitment"), h("th", {}, "Gig"), h("th", {}, "Broke"))),
+    h("tbody", {}, weeks.map(w => h("tr", { class: "click" + (w.week === sel ? " now" : ""), onclick: () => go(w.week) },
+      h("td", { class: "num" }, w.week), h("td", { class: "r" }, money(w.cash)), h("td", { class: "r" }, money(w.income)), h("td", { class: "r" }, money(w.funding)),
+      h("td", {}, (w.labels || []).join(", ") || "–"), h("td", {}, w.gig ? "yes" : ""), h("td", {}, w.broke ? h("span", { class: "oc" }, h("i", { class: "dot coral" }), "broke") : "")))));
+}
+
+function weekPanel(evs, sel, doneWeeks) {
+  const ws = evs.find(e => e.kind === "week_start"), we = evs.find(e => e.kind === "week_end");
+  return GlassCard({ title: `Week ${sel}`, sub: we ? `ended: ${we.reason}, ${we.used}/${we.actions} actions, ${we.invalid} invalid` : sel > doneWeeks ? "in progress" : "" },
+    ws?.broke ? h("div", { style: "margin-bottom:12px" }, Pill("Broke this week: cash plus income didn't cover expenses", { tone: "coral" })) : null,
+    ws?.news?.length ? h("div", { style: "margin-bottom:12px" }, h("div", { class: "meta" }, "News"), h("ul", { style: "margin:4px 0 0;padding-left:16px" }, ws.news.map(n => h("li", { class: "text" }, n)))) : null,
+    ws?.carried_errors?.length ? h("div", { style: "margin-bottom:12px" }, h("div", { class: "meta" }, "Problems carried from last week"), h("ul", { style: "margin:4px 0 0;padding-left:16px" }, ws.carried_errors.map(n => h("li", { class: "text" }, n)))) : null,
+    we ? h("div", { class: "text ink2" }, we.digest) : h("div", { class: "empty" }, "Week not finished yet."),
+    ws && ws.openings_hidden ? h("div", { class: "notice" }, `${ws.openings_hidden} openings hidden from the agent this week (pending, accepted, or before the reapply week).`) : null);
+}
+
+function thinkingPanel(evs) {
+  const th = evs.filter(e => e.kind === "thought");
+  return h("section", { class: "tile t-glass span2" }, h("h3", {}, "Thinking", h("span", { class: "lab" }, "the agent's own words this week")),
+    th.length ? h("div", { class: "feed" }, th.map(e => h("div", { class: "item" },
+      h("div", { class: "meta" }, e.source === "thinking" ? "thinking (summarized)" : e.source === "note" ? "wait note" : e.nudge ? "nudge" : "text"), h("div", { class: "text", style: "margin-top:4px" }, e.text)))) : h("div", { class: "empty" }, "Nothing this week."),
+    th.some(e => e.source === "thinking") ? null : h("div", { class: "notice", style: "margin-top:0" }, "This run didn't log thinking; showing the agent's visible text and wait notes."));
+}
+
+function terminalPanel(upTo, sel) {
+  const sh = upTo.filter(e => e.kind === "shell_output");
+  const term = h("div", { class: "term", tabindex: 0, "aria-label": "Shell history" },
+    sh.length ? sh.map(e => [h("div", { class: "info" }, `week ${e.week}, exit ${e.exit_code}${e.timed_out ? ", timed out" : ""}${e.stopped ? ", output capped" : ""}`),
+      h("div", { class: "cmd" }, "$ " + e.command), h("div", { class: "out" }, e.output || "")]) : h("div", { class: "info" }, "No shell commands yet."));
+  queueMicrotask(() => { term.scrollTop = term.scrollHeight; });
+  return GlassCard({ title: "Terminal", sub: `${sh.length} command${sh.length === 1 ? "" : "s"} through week ${sel}`, cls: "wide" }, term);
+}
+
+function toolsPanel(evs) {
+  const tc = evs.filter(e => e.kind === "tool_call");
+  return GlassCard({ title: "Tool calls", sub: `${tc.length} this week` },
+    tc.length ? h("div", { class: "tools" }, tc.map(e => h("details", { class: "tool" },
+      h("summary", {}, e.is_error ? h("i", { class: "dot coral", title: "error" }) : null, h("span", { class: "name" }, e.tool), e.is_error ? h("span", { class: "muted" }, "error") : null, h("span", { class: "muted" }, briefInput(e))),
+      h("div", { class: "inner", style: "margin-top:8px" }, h("div", { class: "pre" }, JSON.stringify(e.input, null, 2)), h("div", { class: "meta", style: "margin-top:8px" }, "result"), h("div", { class: "pre" }, e.output))))) : h("div", { class: "empty" }, "None."));
+}
+function briefInput(e) {
+  const a = e.input || {};
+  const v = a.opening_id || a.path || a.command || a.repo || a.note || a.action || "";
+  return (a.action && a.path ? a.action + " " : "") + String(v).replace(/\s+/g, " ").slice(0, 90);
+}
+
+function ideaPanel(upTo, sel) {
+  const ideas = upTo.filter(e => e.kind === "idea").reverse();
+  const label = { idea: "idea (from wait)", reflection: "quarterly reflection", file: "wrote", pitch: "launch pitch" };
+  return h("section", { class: "tile t-glass span2" }, h("h3", {}, "Idea log", h("span", { class: "lab" }, `reflections, plans, pitches through week ${sel}`)),
+    ideas.length ? h("div", { class: "feed" }, ideas.map(e => h("div", { class: "item" + (e.week === sel ? " now" : "") },
+      h("div", { class: "meta" }, `week ${e.week}, ${label[e.source] || e.source}${e.path ? " " + e.path : ""}${e.title ? ", " + e.title : ""}`),
+      h("div", { class: "text", style: "margin-top:4px" }, e.text)))) : h("div", { class: "empty" }, "No ideas recorded yet."));
+}
+
+function messagePanel(upTo, sel, persona) {
+  const ms = upTo.filter(e => e.kind === "message");
+  if (!ms.length) return GlassCard({ title: "Messages" }, h("div", { class: "empty" }, "No messages yet."));
+  const by = new Map(); for (const m of ms) { if (!by.has(m.contact_id)) by.set(m.contact_id, []); by.get(m.contact_id).push(m); }
+  const offer = o => !o ? null
+    : o.kind === "referral" ? `offer: referral to ${o.opening_id}`
+    : o.kind === "paid_pilot" ? `offer: paid pilot ${money(o.amount)}`
+    : o.kind === "money" ? `offer: ${money(o.amount)} to personal cash`
+    : o.kind === "teammate" ? `offer: teammate for ${o.opening_id}`
+    : o.kind === "boost" ? `offer: boost to about ${(o.reach || 0).toLocaleString()} people${o.community ? ` (${o.community})` : ""}`
+    : `offer: ${o.kind}`;
+  return GlassCard({ title: "Messages", sub: `${ms.length} sent through week ${sel}, ${ms.filter(m => m.replied).length} replied` },
+    h("div", { class: "feed" }, [...by].map(([cid, thread]) => h("div", { class: "thread" }, h("div", { class: "t" }, cid),
+      h("div", { class: "tools" }, thread.map(m => h("div", { class: "item" + (m.week === sel ? " now" : "") },
+        h("div", { class: "meta" }, `week ${m.week}, ${persona || "the agent"}`), h("div", { class: "text", style: "margin-top:4px" }, m.text),
+        h("div", { class: "meta", style: "margin-top:8px" }, m.replied ? `${cid} replied` : `no reply (draw ${m.draw?.toFixed(3)} ≥ reply rate ${m.reply_rate})`),
+        m.replied ? h("div", { class: "text ink2", style: "margin-top:4px" }, m.reply) : null,
+        m.offer ? h("div", { style: "margin-top:8px" }, Pill(offer(m.offer), { tone: "lime" })) : null,
+        m.offer_problem ? h("div", { style: "margin-top:8px" }, Pill(m.offer_problem, { tone: "amber" })) : null,
+        m.sites_seen?.length || m.sites_missing?.length || m.private_link ? h("div", { class: "tile-head", style: "margin-top:8px" },
+          (m.sites_seen || []).map(n => Pill(m.replied ? `opened ${n}` : `linked ${n}`, { tone: "teal" })),
+          (m.sites_missing || []).map(n => Pill(`${n}: no site there`, { tone: "amber" })),
+          m.private_link ? Pill("private code-host link: didn't open", { tone: "amber" }) : null) : null)))))));
+}
+
+// World v3: sites the agent deployed (with what a visitor saw), its costly bets, and the world limits it ran into.
+function venturePanel(upTo, sel, go) {
+  const vs = upTo.filter(e => e.kind === "venture"), bl = upTo.filter(e => e.kind === "blocked");
+  const deploys = vs.filter(e => e.event === "deploy"), bets = vs.filter(e => e.event !== "deploy");
+  const byLimit = {}; for (const b of bl) byLimit[b.limit] = (byLimit[b.limit] || 0) + 1;
+  return GlassCard({ title: "Website, bets and world limits", cls: "wide",
+      sub: `${deploys.length} deploy${deploys.length === 1 ? "" : "s"}, ${bets.length} costly bet${bets.length === 1 ? "" : "s"}, ${bl.length} world limit${bl.length === 1 ? "" : "s"} hit, through week ${sel}` },
+    h("div", { class: "meta" }, "Deploys"),
+    deploys.length ? h("div", { class: "feed", style: "margin-top:4px" }, [...deploys].reverse().map(d => h("div", { class: "item" + (d.week === sel ? " now" : "") },
+      h("div", { class: "meta" }, `week ${d.week}, version ${d.version}, ${d.served} file${d.served === 1 ? "" : "s"} served from ${d.root || "the repo root"}${d.not_served ? `, ${d.not_served} not served` : ""}${d.sha ? ", " + d.sha.slice(0, 7) : ""}`),
+      h("div", { class: "tile-head", style: "margin-top:4px" }, h("i", { class: "dot teal" }), h("code", {}, d.url), Pill((d.repo || "").split("/").pop(), { k: "repo" })),
+      h("details", { style: "margin-top:8px" }, h("summary", {}, "what visitors saw"), h("div", { class: "pre" }, d.view || "–"))))) :
+      h("div", { class: "empty" }, "No site deployed yet."),
+    h("div", { class: "meta", style: "margin-top:16px" }, "Costly bets"),
+    bets.length ? h("div", { class: "tools", style: "margin-top:4px" }, bets.map(b => h("div", { class: "commit click", onclick: () => go(b.week), title: "Go to week " + b.week },
+      h("span", { class: "muted num" }, "w" + b.week), h("span", { class: "text" }, betText(b, upTo.filter(x => x.week === b.week)))))) : h("div", { class: "empty" }, "None yet."),
+    h("div", { class: "meta", style: "margin-top:16px" }, "World limits hit (blocked_by_world)"),
+    bl.length ? [h("div", { class: "tile-head", style: "margin-top:4px" }, Object.entries(byLimit).map(([k, n]) => Pill(String(n), { k: k.replace(/_/g, " ") }))),
+      h("div", { class: "tools", style: "margin-top:8px" }, bl.map(b => h("div", { class: "commit click", onclick: () => go(b.week), title: "Go to week " + b.week },
+        h("span", { class: "muted num" }, "w" + b.week), h("span", {}, b.limit.replace(/_/g, " ")), h("span", { class: "muted" }, `via ${b.via}`),
+        h("span", { class: "text" }, b.evidence), b.alternative ? Pill(`the world offered: ${b.alternative}`, { tone: "teal" }) : null)))] :
+      h("div", { class: "empty" }, "None yet."),
+    h("div", { class: "notice" }, "A world limit is logged when an attempt runs into something the world can't do; plans never attempted don't appear here."));
+}
+
+// The feed: follower curve, likes per week, and every post with the replies the author saw.
+function feedPanel(upTo, weeks, sel, horizon) {
+  const posts = upTo.filter(e => e.kind === "post"), n = Math.max(horizon || 0, sel, 1);
+  const followers = weeks.filter(w => w.week <= sel).map(w => w.followers || 0), now = followers[followers.length - 1] || 0;
+  const likes = Array.from({ length: n }, (_, i) => posts.filter(p => p.week === i + 1).reduce((a, p) => a + (p.likes || 0), 0));
+  const W = 640, H = 48, max = Math.max(1, ...likes), slot = W / n;
+  const bars = s("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", style: "width:100%;height:48px;display:block", role: "img",
+    "aria-label": `Likes per week through week ${sel}; most in one week ${max}` });
+  likes.forEach((v, i) => { if (!v) return; const bh = Math.max(2, v / max * (H - 2)), r = s("rect", { x: i * slot + slot * 0.15, y: H - bh, width: slot * 0.7, height: bh, rx: Math.min(2, slot * 0.35), fill: "var(--ink-2)" });
+    const t = s("title"); t.textContent = `Week ${i + 1}: ${v} likes`; r.append(t); bars.append(r); });
+  return GlassCard({ title: "Feed", sub: `${posts.length} post${posts.length === 1 ? "" : "s"} through week ${sel}`, cls: "wide" },
+    h("div", { class: "money", style: "margin-bottom:16px" },
+      h("div", {}, h("div", { class: "big" }, now.toLocaleString()), h("div", { class: "lab" }, "followers")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, posts.reduce((a, p) => a + (p.likes || 0), 0).toLocaleString()), h("div", { class: "lab" }, "likes, all posts")),
+      h("div", { class: "sm" }, h("div", { class: "v" }, posts.filter(p => p.breakout).length), h("div", { class: "lab" }, "broke out"))),
+    h("div", { class: "lab" }, "Followers by week"), Spark(followers.length ? followers : [0]),
+    h("div", { class: "lab", style: "margin-top:12px" }, `Likes per week (tallest: ${max})`), bars,
+    posts.length ? h("div", { class: "feed", style: "margin-top:16px" }, [...posts].reverse().map(p => h("div", { class: "item" + (p.week === sel ? " now" : "") },
+      h("div", { class: "meta" }, `week ${p.week}, post ${p.n}, about ${(p.reach || 0).toLocaleString()} people saw it`),
+      h("div", { class: "text", style: "margin-top:4px" }, p.text),
+      h("div", { class: "tile-head", style: "margin-top:8px" }, Pill(`${p.likes} likes`, { tone: p.breakout ? "lime" : null }), Pill(`${p.replies} replies`),
+        Pill(`+${p.new_followers} followers`), p.breakout ? Pill("broke out", { tone: "lime" }) : null, p.repo ? Pill(p.repo.split("/").pop(), { k: "repo" }) : null),
+      p.shown?.length ? h("div", { class: "tools", style: "margin-top:8px" }, p.shown.map(r => h("div", { class: "inner" }, h("div", { class: "meta" }, "@" + r.handle), h("div", { class: "text" }, r.text)))) : null,
+      h("details", { style: "margin-top:8px" }, h("summary", {}, "referee"), h("div", { class: "inner", style: "margin-top:8px" },
+        h("div", { class: "meta" }, `breakout chance ${pct(p.estimated_chance)} (base ${pct(p.base_rate)}), draw ${p.draw?.toFixed(3)}, luck ${p.luck}×`),
+        h("div", { class: "text" }, p.rationale || "–")))))) : h("div", { class: "empty", style: "margin-top:12px" }, "No posts yet."));
+}
+
+function refereePanel(all, sel, go) {
+  const every = all.filter(e => e.kind === "referee" && (e.event === "apply" || e.event === "launch" || e.event === "hackathon"));
+  const apps = every.filter(e => e.week <= sel), later = every.length - apps.length;
+  const rows = apps.map(e => {
+    const revealed = e.event !== "apply" || (e.reveal_week != null && e.reveal_week <= sel);
+    const [ocText, ocTone] = OUTCOME[e.outcome] || [e.outcome, ""];
+    const oc = h("span", { class: "oc" }, h("i", { class: "dot " + ocTone }), ocText);
+    return [h("tr", { class: "click" + (e.week === sel ? " now" : ""), onclick: () => go(e.week), title: "Go to week " + e.week },
+      h("td", { class: "num" }, e.week), h("td", {}, e.event === "launch" ? "launch " + (e.repo || "").split("/").pop() : e.opening_id,
+        h("div", { class: "lab" }, e.event === "launch" ? "forum" : e.event === "hackathon" ? "hackathon judging" : e.opening_type)),
+      h("td", { class: "r" }, pct(e.base_rate)), h("td", { class: "r" }, pct(e.estimated_chance)),
+      h("td", { class: "r" }, e.base_rate ? (e.estimated_chance / e.base_rate).toFixed(2) + "×" : "–"),
+      h("td", { class: "r" }, e.draw != null ? e.draw.toFixed(3) : "–"),
+      h("td", {}, oc, e.event === "launch" ? h("div", { class: "lab" }, `${e.upvotes ?? 0} upvotes`) :
+        e.event === "hackathon" ? h("div", { class: "lab" }, e.prize ? `prize ${money(e.prize)}` : "") :
+        h("div", { class: "lab oc" }, revealed ? `heard week ${e.reveal_week}` : [h("i", { class: "dot amber" }), `already drawn, agent hears week ${e.reveal_week}`]))),
+      h("tr", {}, h("td", { colspan: 7, style: "padding-top:0" }, h("details", {}, h("summary", {}, "submission and rationale"),
+        h("div", { class: "inner", style: "margin-top:8px" },
+          e.details ? h("div", {}, h("div", { class: "meta" }, "submission"), h("div", { class: "text" }, e.details)) : null,
+          e.repo ? h("div", { class: "meta", style: "margin-top:8px" }, "repo: " + e.repo) : null,
+          e.key ? h("div", { class: "meta" }, "dice key: " + e.key) : null,
+          h("div", { class: "meta", style: "margin-top:8px" }, "referee rationale"), h("div", { class: "text" }, e.rationale || "–"),
+          e.comments?.length ? h("div", {}, h("div", { class: "meta", style: "margin-top:8px" }, "forum comments"), h("ul", { style: "margin:4px 0 0;padding-left:16px" }, e.comments.map(c => h("li", { class: "text" }, c)))) : null))))];
+  });
+  const done = apps, mean = done.length ? done.reduce((a, e) => a + (e.base_rate ? e.estimated_chance / e.base_rate : 0), 0) / done.length : null;
+  return GlassCard({ title: "Referee", sub: `${done.length} decisions through week ${sel}${mean ? `, mean estimate ${mean.toFixed(2)}× base` : ""}`, cls: "wide" },
+    apps.length ? h("div", { class: "tbl" }, h("table", {},
+      h("thead", {}, h("tr", {}, h("th", {}, "Wk"), h("th", {}, "Opening"), h("th", { class: "r" }, "Base"), h("th", { class: "r" }, "Est."), h("th", { class: "r" }, "Est./base"), h("th", { class: "r" }, "Draw u"), h("th", {}, "Outcome"))),
+      h("tbody", {}, rows))) : h("div", { class: "empty" }, "No applications yet."),
+    h("div", { class: "notice" }, `Success if u < estimate. The referee only estimates; the keyed dice pick the outcome.${later ? ` ${later} later decision${later === 1 ? "" : "s"} not shown.` : ""}`));
+}
+
+function repoPanel(upTo, sel, R) {
+  const git = upTo.filter(e => e.kind === "git_commit" || e.kind === "git_push");
+  const launches = upTo.filter(e => e.kind === "referee" && e.event === "launch");
+  const atEnd = R.ended && sel >= R.maxWeek;
+  return GlassCard({ title: "Repos and commits", sub: `through week ${sel}`, cls: "wide" },
+    git.length ? h("div", { class: "tools" }, git.map(e => e.kind === "git_commit"
+      ? h("div", { class: "commit" }, h("i", { class: "dot teal" }), h("span", { class: "muted num" }, "w" + e.week), h("code", { title: e.sha ? null : "git ran with -q; read from the command, not git's output" }, e.sha || "commit -q"), h("span", { class: "text" }, e.message),
+          e.files != null ? h("span", { class: "muted num" }, `${e.files} file${e.files === 1 ? "" : "s"} +${e.insertions} −${e.deletions}`) : null)
+      : h("div", { class: "commit" }, h("i", { class: "dot" }), h("span", { class: "muted num" }, "w" + e.week), h("span", {}, e.first ? "new repo on the code host" : "push"), h("code", {}, e.repo || e.url || ""), e.refs?.length ? h("span", { class: "muted" }, e.refs.join(", ")) : null)))
+      : h("div", { class: "empty" }, "No commits or pushes seen in the shell yet."),
+    launches.map(l => h("div", { class: "repo inner" }, h("div", {}, h("span", { class: "t" }, "Launched "), l.title || "", h("span", { class: "muted" }, `, week ${l.week}, ${l.snapshot?.commits ?? "?"} commits, ${l.snapshot?.file_count ?? "?"} files`)),
+      l.snapshot?.files?.length ? h("div", { class: "pre muted" }, l.snapshot.files.join("  ")) : null,
+      l.snapshot?.readme ? h("details", {}, h("summary", {}, "README as the referee saw it"), h("div", { class: "pre" }, l.snapshot.readme)) : null)),
+    atEnd && R.repos ? h("div", { class: "repo" }, h("div", { class: "meta" }, "Exported at run end (runs/<id>/repos/*.bundle)"),
+      R.repos.length ? R.repos.map(b => h("div", { class: "repo inner" },
+        h("div", {}, h("span", { class: "t" }, b.repo), h("span", { class: "muted" }, b.error ? ", " + b.error : `, ${b.commits.length} commit${b.commits.length === 1 ? "" : "s"}, ${b.file_count} files${b.bundle_bytes != null ? `, ${b.bundle_bytes.toLocaleString()} bytes` : ""}`)),
+        (b.commits || []).map(c => h("div", { class: "commit" }, h("code", {}, c.sha.slice(0, 7)), h("span", { class: "text" }, c.subject),
+          h("span", { class: "muted num" }, `${c.files} file${c.files === 1 ? "" : "s"} +${c.insertions} −${c.deletions}`))),
+        b.files?.length ? h("div", { class: "pre muted" }, b.files.join("  ")) : null,
+        b.readme ? h("details", {}, h("summary", {}, b.readme_path), h("div", { class: "pre" }, b.readme)) : null)) : h("div", { class: "empty" }, "No repos were exported."))
+      : R.ended ? h("div", { class: "notice" }, "Move to the last week to see the exported repos.") : h("div", { class: "notice" }, "Exported repos appear when the run ends."));
+}
+
+route();
